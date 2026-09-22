@@ -11,7 +11,6 @@ _AIND_EPHYS_CONFIGS_REGISTRY_PATH = (
 _LFP_PARAMS_REGISTRY_PATH = (
     pathlib.Path(__file__).parent.parent / "lfp_pipeline" / "registries" / "registered_params.json"
 )
-_PIPELINE_CONFIG_SCHEMA_PATH = pathlib.Path(__file__).parent.parent / "schemas" / "pipeline_config.linkml.yaml"
 _RAW_ARRAY_DISPATCH_TEMPLATE_FILE_PATH = pathlib.Path(__file__).parent / "templates" / "array_dispatch_template.txt"
 #: Prefix of the SLURM job name carried by every pipeline's array dispatcher.
 _DISPATCH_JOB_NAME_PREFIX = "dandicompute-dispatch"

@@ -29,6 +29,7 @@ from ..dandiset._job_id import (
     _find_existing_capsule_path,
     _next_available_job_id,
 )
+from ..schemas import validate_registry
 
 _log = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ def prepare_aind_ephys_job(
     requested_pipeline_version = _parse_pipeline_version(pipeline_version, label="requested pipeline")
     config_registry_path = pathlib.Path(__file__).parent / "registries" / "registered_configs.json"
     config_registry = json.loads(config_registry_path.read_text())
+    validate_registry(config_registry, description=f"registry '{config_registry_path.name}'")
     if config_key not in config_registry:
         registered_keys = list(config_registry.keys())
         message = (
@@ -151,6 +153,7 @@ def prepare_aind_ephys_job(
 
     params_registry_path = pathlib.Path(__file__).parent / "registries" / "registered_params.json"
     params_registry = json.loads(params_registry_path.read_text())
+    validate_registry(params_registry, description=f"registry '{params_registry_path.name}'")
     if parameters_key not in params_registry:
         registered_keys = list(params_registry.keys())
         message = (

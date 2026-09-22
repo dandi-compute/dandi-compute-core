@@ -19,10 +19,13 @@ jobs:
       os_list: '["ubuntu-latest"]'
       python_list: '["3.11","3.12","3.13","3.14"]'
 
+  ValidateSchemas:
+    uses: ./.github/workflows/validate_schemas.yml
+
   NotifyOnFailure:
     runs-on: ubuntu-latest
-    needs: [ DailyTests ]
-    if: ${{ always() && needs.DailyTests.result == 'failure' }}
+    needs: [ DailyTests, ValidateSchemas ]
+    if: ${{ always() && (needs.DailyTests.result == 'failure' || needs.ValidateSchemas.result == 'failure') }}
     steps:
       - uses: dawidd6/action-send-mail@v18
         with:

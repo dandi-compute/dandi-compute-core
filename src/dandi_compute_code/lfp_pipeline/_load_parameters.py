@@ -1,14 +1,37 @@
 import hashlib
 import json
 
-import jsonschema
+from ._globals import _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
+from ..schemas import permissible_values, validate_against_schema, validate_registry
 
-from ._globals import _PARAMETER_SCHEMA_FILE_PATH, _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
+#: Numeric parameters whose allowed values are a fixed set rather than a range. LinkML states
+#: a set like this as an enumeration, and an enumeration's values are text, so the schema
+#: carries one enumeration per field and the value read from a file is formatted to match.
+#: ``filter_band`` is here too, since what is restricted is the pair of edges rather than
+#: either edge on its own.
+_ENUMERATED_NUMERIC_FIELDS = {
+    "filter_band": "FilterBand",
+    "filter_order": "FilterOrder",
+    "resample_target_fs": "ResampleTargetFs",
+    "spatial_factor": "SpatialFactor",
+}
+
+
+def _format_number(value, /) -> str:
+    """Write one number the way the schema's enumerations write it."""
+    return format(float(value), "g")
+
+
+def _format_numeric_value(value, /) -> str:
+    """Write a number, or a sequence of them, the way the schema's enumerations write it."""
+    if isinstance(value, (list, tuple)):
+        return "-".join(_format_number(element) for element in value)
+    return _format_number(value)
 
 
 def validate_lfp_parameters(parameters, /) -> dict:
     """
-    Validate a set of LFP parameters against the pipeline JSON schema.
+    Validate a set of LFP parameters against the pipeline LinkML schema.
 
     :param parameters: The parameter mapping to validate.
     :type parameters: dict
@@ -17,11 +40,26 @@ def validate_lfp_parameters(parameters, /) -> dict:
 
     Raises
     ------
-    jsonschema.ValidationError
-        If the parameters do not conform to ``parameter_schema.json``.
+    ValueError
+        If the parameters do not conform to ``schemas/lfp_parameters.linkml.yaml``, or if a
+        numeric parameter is outside the fixed set that schema enumerates for it.
     """
-    schema = json.loads(_PARAMETER_SCHEMA_FILE_PATH.read_text())
-    jsonschema.validate(instance=parameters, schema=schema)
+    validate_against_schema(parameters, schema="lfp_parameters", description="LFP parameters")
+
+    for field, enum_name in _ENUMERATED_NUMERIC_FIELDS.items():
+        allowed = permissible_values(schema="lfp_parameters", enum_name=enum_name)
+        value = parameters[field]
+        try:
+            formatted_value = _format_numeric_value(value)
+        except (TypeError, ValueError):
+            formatted_value = None
+        if formatted_value not in allowed:
+            message = (
+                f"Invalid LFP parameters: {field} {value!r} is not one of the supported values. "
+                f"Supported values, as the '{enum_name}' enumeration writes them, are: {list(allowed)}."
+            )
+            raise ValueError(message)
+
     return parameters
 
 
@@ -29,10 +67,11 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     """
     Resolve a registered parameters key to a validated set of LFP parameters.
 
-    Mirrors the AIND ephys pipeline approach. The key is looked up in
-    ``registries/registered_params.json``, the referenced file under ``params/``
-    is checked against its recorded MD5, and the loaded parameters are validated
-    against ``parameter_schema.json``.
+    Mirrors the AIND ephys pipeline approach. The registry itself is validated against
+    ``schemas/registry.linkml.yaml``, the key is looked up in
+    ``registries/registered_params.json``, the referenced file under ``params/`` is checked
+    against its recorded MD5, and the loaded parameters are validated against
+    ``schemas/lfp_parameters.linkml.yaml``.
 
     :param parameters_key: The short name of the parameters to load.
         Must be a key registered in ``registries/registered_params.json``.
@@ -43,12 +82,12 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     Raises
     ------
     ValueError
-        If ``parameters_key`` is not registered, or if the MD5 checksum of the
-        resolved file does not match its registry entry.
-    jsonschema.ValidationError
-        If the loaded parameters do not conform to ``parameter_schema.json``.
+        If the registry does not conform to its schema, if ``parameters_key`` is not
+        registered, if the MD5 checksum of the resolved file does not match its registry
+        entry, or if the loaded parameters do not conform to their schema.
     """
     registry = json.loads(_PARAMS_REGISTRY_FILE_PATH.read_text())
+    validate_registry(registry, description=f"registry '{_PARAMS_REGISTRY_FILE_PATH.name}'")
     if parameters_key not in registry:
         registered_keys = list(registry.keys())
         message = (

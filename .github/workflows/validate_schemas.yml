@@ -1,0 +1,52 @@
+name: Validate LinkML schemas
+
+on:
+  workflow_call:
+  pull_request:
+    types: [synchronize, opened, reopened, ready_for_review]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up environment
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install the package and the full LinkML toolchain
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -e . pytest
+          pip install --group schemas
+
+      - name: Report the resolved LinkML versions
+        run: pip list | grep -i linkml
+
+      # Every schema is compiled to JSON Schema and every packaged data file is validated
+      # against the schema that describes it. The strict tests fail rather than skip when the
+      # full linkml distribution is missing, which is what this variable asks for.
+      - name: Validate the schemas and every packaged instance
+        env:
+          DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION: '1'
+        run: pytest tests/dandi_compute_code/schemas -v
+
+      # The schemas are also what the package validates against at import and load time, so
+      # the rest of the suite has to keep passing with the full toolchain installed.
+      - name: Run the tests that load the validated files
+        env:
+          DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION: '1'
+        run: pytest tests/ -v

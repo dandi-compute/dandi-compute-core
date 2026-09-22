@@ -29,7 +29,7 @@ extensions = [
 autosummary_generate = True
 # The LFP pipeline runtime dependencies are an optional extra, so mock them to
 # document `lfp_pipeline` without installing the heavy scientific stack.
-autodoc_mock_imports = ["spikeinterface", "neuroconv", "pynwb", "jsonschema", "numpy"]
+autodoc_mock_imports = ["spikeinterface", "neuroconv", "pynwb", "numpy"]
 autodoc_typehints = "description"
 autodoc_member_order = "bysource"
 napoleon_google_docstring = False

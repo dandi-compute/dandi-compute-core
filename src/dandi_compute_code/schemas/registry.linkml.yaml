@@ -1,0 +1,58 @@
+id: https://github.com/dandi-compute/dandi-compute-core/schemas/registry
+name: dandi_compute_registry
+title: DANDI Compute Registry
+description: >-
+  A LinkML schema describing the packaged registry files that map a short, stable key
+  onto a versioned file shipped with a pipeline. The same shape is used by every
+  registry, whether it registers parameter sets or SLURM configurations.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
+default_prefix: dandi_compute
+default_range: string
+imports:
+  - linkml:types
+classes:
+  Registry:
+    description: >-
+      A whole registry file. The top level is a mapping from registry key to the entry
+      describing the file that key resolves to.
+    tree_root: true
+    attributes:
+      entries:
+        description: A mapping from registry key to its entry.
+        range: RegistryEntry
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+  RegistryEntry:
+    description: >-
+      One registered file. The key is the short name callers pass, and the entry records
+      which packaged file it resolves to along with the checksum that file must still have.
+    attributes:
+      key:
+        description: >-
+          The short name this entry is registered under, such as "default" or "no-motion".
+        identifier: true
+        range: string
+        required: true
+      path:
+        description: >-
+          The registered file's name, relative to the pipeline's own params or configs
+          directory.
+        range: string
+        required: true
+      md5:
+        description: >-
+          The full MD5 checksum of the registered file. A loader recomputes this and
+          refuses the file when the two disagree, so an edited file cannot be loaded
+          under a key that was registered against different contents.
+        range: string
+        required: true
+        pattern: "^[0-9a-f]{32}$"
+      description:
+        description: >-
+          What this entry is for, and how it differs from the others. Optional because the
+          LFP registry records only a path and a checksum.
+        range: string
+        required: false

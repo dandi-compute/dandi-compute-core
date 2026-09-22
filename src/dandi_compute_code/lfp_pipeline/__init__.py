@@ -3,7 +3,7 @@ from ._prepare_job import build_lfp_job_hash, build_lfp_pipeline_path, prepare_l
 from ._resolve import resolve_filter_kwargs, resolve_reference_spec
 
 # The runtime processing modules require the LFP container environment
-# (SpikeInterface, neuroconv, pynwb, jsonschema). Keep them optional so the
+# (SpikeInterface, neuroconv, pynwb). Keep them optional so the
 # orchestration side (job capsule creation) can import this package in the base
 # environment without that heavy stack installed.
 try:

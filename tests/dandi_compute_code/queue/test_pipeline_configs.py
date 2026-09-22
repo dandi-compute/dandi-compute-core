@@ -31,7 +31,7 @@ def test_load_pipeline_config_raises_when_packaged_config_fails_linkml_validatio
 
     with (
         mock.patch("dandi_compute_code.queue._queue_utils._PACKAGED_PIPELINE_CONFIGS_PATH", invalid_config_file),
-        pytest.raises(ValueError, match="LinkML validation failed"),
+        pytest.raises(ValueError, match="LinkML validation"),
     ):
         PipelineQueue.load_pipeline_config()
 

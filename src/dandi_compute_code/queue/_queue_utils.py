@@ -21,13 +21,9 @@ import urllib.request
 from collections.abc import Collection
 from dataclasses import dataclass
 
-import linkml_runtime.processing.referencevalidator
-import linkml_runtime.utils.schemaview
-
 from ._globals import (
     _DURATION_PART_RE,
     _PACKAGED_PIPELINE_CONFIGS_PATH,
-    _PIPELINE_CONFIG_SCHEMA_PATH,
     _VERSION_TAG_RE,
 )
 from ._job_capsule import _derive_job_status
@@ -40,6 +36,7 @@ from ..dandiset._load_assets_jsonld_metadata import (
     _build_asset_metadata,
 )
 from ..dandiset._load_content_id_to_usage_dandiset_path import _load_content_id_to_usage_dandiset_path
+from ..schemas import validate_against_schema
 
 _log = logging.getLogger(__name__)
 
@@ -388,17 +385,7 @@ def _sort_key(record: dict[str, object]) -> tuple[str, str, str, str]:
 
 def _validate_pipeline_config(*, pipeline_config: dict) -> None:
     """Validate the pipeline config (top-level ``pipelines`` mapping) against the LinkML schema."""
-    validator = linkml_runtime.processing.referencevalidator.ReferenceValidator(
-        linkml_runtime.utils.schemaview.SchemaView(str(_PIPELINE_CONFIG_SCHEMA_PATH))
-    )
-    report = validator.validate(pipeline_config, target="PipelinesConfig")
-    errors = [result for result in report.results if not (result.normalized or result.repaired)]
-    if errors:
-        message = (
-            f"Invalid pipeline configuration: LinkML validation failed with {len(errors)} error(s). "
-            f"First error: {errors[0]!r}"
-        )
-        raise ValueError(message)
+    validate_against_schema(pipeline_config, schema="pipeline_config", description="pipeline configuration")
 
 
 def _latest_repository_version_tag(pipeline_directory: pathlib.Path, /) -> str:

@@ -1,0 +1,135 @@
+id: https://github.com/dandi-compute/dandi-compute-core/schemas/dispatch
+name: dandi_compute_dispatch
+title: DANDI Compute Dispatch
+description: >-
+  A LinkML schema describing what one pipeline's SLURM array dispatcher is configured with
+  and what one dispatch attempt produced. Every pipeline is run on the cluster by exactly
+  one array job, so these describe that job rather than any individual capsule's run.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
+default_prefix: dandi_compute
+default_range: string
+imports:
+  - linkml:types
+enums:
+  DispatchStatus:
+    description: The outcome of one pipeline's dispatch attempt.
+    permissible_values:
+      dispatched:
+        description: At least one array job was submitted.
+      no-pending:
+        description: No capsules were waiting to be submitted.
+      dispatcher-active:
+        description: >-
+          A dispatcher already owns this pipeline's array and has not exhausted it, so
+          nothing was submitted.
+classes:
+  CapsuleResources:
+    description: >-
+      What one capsule's submission script asks SLURM for. Capsules are grouped by these
+      requests, and each group is given an array sized for it, because pipelines differ in
+      shape for real reasons. The AIND submission script drives Nextflow and needs very
+      little itself, while the LFP script does its work in process and needs a lot.
+    attributes:
+      memory:
+        description: The `--mem` request, as SLURM writes it (for example "16GB").
+        range: string
+        required: true
+      cpus_per_task:
+        description: The `--cpus-per-task` request.
+        range: integer
+        minimum_value: 1
+        required: true
+      partition:
+        description: The `--partition` the capsule is submitted to.
+        range: string
+        required: true
+      time_limit:
+        description: The `--time` limit, as SLURM writes it (for example "48:00:00").
+        range: string
+        required: true
+  DispatchConfig:
+    description: >-
+      The settings of one pipeline's array dispatcher. Only the two queue limits are
+      configured. The resource requests are read back out of the pipeline's own submission
+      template, since an array task runs its capsule's submission script directly and so
+      has to be allocated whatever that script asks for.
+    tree_root: true
+    is_a: CapsuleResources
+    attributes:
+      pipeline:
+        description: The pipeline name as it appears in the pipeline configuration.
+        range: string
+        required: true
+      max_concurrent:
+        description: >-
+          How many array tasks SLURM is allowed to run at once, applied as the `%n` throttle
+          of the array specification.
+        range: integer
+        minimum_value: 1
+        required: true
+      max_array_tasks:
+        description: >-
+          Upper bound on the number of capsules placed in one array. Capsules beyond it stay
+          pending and are picked up by the next dispatch. Null means no upper bound, which
+          relies on the cluster's own `MaxArraySize` being large enough.
+        range: integer
+        minimum_value: 1
+        required: false
+  DispatchedArray:
+    description: >-
+      One array job, covering the capsules of a pipeline that request the same resources.
+    attributes:
+      array_job_id:
+        description: The SLURM job ID `sbatch` reported for this array.
+        range: string
+        required: true
+      task_count:
+        description: How many capsules this array covers.
+        range: integer
+        minimum_value: 1
+        required: true
+      resources:
+        description: The requests shared by every capsule in this array.
+        range: CapsuleResources
+        inlined: true
+        required: true
+      max_concurrent:
+        description: The concurrency throttle this array was submitted under.
+        range: integer
+        minimum_value: 1
+        required: true
+  DispatchResult:
+    description: The outcome of one pipeline's dispatch attempt.
+    attributes:
+      pipeline:
+        description: The pipeline that was dispatched.
+        range: string
+        required: true
+      status:
+        description: What the attempt did.
+        range: DispatchStatus
+        required: true
+      arrays:
+        description: >-
+          The arrays submitted, one per distinct set of requested resources. Empty unless
+          the status is "dispatched".
+        range: DispatchedArray
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
+        required: false
+      active_job_ids:
+        description: >-
+          The job IDs of the dispatchers already holding this pipeline's array. Populated
+          only when the status is "dispatcher-active".
+        range: string
+        multivalued: true
+        required: false
+      dispatch_directory:
+        description: >-
+          Where this dispatch's manifest and generated scripts were written. Null when
+          nothing was submitted.
+        range: string
+        required: false

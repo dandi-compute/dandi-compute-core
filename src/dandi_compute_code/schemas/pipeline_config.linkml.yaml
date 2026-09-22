@@ -6,7 +6,8 @@ description: >-
   including the parameter sets each pipeline forms job capsules for and asset overrides.
 prefixes:
   linkml: https://w3id.org/linkml/
-default_prefix: linkml
+  dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
+default_prefix: dandi_compute
 default_range: string
 imports:
   - linkml:types
@@ -14,6 +15,7 @@ classes:
   PipelinesConfig:
     description: >-
       Top-level container holding a collection of named pipelines.
+    tree_root: true
     attributes:
       pipelines:
         description: A mapping from pipeline name to pipeline configuration.
@@ -44,7 +46,7 @@ classes:
         description: >-
           A mapping of asset identifiers (e.g. UUIDs) to an override value.
           A null value indicates the asset should be skipped.
-        range: string
+        range: AssetOverride
         multivalued: true
         inlined: true
         inlined_as_list: false

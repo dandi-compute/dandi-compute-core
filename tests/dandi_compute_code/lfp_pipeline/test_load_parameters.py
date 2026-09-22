@@ -2,7 +2,6 @@ import hashlib
 import json
 import pathlib
 
-import jsonschema
 import pytest
 
 from dandi_compute_code.lfp_pipeline import load_lfp_parameters, validate_lfp_parameters
@@ -73,7 +72,7 @@ def test_validate_rejects_invalid_values(field: str, value: object) -> None:
     parameters = dict(_VALID_PARAMETERS)
     parameters[field] = value
 
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises(ValueError):
         validate_lfp_parameters(parameters)
 
 
@@ -82,7 +81,7 @@ def test_validate_rejects_missing_field() -> None:
     parameters = dict(_VALID_PARAMETERS)
     del parameters["filter_family"]
 
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises(ValueError):
         validate_lfp_parameters(parameters)
 
 
@@ -91,5 +90,5 @@ def test_validate_rejects_unknown_field() -> None:
     parameters = dict(_VALID_PARAMETERS)
     parameters["highpass_spatial_filter"] = True
 
-    with pytest.raises(jsonschema.ValidationError):
+    with pytest.raises(ValueError):
         validate_lfp_parameters(parameters)
