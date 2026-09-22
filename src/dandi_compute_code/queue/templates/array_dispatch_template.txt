@@ -39,7 +39,22 @@ echo "Claimed ${CODE_DIR_PATH} with marker $(basename "$MARKER_FILE_PATH")."
 
 # The capsule script runs inside this array task rather than being submitted as a job of its
 # own, so its `#SBATCH` directives are inert and the requests above are the allocation it gets.
-bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"
+# Its `--output` is the one directive that still has to be honoured: it points into the
+# capsule's own logs directory, which is where the capsule uploads its SLURM log from and
+# where `dandicompute issues dump` reads it back. The run is tee'd there to keep that intact.
+CAPSULE_LOG_FILE_PATH=$(sed -n 's/^#SBATCH[[:space:]]\+--output=//p' "${CAPSULE_CODE_DIRECTORY}/submit.sh" | head -n 1)
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%A/${SLURM_ARRAY_JOB_ID}}"
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%a/${SLURM_ARRAY_TASK_ID}}"
+
+if [ -n "$CAPSULE_LOG_FILE_PATH" ]; then
+    mkdir -p "$(dirname "$CAPSULE_LOG_FILE_PATH")"
+    echo "Writing the capsule's SLURM log to ${CAPSULE_LOG_FILE_PATH}."
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"
+else
+    echo "Capsule ${CODE_DIR_PATH} declares no SLURM output path; its log stays with this array task."
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"
+fi
 {% if keep_task_directory %}
 echo "Leaving task directory in place: ${TASK_DIRECTORY}"
 {% else %}

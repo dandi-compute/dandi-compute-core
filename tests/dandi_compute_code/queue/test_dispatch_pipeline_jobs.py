@@ -117,6 +117,27 @@ def test_dispatch_script_carries_the_configured_resources_and_throttle(
 
 
 @pytest.mark.ai_generated
+def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
+    processing_directory: pathlib.Path,
+) -> None:
+    """
+    The capsule's `#SBATCH --output` is the one directive still honoured.
+
+    Running the capsule inside an array task makes its `#SBATCH` header inert, but that path
+    points into the capsule's own logs directory, which is where the capsule uploads its SLURM
+    log from and where `issues dump` reads it back.
+    """
+    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
+    assert 'CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"' in script
+    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"' in script
+    # pipefail is what keeps a failing capsule a failing array task through that pipe.
+    assert "set -euo pipefail" in script
+
+
+@pytest.mark.ai_generated
 def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory: pathlib.Path) -> None:
     """The array script is what gets handed to sbatch."""
     with mock.patch(
