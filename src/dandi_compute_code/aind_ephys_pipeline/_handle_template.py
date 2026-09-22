@@ -28,34 +28,37 @@ def generate_aind_ephys_submission_script(
 
     Arguments are ordered as they occur in the submission template.
 
-    :param script_file_path: Where to write the submission script.
-    :type script_file_path: pathlib.Path
-    :param log_directory: The log directory.
-    :type log_directory: str
-    :param nwb_file_path: The input NWB file path.
-    :type nwb_file_path: str
-    :param results_directory: The results directory.
-    :type results_directory: str
-    :param work_directory: The work directory.
-    :type work_directory: str
-    :param apptainer_cache_directory: The Apptainer cache directory.
-    :type apptainer_cache_directory: str
-    :param environment_directory: The conda environment to activate.
-    :type environment_directory: str
-    :param config_file_path: The configuration file path.
-    :type config_file_path: str
-    :param pipeline_file_path: The pipeline file path.
-    :type pipeline_file_path: str
-    :param pipeline_repo_directory: Path to the base pipeline repository intended to be used.
-    :type pipeline_repo_directory: str
-    :param pipeline_version: The pipeline version, which is used to checkout a branch of the pipeline repository.
-    :type pipeline_version: str, optional
-    :param temp_name: The name of the temporary processing directory.
-    :type temp_name: str
-    :param done_tracker_file_path: The path to the 'done' tracker file.
-    :type done_tracker_file_path: str
-    :param params_file_path: The parameters file path.
-    :type params_file_path: str
+    Parameters
+    ----------
+    script_file_path : pathlib.Path
+        Where to write the submission script.
+    log_directory : str
+        The log directory.
+    nwb_file_path : str
+        The input NWB file path.
+    results_directory : str
+        The results directory.
+    work_directory : str
+        The work directory.
+    apptainer_cache_directory : str
+        The Apptainer cache directory.
+    environment_directory : str
+        The conda environment to activate.
+    config_file_path : str
+        The configuration file path.
+    pipeline_file_path : str
+        The pipeline file path.
+    pipeline_repo_directory : str
+        Path to the base pipeline repository intended to be used.
+    pipeline_version : str, optional
+        The pipeline version, which is used to checkout a branch of the pipeline
+        repository.
+    temp_name : str
+        The name of the temporary processing directory.
+    done_tracker_file_path : str
+        The path to the 'done' tracker file.
+    params_file_path : str
+        The parameters file path.
     """
     raw_template = _RAW_TEMPLATE_FILE_PATH.read_text()
     template = jinja2.Template(source=raw_template)

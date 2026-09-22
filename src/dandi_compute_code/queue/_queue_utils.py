@@ -392,7 +392,10 @@ def _latest_repository_version_tag(pipeline_directory: pathlib.Path, /) -> str:
     """
     The highest release tag in a local pipeline repository checkout.
 
-    :raises ValueError: If the checkout carries no release tags.
+    Raises
+    ------
+    ValueError
+        If the checkout carries no release tags.
     """
     tag_output = subprocess.check_output(["git", "tag", "--list"], cwd=pipeline_directory, text=True)
     version_tags = [tag.strip() for tag in tag_output.splitlines() if _VERSION_TAG_RE.fullmatch(tag.strip())]
@@ -414,8 +417,12 @@ def _load_pipeline_config() -> dict:
     Always reads the pipeline configuration packaged with this repo (see
     ``_PACKAGED_PIPELINE_CONFIGS_PATH``) -- there is no local override.
 
-    :raises FileNotFoundError: If the packaged pipeline configuration file is missing.
-    :raises ValueError: If the pipeline configuration fails LinkML validation.
+    Raises
+    ------
+    FileNotFoundError
+        If the packaged pipeline configuration file is missing.
+    ValueError
+        If the pipeline configuration fails LinkML validation.
     """
     if not _PACKAGED_PIPELINE_CONFIGS_PATH.exists():
         message = f"Packaged pipeline configuration is missing: '{_PACKAGED_PIPELINE_CONFIGS_PATH}'."

@@ -134,10 +134,18 @@ class PipelineQueue:
         """
         Return the entry with the given ``dandi_path`` (and ``config``).
 
-        :param dandi_path: The ``dandi_path`` recorded on the target entry.
-        :param config: Disambiguates scenarios that hold more than one job capsule for
-            the same asset. Any config matches when omitted.
-        :raises KeyError: If no entry matches *dandi_path* and *config*.
+        Parameters
+        ----------
+        dandi_path : str
+            The ``dandi_path`` recorded on the target entry.
+        config : str, optional
+            Disambiguates scenarios that hold more than one job capsule for the
+            same asset. Any config matches when omitted.
+
+        Raises
+        ------
+        KeyError
+            If no entry matches *dandi_path* and *config*.
         """
         for entry in self.entries:
             if entry.job.dandi_path == dandi_path and config in (None, entry.job.config):
@@ -154,8 +162,17 @@ class PipelineQueue:
         discovered rather than registered, so a new pipeline queue only has to be imported
         by :mod:`dandi_compute_code.queue` to take effect.
 
-        :param pipeline: The pipeline name as it appears in the packaged pipeline configuration.
-        :return: The claiming subclass, or :class:`PipelineQueue` when no subclass claims it.
+        Parameters
+        ----------
+        pipeline : str
+            The pipeline name as it appears in the packaged pipeline
+            configuration.
+
+        Returns
+        -------
+        type of PipelineQueue
+            The claiming subclass, or :class:`PipelineQueue` when no subclass
+            claims it.
         """
         for subclass in PipelineQueue.__subclasses__():
             if pipeline in subclass.pipelines:
@@ -173,9 +190,12 @@ class PipelineQueue:
         ``submitted`` asset exists, or when a sibling asset whose name starts with
         ``submitted_date-`` exists.
 
-        :returns: Sorted list of ``code`` directory paths (relative to the
-            Dandiset root) that are pending submission. Empty when nothing is
-            awaiting submission.
+        Returns
+        -------
+        list of str
+            Sorted list of ``code`` directory paths (relative to the Dandiset
+            root) that are pending submission. Empty when nothing is awaiting
+            submission.
         """
         metadata = load_assets_jsonld_metadata()
         paths = set(metadata.path_to_asset_metadata.keys())
@@ -215,8 +235,12 @@ class PipelineQueue:
         Always reads the pipeline configuration packaged with this repo -- there is no local
         override.
 
-        :raises FileNotFoundError: If the packaged pipeline configuration file is missing.
-        :raises ValueError: If the pipeline configuration fails LinkML validation.
+        Raises
+        ------
+        FileNotFoundError
+            If the packaged pipeline configuration file is missing.
+        ValueError
+            If the pipeline configuration fails LinkML validation.
         """
         return _load_pipeline_config()
 
@@ -257,9 +281,11 @@ class PipelineQueue:
         codebase version, parameters and config of each capsule are read back from the
         provenance block in its ``dataset_description.json``.
 
-        :param metadata: Indexed assets metadata, as produced by
-            :meth:`from_jsonld` or :meth:`from_dandi`.
-        :type metadata: AssetsJsonldMetadata
+        Parameters
+        ----------
+        metadata : AssetsJsonldMetadata
+            Indexed assets metadata, as produced by :meth:`from_jsonld` or
+            :meth:`from_dandi`.
         """
         collection = _collect_job_capsules(metadata)
         upstream_cache = _UpstreamMetadataCache()
@@ -284,9 +310,15 @@ class PipelineQueue:
         the same S3 location because JSON parsing is many times faster than
         YAML for identical content.
 
-        :param file_path: Path to a local assets JSON-LD file.
-        :type file_path: pathlib.Path
-        :raises ValueError: If the file content is not a JSON array.
+        Parameters
+        ----------
+        file_path : pathlib.Path
+            Path to a local assets JSON-LD file.
+
+        Raises
+        ------
+        ValueError
+            If the file content is not a JSON array.
         """
         raw = json.loads(file_path.read_text())
         if not isinstance(raw, list):
@@ -318,9 +350,11 @@ class PipelineQueue:
         Fetches ``assets.jsonld`` for *dandiset_id* from the DANDI S3 bucket
         over the network.
 
-        :param dandiset_id: The Dandiset whose ``assets.jsonld`` is read.
-            Defaults to the job capsules Dandiset (``001697``).
-        :type dandiset_id: str
+        Parameters
+        ----------
+        dandiset_id : str, optional
+            The Dandiset whose ``assets.jsonld`` is read. Defaults to the job
+            capsules Dandiset (``001697``).
         """
         return cls.from_metadata(load_assets_jsonld_metadata(dandiset_id=dandiset_id))
 
@@ -337,8 +371,10 @@ class PipelineQueue:
         """
         Write all entries to *file_path* as a tab-separated ``state.tsv`` table.
 
-        :param file_path: Destination path; the file is overwritten if it already exists.
-        :type file_path: pathlib.Path
+        Parameters
+        ----------
+        file_path : pathlib.Path
+            Destination path. The file is overwritten if it already exists.
         """
         file_path.write_text(self.to_tsv_string())
 
@@ -364,18 +400,24 @@ class PipelineQueue:
         state file involved -- the state is always rebuilt fresh from *dandiset_id*'s remote
         ``assets.jsonld`` and rewritten directly.
 
-        :param dandiset_id: The Dandiset whose ``assets.jsonld`` portrays the state, and which
+        Parameters
+        ----------
+        dandiset_id : str, optional
+            The Dandiset whose ``assets.jsonld`` portrays the state, and which
             the table is written into. Defaults to the job capsules Dandiset.
-        :type dandiset_id: str
-        :param relative_path: Path (relative to the Dandiset root) the table is written to.
-        :type relative_path: str
-        :param processing_directory: Directory for the temporary working tree used to upload
-            the table (defaults to the system temporary location).
-        :type processing_directory: pathlib.Path | None
-        :param test: When ``True``, leave the temporary working tree on disk after a
+        relative_path : str, optional
+            Path (relative to the Dandiset root) the table is written to.
+        processing_directory : pathlib.Path, optional
+            Directory for the temporary working tree used to upload the table.
+            Defaults to the system temporary location.
+        test : bool, optional
+            When ``True``, leave the temporary working tree on disk after a
             successful upload for debugging.
-        :type test: bool
-        :raises RuntimeError: If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
+
+        Raises
+        ------
+        RuntimeError
+            If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
         """
         state = cls.from_dandi(dandiset_id=dandiset_id)
         write_dandiset_file(
@@ -404,21 +446,27 @@ class PipelineQueue:
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`, rather than written to local
         disk.
 
-        :param dandiset_directory: Local clone of the dandiset used to locate Nextflow timeline
+        Parameters
+        ----------
+        dandiset_directory : pathlib.Path
+            Local clone of the dandiset used to locate Nextflow timeline
             reports.
-        :type dandiset_directory: pathlib.Path
-        :param dandiset_id: The Dandiset the statistics JSON is written into.
-        :type dandiset_id: str
-        :param relative_path: Path (relative to the Dandiset root) the statistics JSON is
-            written to.
-        :type relative_path: str
-        :param processing_directory: Directory for the temporary working tree used to upload the
-            statistics JSON (defaults to the system temporary location).
-        :type processing_directory: pathlib.Path | None
-        :param test: When ``True``, leave the temporary working tree on disk after a successful
-            upload for debugging.
-        :type test: bool
-        :raises RuntimeError: If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
+        dandiset_id : str, optional
+            The Dandiset the statistics JSON is written into.
+        relative_path : str, optional
+            Path (relative to the Dandiset root) the statistics JSON is written
+            to.
+        processing_directory : pathlib.Path, optional
+            Directory for the temporary working tree used to upload the
+            statistics JSON. Defaults to the system temporary location.
+        test : bool, optional
+            When ``True``, leave the temporary working tree on disk after a
+            successful upload for debugging.
+
+        Raises
+        ------
+        RuntimeError
+            If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
         """
         job_step_wall_time_seconds: collections.defaultdict[str, float] = collections.defaultdict(float)
         timeline_files_processed = 0
@@ -486,12 +534,21 @@ class PipelineQueue:
         job capsule directory is deleted from the DANDI archive (via ``dandi delete``)
         and the local filesystem.
 
-        :param dandiset_directory: Local clone of the dandiset used to resolve and
-            delete matching job capsule directories.
-        :type dandiset_directory: pathlib.Path
-        :returns: Job capsule directory paths that were deleted.
-        :rtype: list[pathlib.Path]
-        :raises RuntimeError: If ``DANDI_API_KEY`` is not set or is blank.
+        Parameters
+        ----------
+        dandiset_directory : pathlib.Path
+            Local clone of the dandiset used to resolve and delete matching job
+            capsule directories.
+
+        Returns
+        -------
+        list of pathlib.Path
+            Job capsule directory paths that were deleted.
+
+        Raises
+        ------
+        RuntimeError
+            If ``DANDI_API_KEY`` is not set or is blank.
         """
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
@@ -541,28 +598,37 @@ class PipelineQueue:
         addressed purely by ID -- everything is resolved and moved ephemerally over
         the network, with no local Dandiset clone required.
 
-        :param status: Which subset of entries to archive.
-        :type status: typing.Literal["failed", "pending", "stalled"]
-        :param dandiset_id: Dandiset entries are archived *from*. Defaults to the job
-            capsules Dandiset.
-        :type dandiset_id: str
-        :param archive_dandiset_id: Dandiset entries are archived *to*. Defaults to
-            the failed runs archive Dandiset.
-        :type archive_dandiset_id: str
-        :param processing_directory: Directory for the temporary working tree used by
-            each move (defaults to the system temporary location).
-        :type processing_directory: pathlib.Path | None
-        :param test: When ``True``, leave each temporary working tree on disk after a
+        Parameters
+        ----------
+        status : {"failed", "pending", "stalled"}
+            Which subset of entries to archive.
+        dandiset_id : str, optional
+            Dandiset entries are archived *from*. Defaults to the job capsules
+            Dandiset.
+        archive_dandiset_id : str, optional
+            Dandiset entries are archived *to*. Defaults to the failed runs
+            archive Dandiset.
+        processing_directory : pathlib.Path, optional
+            Directory for the temporary working tree used by each move. Defaults
+            to the system temporary location.
+        test : bool, optional
+            When ``True``, leave each temporary working tree on disk after a
             successful move for debugging.
-        :type test: bool
-        :returns: Capsule paths (relative to the Dandiset root) that were archived,
-            in the order they were processed.
-        :rtype: list[str]
-        :raises RuntimeError: If ``DANDI_API_KEY`` is unset or blank, or if archiving
-            any individual capsule fails (see :func:`move_job_capsule`). A failure
+
+        Returns
+        -------
+        list of str
+            Capsule paths (relative to the Dandiset root) that were archived, in
+            the order they were processed.
+
+        Raises
+        ------
+        RuntimeError
+            If ``DANDI_API_KEY`` is unset or blank, or if archiving any
+            individual capsule fails (see :func:`move_job_capsule`). A failure
             leaves entries processed so far archived and stops before the rest.
-        :raises ValueError: If *status* is not ``"failed"``, ``"pending"``, or
-            ``"stalled"``.
+        ValueError
+            If *status* is not ``"failed"``, ``"pending"``, or ``"stalled"``.
         """
         if status not in ("failed", "pending", "stalled"):
             message = f"Unknown status {status!r}; expected 'failed', 'pending', or 'stalled'."
@@ -615,20 +681,37 @@ class PipelineQueue:
         The queue state is always fetched fresh. Pending capsules are read live from the DANDI
         assets metadata (see :meth:`pending_code_dirs`), so there is no local queue directory.
 
-        :param processing_directory: Directory the per-pipeline dispatch directories are
-            created in. Each holds a manifest, a dispatch script and the array's logs, so it
-            has to stay readable from the compute nodes for as long as the array lives.
-        :param only_pipeline: Dispatch only this pipeline instead of every configured one.
-        :param max_concurrent: Overrides every dispatched pipeline's configured concurrency
-            limit.
-        :param jitter_seconds: Maximum random delay (seconds) before processing; ``0`` disables.
-            Spreads concurrent invocations out so they do not read the cluster state at once.
-        :param dandiset_id: The Dandiset capsules are downloaded from and uploaded back to.
-        :param test: If ``True``, array tasks leave their working trees on disk for debugging.
-        :returns: The dispatch outcome per pipeline, keyed by pipeline name.
-        :rtype: dict[str, DispatchResult]
-        :raises ValueError: If *jitter_seconds* is negative, if *max_concurrent* is less than
-            1, or if *only_pipeline* is not configured.
+        Parameters
+        ----------
+        processing_directory : pathlib.Path
+            Directory the per-pipeline dispatch directories are created in. Each
+            holds a manifest, a dispatch script and the array's logs, so it has
+            to stay readable from the compute nodes for as long as the array
+            lives.
+        only_pipeline : str, optional
+            Dispatch only this pipeline instead of every configured one.
+        max_concurrent : int, optional
+            Overrides every dispatched pipeline's configured concurrency limit.
+        jitter_seconds : float, optional
+            Maximum random delay (seconds) before processing. ``0`` disables it.
+            Spreads concurrent invocations out so they do not read the cluster
+            state at once.
+        dandiset_id : str, optional
+            The Dandiset capsules are downloaded from and uploaded back to.
+        test : bool, optional
+            If ``True``, array tasks leave their working trees on disk for
+            debugging.
+
+        Returns
+        -------
+        dict of str to DispatchResult
+            The dispatch outcome per pipeline, keyed by pipeline name.
+
+        Raises
+        ------
+        ValueError
+            If *jitter_seconds* is negative, if *max_concurrent* is less than 1,
+            or if *only_pipeline* is not configured.
         """
         if jitter_seconds < 0:
             message = "jitter_seconds must be non-negative"
@@ -699,11 +782,19 @@ class PipelineQueue:
         pipeline, so the answer comes from the queue class that owns *pipeline* (see
         :meth:`for_pipeline`).
 
-        :param pipeline: The pipeline name as it appears in the packaged pipeline configuration.
-        :param pipeline_directory: Local checkout of the pipeline repository, for pipelines
-            that live in one.
-        :return: The version string to form new job capsules against.
-        :rtype: str
+        Parameters
+        ----------
+        pipeline : str
+            The pipeline name as it appears in the packaged pipeline
+            configuration.
+        pipeline_directory : pathlib.Path, optional
+            Local checkout of the pipeline repository, for pipelines that live
+            in one.
+
+        Returns
+        -------
+        str
+            The version string to form new job capsules against.
         """
         queue_class = cls.for_pipeline(pipeline)
         latest_version = queue_class._resolve_latest_pipeline_version(pipeline_directory=pipeline_directory)
@@ -744,17 +835,28 @@ class PipelineQueue:
         is how a new pipeline release gets rolled out over assets that have already been
         processed.
 
-        :param only_pipeline: Form capsules only for this pipeline instead of every pipeline in
+        Parameters
+        ----------
+        only_pipeline : str, optional
+            Form capsules only for this pipeline instead of every pipeline in
             the configuration. Raises if the name is not configured.
-        :param config_key: Key for a registered job configuration.
-        :param content_ids: Explicit content IDs to form capsules for. The qualifying list is
+        config_key : str, optional
+            Key for a registered job configuration.
+        content_ids : list of str, optional
+            Explicit content IDs to form capsules for. The qualifying list is
             not fetched from the network when these are provided.
-        :param limit: Form at most this many capsules in total. Unlimited when ``None``.
-        :param force_latest_versions: Form a capsule for every qualifying asset against the
-            latest pipeline and codebase versions, whether or not one already exists.
-        :param pipeline_directory: Local checkout of the AIND pipeline repository.
-        :return: The number of job capsules that were formed.
-        :rtype: int
+        limit : int, optional
+            Form at most this many capsules in total. Unlimited when ``None``.
+        force_latest_versions : bool, optional
+            Form a capsule for every qualifying asset against the latest
+            pipeline and codebase versions, whether or not one already exists.
+        pipeline_directory : pathlib.Path, optional
+            Local checkout of the AIND pipeline repository.
+
+        Returns
+        -------
+        int
+            The number of job capsules that were formed.
         """
         pipeline_config = _load_pipeline_config()
         pipelines = pipeline_config.get("pipelines", {})
@@ -934,9 +1036,15 @@ class PipelineQueue:
         the expected column order) back into :class:`JobCapsule` objects via
         :meth:`JobCapsule.from_tsv_row`.
 
-        :param file_path: Path to the ``state.tsv`` file to read.
-        :type file_path: pathlib.Path
-        :raises FileNotFoundError: If *file_path* does not exist.
+        Parameters
+        ----------
+        file_path : pathlib.Path
+            Path to the ``state.tsv`` file to read.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *file_path* does not exist.
         """
         if not file_path.exists():
             message = f"State file not found: {file_path}"

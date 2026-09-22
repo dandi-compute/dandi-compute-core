@@ -5,10 +5,15 @@ def resolve_filter_kwargs(parameters, /) -> dict:
     """
     Translate the filter parameters into keyword arguments for ``spikeinterface.bandpass_filter``.
 
-    :param parameters: The validated LFP parameters.
-    :type parameters: dict
-    :return: Keyword arguments for ``spikeinterface.bandpass_filter``.
-    :rtype: dict
+    Parameters
+    ----------
+    parameters : dict
+        The validated LFP parameters.
+
+    Returns
+    -------
+    dict
+        Keyword arguments for ``spikeinterface.bandpass_filter``.
     """
     freq_min, freq_max = parameters["filter_band"]
     filter_kwargs = {
@@ -29,10 +34,15 @@ def resolve_reference_spec(parameters, /) -> dict:
     it is ``True``, ``operator`` is the median operator and ``per_shank`` selects
     between a global reference and one computed within each shank group.
 
-    :param parameters: The validated LFP parameters.
-    :type parameters: dict
-    :return: A specification with ``apply``, ``operator``, and ``per_shank`` keys.
-    :rtype: dict
+    Parameters
+    ----------
+    parameters : dict
+        The validated LFP parameters.
+
+    Returns
+    -------
+    dict
+        A specification with ``apply``, ``operator``, and ``per_shank`` keys.
     """
     reference_scheme = parameters["reference_scheme"]
     if reference_scheme == "none":

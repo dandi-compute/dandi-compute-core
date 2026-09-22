@@ -23,11 +23,20 @@ def resolve_schema_path(schema: str, /) -> pathlib.Path:
     """
     Resolve a schema's short name to its packaged file path.
 
-    :param schema: A key of :data:`SCHEMA_PATHS`.
-    :type schema: str
-    :return: The path of the schema file.
-    :rtype: pathlib.Path
-    :raises ValueError: If *schema* is not packaged.
+    Parameters
+    ----------
+    schema : str
+        A key of :data:`SCHEMA_PATHS`.
+
+    Returns
+    -------
+    pathlib.Path
+        The path of the schema file.
+
+    Raises
+    ------
+    ValueError
+        If *schema* is not packaged.
     """
     if schema not in SCHEMA_PATHS:
         packaged = sorted(SCHEMA_PATHS)
@@ -40,15 +49,24 @@ def validate_against_schema(instance: dict, /, *, schema: str, description: str 
     """
     Validate a structure against one of the packaged LinkML schemas.
 
-    :param instance: The structure to validate.
-    :type instance: dict
-    :param schema: A key of :data:`SCHEMA_PATHS`.
-    :type schema: str
-    :param description: What is being validated, used to open the error message.
-    :type description: str
-    :return: The instance, unchanged.
-    :rtype: dict
-    :raises ValueError: If *instance* does not conform to the schema.
+    Parameters
+    ----------
+    instance : dict
+        The structure to validate.
+    schema : str
+        A key of :data:`SCHEMA_PATHS`.
+    description : str, optional
+        What is being validated, used to open the error message.
+
+    Returns
+    -------
+    dict
+        The instance, unchanged.
+
+    Raises
+    ------
+    ValueError
+        If *instance* does not conform to the schema.
     """
     schema_path = resolve_schema_path(schema)
     target_class = SCHEMA_TREE_ROOTS[schema]
@@ -71,13 +89,22 @@ def validate_registry(registry: dict, /, *, description: str = "registry") -> di
     A registry file's top level is the key-to-entry mapping itself, so it is wrapped in the
     ``entries`` slot the ``Registry`` class declares before being validated.
 
-    :param registry: The loaded registry, keyed by registry key.
-    :type registry: dict
-    :param description: What is being validated, used to open the error message.
-    :type description: str
-    :return: The registry, unchanged.
-    :rtype: dict
-    :raises ValueError: If *registry* does not conform to the registry schema.
+    Parameters
+    ----------
+    registry : dict
+        The loaded registry, keyed by registry key.
+    description : str, optional
+        What is being validated, used to open the error message.
+
+    Returns
+    -------
+    dict
+        The registry, unchanged.
+
+    Raises
+    ------
+    ValueError
+        If *registry* does not conform to the registry schema.
     """
     validate_against_schema({"entries": registry}, schema="registry", description=description)
     return registry

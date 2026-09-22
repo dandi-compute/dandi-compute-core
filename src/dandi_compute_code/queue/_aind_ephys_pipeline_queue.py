@@ -34,8 +34,11 @@ class AindEphysPipelineQueue(PipelineQueue):
         """
         The highest release tag in the local AIND ephys pipeline checkout.
 
-        :param pipeline_directory: Local checkout of the AIND ephys pipeline repository.
-            Defaults to the checkout on MIT Engaging.
+        Parameters
+        ----------
+        pipeline_directory : pathlib.Path, optional
+            Local checkout of the AIND ephys pipeline repository. Defaults to the
+            checkout on MIT Engaging.
         """
         latest_version = _latest_repository_version_tag(pipeline_directory or _DEFAULT_AIND_PIPELINE_DIRECTORY)
         return latest_version

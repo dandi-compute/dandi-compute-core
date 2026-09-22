@@ -26,31 +26,33 @@ def generate_lfp_submission_script(
     on a local NWB file. It is intentionally much simpler than the AIND ephys
     submission script.
 
-    :param script_file_path: Where to write the submission script.
-    :type script_file_path: pathlib.Path
-    :param log_directory: Directory for the slurm and duct logs.
-    :type log_directory: str
-    :param dataset_directory: The datalad dataset directory in which the container runs.
-    :type dataset_directory: str
-    :param environment_directory: The conda environment to activate. It must provide datalad,
+    Parameters
+    ----------
+    script_file_path : pathlib.Path
+        Where to write the submission script.
+    log_directory : str
+        Directory for the slurm and duct logs.
+    dataset_directory : str
+        The datalad dataset directory in which the container runs.
+    environment_directory : str
+        The conda environment to activate. It must provide datalad,
         datalad-container, con-duct, and apptainer.
-    :type environment_directory: str
-    :param container_name: The datalad container registration name.
-    :type container_name: str
-    :param container_image: The container image reference, for example
+    container_name : str
+        The datalad container registration name.
+    container_image : str
+        The container image reference, for example
         ``ghcr.io/dandi-compute/dandi-compute-lfp:latest``.
-    :type container_image: str
-    :param nwb_file_path: Path to the input NWB file. It is a valid NWB file even though it
-        has no ``.nwb`` suffix.
-    :type nwb_file_path: str
-    :param output_nwb_file_path: Path to write the resulting NWB file.
-    :type output_nwb_file_path: str
-    :param parameters_key: The registered LFP parameters key to run.
-    :type parameters_key: str
-    :param temp_name: The name recorded in the done tracker file on completion.
-    :type temp_name: str
-    :param done_tracker_file_path: The path to the done tracker file.
-    :type done_tracker_file_path: str
+    nwb_file_path : str
+        Path to the input NWB file. It is a valid NWB file even though it has no
+        ``.nwb`` suffix.
+    output_nwb_file_path : str
+        Path to write the resulting NWB file.
+    parameters_key : str
+        The registered LFP parameters key to run.
+    temp_name : str
+        The name recorded in the done tracker file on completion.
+    done_tracker_file_path : str
+        The path to the done tracker file.
     """
     raw_template = _RAW_TEMPLATE_FILE_PATH.read_text()
     template = jinja2.Template(source=raw_template)

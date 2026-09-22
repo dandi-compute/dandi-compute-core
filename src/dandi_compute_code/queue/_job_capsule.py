@@ -68,10 +68,16 @@ def _derive_job_status(*, has_code: bool, has_been_submitted: bool, has_logs: bo
     output can mean either, and nothing recorded about a capsule tells the two apart, so
     they are one status rather than two overlapping ones.
 
-    :param has_code: A ``code`` directory is present.
-    :param has_been_submitted: A ``code/submitted*`` marker is present.
-    :param has_logs: A ``logs`` directory holds something other than its dataset description.
-    :param has_output: A ``derivatives`` directory is present.
+    Parameters
+    ----------
+    has_code : bool
+        A ``code`` directory is present.
+    has_been_submitted : bool
+        A ``code/submitted*`` marker is present.
+    has_logs : bool
+        A ``logs`` directory holds something other than its dataset description.
+    has_output : bool
+        A ``derivatives`` directory is present.
     """
     if has_output:
         return "successful"
@@ -167,9 +173,15 @@ class JobCapsule:
         """
         Return this job capsule's directory path under *base_dir*.
 
-        :param base_dir: Root of the local Dandiset tree to resolve paths under.
-        :type base_dir: pathlib.Path
-        :raises ValueError: If this entry's ``dandi_path`` is an empty string.
+        Parameters
+        ----------
+        base_dir : pathlib.Path
+            Root of the local Dandiset tree to resolve paths under.
+
+        Raises
+        ------
+        ValueError
+            If this entry's ``dandi_path`` is an empty string.
         """
         if self.job.dandi_path == "":
             message = f"Entry has invalid dandi_path field (empty): {self!r}"
@@ -217,7 +229,10 @@ class JobCapsule:
         The remote-metadata counterpart of :meth:`capsule_dir`, used when resolving a
         capsule's path against DANDI assets metadata rather than a local Dandiset clone.
 
-        :raises ValueError: If this entry's ``dandi_path`` is an empty string.
+        Raises
+        ------
+        ValueError
+            If this entry's ``dandi_path`` is an empty string.
         """
         if self.job.dandi_path == "":
             message = f"Entry has invalid dandi_path field (empty): {self!r}"
@@ -241,9 +256,11 @@ class JobCapsule:
         filesystem -- so this works purely from DANDI metadata, without a local Dandiset
         clone.
 
-        :param asset_paths: Asset paths (POSIX strings) for the Dandiset this
-            entry's capsule lives in.
-        :type asset_paths: collections.abc.Collection[str]
+        Parameters
+        ----------
+        asset_paths : collections.abc.Collection of str
+            Asset paths (POSIX strings) for the Dandiset this entry's capsule
+            lives in.
         """
 
         def _has_assets_under(prefix: str) -> bool:

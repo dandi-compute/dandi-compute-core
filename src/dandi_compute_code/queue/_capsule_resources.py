@@ -121,8 +121,12 @@ def read_capsule_resources(
     A capsule whose script cannot be read is left out rather than guessed at, so the caller
     falls back to its pipeline's own defaults for it.
 
-    :param code_dir_paths: Capsule ``code`` directory paths, relative to the Dandiset root.
-    :param metadata: Already loaded assets metadata. Fetched when not supplied.
+    Parameters
+    ----------
+    code_dir_paths : list of str
+        Capsule ``code`` directory paths, relative to the Dandiset root.
+    metadata : AssetsJsonldMetadata, optional
+        Already loaded assets metadata. Fetched when not supplied.
     """
     if not code_dir_paths:
         return {}

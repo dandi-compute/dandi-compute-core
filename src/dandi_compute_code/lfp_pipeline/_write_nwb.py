@@ -15,11 +15,17 @@ def add_lfp_to_nwbfile(*, recording, nwbfile):
     The series is placed inside an ``LFP`` container within the ``ecephys``
     processing module, following the NWB best practice for processed LFP.
 
-    :param recording: The LFP SpikeInterface recording to add.
-    :param nwbfile: The in-memory NWBFile to augment.
-    :type nwbfile: pynwb.NWBFile
-    :return: The same NWBFile, with the LFP ``ElectricalSeries`` added.
-    :rtype: pynwb.NWBFile
+    Parameters
+    ----------
+    recording
+        The LFP SpikeInterface recording to add.
+    nwbfile : pynwb.NWBFile
+        The in-memory NWBFile to augment.
+
+    Returns
+    -------
+    pynwb.NWBFile
+        The same NWBFile, with the LFP ``ElectricalSeries`` added.
     """
     neuroconv.tools.spikeinterface.add_recording_to_nwbfile(
         recording=recording, nwbfile=nwbfile, parent_container="processing/LFP"
@@ -35,16 +41,23 @@ def run_lfp_pipeline(*, recording, nwbfile, parameters: dict | None = None, nwbf
     ``ElectricalSeries`` to ``nwbfile`` inside the ``ecephys`` processing
     module. When ``nwbfile_path`` is provided the NWBFile is written to disk.
 
-    :param recording: The raw SpikeInterface recording to process.
-    :param nwbfile: The in-memory NWBFile to augment with the extracted LFP.
-    :type nwbfile: pynwb.NWBFile
-    :param parameters: The validated LFP parameters. Defaults to the registered
-        ``default`` parameters.
-    :type parameters: dict, optional
-    :param nwbfile_path: Where to write the resulting NWB file. When ``None`` the
-        NWBFile is only augmented in memory and not written to disk.
-    :return: The augmented NWBFile.
-    :rtype: pynwb.NWBFile
+    Parameters
+    ----------
+    recording
+        The raw SpikeInterface recording to process.
+    nwbfile : pynwb.NWBFile
+        The in-memory NWBFile to augment with the extracted LFP.
+    parameters : dict, optional
+        The validated LFP parameters. Defaults to the registered ``default``
+        parameters.
+    nwbfile_path
+        Where to write the resulting NWB file. When ``None`` the NWBFile is only
+        augmented in memory and not written to disk.
+
+    Returns
+    -------
+    pynwb.NWBFile
+        The augmented NWBFile.
     """
     lfp_recording = extract_lfp(recording=recording, parameters=parameters)
     add_lfp_to_nwbfile(recording=lfp_recording, nwbfile=nwbfile)

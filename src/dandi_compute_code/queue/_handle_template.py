@@ -25,33 +25,34 @@ def generate_array_dispatch_script(
 
     Arguments are ordered as they occur in the dispatch template.
 
-    :param script_file_path: Where to write the dispatch script.
-    :type script_file_path: pathlib.Path
-    :param job_name: The SLURM job name identifying this pipeline's dispatcher.
-    :type job_name: str
-    :param dispatch_directory: Directory holding the manifest, the array logs, and each
-        task's working tree.
-    :type dispatch_directory: str
-    :param memory: Memory requested per array task, taken from the pipeline's submission
+    Parameters
+    ----------
+    script_file_path : pathlib.Path
+        Where to write the dispatch script.
+    job_name : str
+        The SLURM job name identifying this pipeline's dispatcher.
+    dispatch_directory : str
+        Directory holding the manifest, the array logs, and each task's working
+        tree.
+    memory : str
+        Memory requested per array task, taken from the pipeline's submission
         template so that it matches what the capsule asks for.
-    :type memory: str
-    :param cpus_per_task: CPUs requested per array task.
-    :type cpus_per_task: int
-    :param partition: The SLURM partition the array is submitted to.
-    :type partition: str
-    :param time_limit: Wall time requested per array task.
-    :type time_limit: str
-    :param array_specification: The ``--array`` specification, including the concurrency
-        throttle.
-    :type array_specification: str
-    :param dandiset_id: The Dandiset each capsule is downloaded from and uploaded back to.
-    :type dandiset_id: str
-    :param manifest_file_path: File listing one capsule ``code`` directory per line, read by
-        array task index.
-    :type manifest_file_path: str
-    :param keep_task_directory: When ``True``, each task leaves its working tree on disk for
-        debugging instead of removing it.
-    :type keep_task_directory: bool
+    cpus_per_task : int
+        CPUs requested per array task.
+    partition : str
+        The SLURM partition the array is submitted to.
+    time_limit : str
+        Wall time requested per array task.
+    array_specification : str
+        The ``--array`` specification, including the concurrency throttle.
+    dandiset_id : str
+        The Dandiset each capsule is downloaded from and uploaded back to.
+    manifest_file_path : str
+        File listing one capsule ``code`` directory per line, read by array task
+        index.
+    keep_task_directory : bool, optional
+        When ``True``, each task leaves its working tree on disk for debugging
+        instead of removing it.
     """
     raw_template = _RAW_ARRAY_DISPATCH_TEMPLATE_FILE_PATH.read_text()
     template = jinja2.Template(source=raw_template)

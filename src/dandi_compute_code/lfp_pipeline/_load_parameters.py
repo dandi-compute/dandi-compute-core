@@ -11,10 +11,15 @@ def validate_lfp_parameters(parameters, /) -> dict:
     """
     Validate a set of LFP parameters against the pipeline JSON schema.
 
-    :param parameters: The parameter mapping to validate.
-    :type parameters: dict
-    :return: The validated parameters, unchanged.
-    :rtype: dict
+    Parameters
+    ----------
+    parameters : dict
+        The parameter mapping to validate.
+
+    Returns
+    -------
+    dict
+        The validated parameters, unchanged.
 
     Raises
     ------
@@ -36,11 +41,16 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     against its recorded MD5, and the loaded parameters are validated against
     ``parameter_schema.json``.
 
-    :param parameters_key: The short name of the parameters to load.
-        Must be a key registered in ``registries/registered_params.json``.
-    :type parameters_key: str
-    :return: The validated parameters loaded from the registered file.
-    :rtype: dict
+    Parameters
+    ----------
+    parameters_key : str
+        The short name of the parameters to load. Must be a key registered in
+        ``registries/registered_params.json``.
+
+    Returns
+    -------
+    dict
+        The validated parameters loaded from the registered file.
 
     Raises
     ------

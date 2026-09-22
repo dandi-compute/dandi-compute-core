@@ -39,8 +39,10 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
     """
     Build the path of the LFP pipeline directory that holds an asset's job capsules.
 
-    :return: The pipeline directory path under the job capsules Dandiset.
-    :rtype: str
+    Returns
+    -------
+    str
+        The pipeline directory path under the job capsules Dandiset.
     """
     pipeline_path = f"derivatives/dandiset-{dandiset_id}/{output_dandi_path}/pipeline-lfp"
     return pipeline_path
@@ -61,8 +63,10 @@ def build_lfp_job_hash(
     version is left out for the same reason it is on the AIND side: a job is the same logical
     job whichever release of this package formed it.
 
-    :return: The hash half of the job ID naming the capsule directory.
-    :rtype: str
+    Returns
+    -------
+    str
+        The hash half of the job ID naming the capsule directory.
     """
     job_hash = _compute_job_hash(
         dandiset_id=dandiset_id,
@@ -123,17 +127,30 @@ def prepare_lfp_job(
     capsule is ever prepared per asset. When a capsule already exists for the
     resolved output path, the function returns ``None`` without preparing another.
 
-    :param pipeline_version: The container image tag to run, for example ``v0.4.0``.
-    :param content_id: The content ID for the data to be processed.
-    :param dandiset_id: The Dandiset ID, used to look up the content ID if it is not provided.
-    :param dandiset_path: The asset path, used to look up the content ID if it is not provided.
-    :param parameters_key: The registered LFP parameters key.
-    :param force_new_capsule: Whether to form a new capsule even when one already exists for
-        this job, under a job ID disambiguated with a counter when the existing one was
+    Parameters
+    ----------
+    pipeline_version : str
+        The container image tag to run, for example ``v0.4.0``.
+    content_id : str, optional
+        The content ID for the data to be processed.
+    dandiset_id : str, optional
+        The Dandiset ID, used to look up the content ID if it is not provided.
+    dandiset_path : str, optional
+        The asset path, used to look up the content ID if it is not provided.
+    parameters_key : str, optional
+        The registered LFP parameters key.
+    force_new_capsule : bool, optional
+        Whether to form a new capsule even when one already exists for this job,
+        under a job ID disambiguated with a counter when the existing one was
         formed on the same day.
-    :param silent: Whether to suppress DANDI client output.
-    :return: The path to the generated submission script, or ``None`` if a capsule already existed.
-    :rtype: pathlib.Path or None
+    silent : bool, optional
+        Whether to suppress DANDI client output.
+
+    Returns
+    -------
+    pathlib.Path or None
+        The path to the generated submission script, or ``None`` if a capsule
+        already existed.
     """
     if not content_id and not (dandiset_id and dandiset_path):
         message = "Either content_id or both dandiset_id and dandiset_path must be provided."
