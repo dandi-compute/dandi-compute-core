@@ -2,7 +2,7 @@ import pathlib
 
 import pytest
 
-from dandi_compute_code.queue import JobEntry
+from dandi_compute_code.queue import JobCapsule
 
 _JOB_ID = "job-240101a1b2c3"
 
@@ -27,7 +27,7 @@ def test_capsule_dir_is_the_job_id_under_the_pipeline_directory(
     relative_prefix: pathlib.Path,
     tmp_path: pathlib.Path,
 ) -> None:
-    """JobEntry.capsule_dir names the capsule by its job ID alone."""
+    """JobCapsule.capsule_dir names the capsule by its job ID alone."""
     entry = {
         "job_id": _JOB_ID,
         "dandiset_id": "000001",
@@ -39,7 +39,7 @@ def test_capsule_dir_is_the_job_id_under_the_pipeline_directory(
         "codebase": "v0.3.0",
     }
 
-    capsule_dir = JobEntry.from_dict(entry).capsule_dir(tmp_path)
+    capsule_dir = JobCapsule.from_dict(entry).capsule_dir(tmp_path)
 
     assert capsule_dir == tmp_path / relative_prefix / _JOB_ID
 
@@ -58,7 +58,7 @@ def test_capsule_dir_name_carries_no_identity_entities(tmp_path: pathlib.Path) -
         "codebase": "v0.3.17",
     }
 
-    capsule_dir_name = JobEntry.from_dict(entry).capsule_dir(tmp_path).name
+    capsule_dir_name = JobCapsule.from_dict(entry).capsule_dir(tmp_path).name
 
     assert capsule_dir_name == _JOB_ID
     for entity in ("version-", "_codebase-", "_params-", "_config-", "_attempt-"):
@@ -78,9 +78,9 @@ def test_capsule_path_mirrors_capsule_dir(tmp_path: pathlib.Path) -> None:
         "config": "def5678",
         "codebase": "v0.3.0",
     }
-    job_entry = JobEntry.from_dict(entry)
+    job_capsule = JobCapsule.from_dict(entry)
 
-    assert job_entry.capsule_path() == job_entry.capsule_dir(tmp_path).relative_to(tmp_path).as_posix()
+    assert job_capsule.capsule_path() == job_capsule.capsule_dir(tmp_path).relative_to(tmp_path).as_posix()
 
 
 @pytest.mark.ai_generated
@@ -99,7 +99,7 @@ def test_capsule_path_mirrors_capsule_dir(tmp_path: pathlib.Path) -> None:
                 "config": "def5678",
                 "codebase": "v0.3.0",
             },
-            # A JobEntry always carries dandi_path, so a missing key fails at construction.
+            # A JobCapsule always carries dandi_path, so a missing key fails at construction.
             KeyError,
             r"dandi_path",
         ),
@@ -125,6 +125,6 @@ def test_capsule_dir_requires_valid_dandi_path(
     expected_message: str,
     tmp_path: pathlib.Path,
 ) -> None:
-    """JobEntry.capsule_dir requires a valid dandi_path value."""
+    """JobCapsule.capsule_dir requires a valid dandi_path value."""
     with pytest.raises(expected_exception, match=expected_message):
-        JobEntry.from_dict(entry).capsule_dir(tmp_path)
+        JobCapsule.from_dict(entry).capsule_dir(tmp_path)

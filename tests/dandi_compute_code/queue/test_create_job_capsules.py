@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import JobEntry, JobInfo, QueueState
+from dandi_compute_code.queue import JobCapsule, JobInfo, QueueState
 
 _MODULE = "dandi_compute_code.queue._queue_state"
 
@@ -52,7 +52,7 @@ def _queue_state_with_capsule(*, content_id: str, params: str, config: str, vers
         config=config,
         codebase="v0.1.0",
     )
-    entry = JobEntry(job=job, content_id=content_id, asset_size_bytes=1024, has_code=True)
+    entry = JobCapsule(job=job, content_id=content_id, asset_size_bytes=1024, has_code=True)
     return QueueState(entries=[entry])
 
 
