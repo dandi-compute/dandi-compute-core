@@ -66,6 +66,39 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 
 
+## Array dispatch
+
+Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects the pipeline's pending job capsules, writes them to a manifest, and submits a single array covering them. Each array task reads its capsule out of the manifest by task index, downloads the capsule's `code/` tree, claims it with a submitted marker, and runs its `submit.sh`.
+
+SLURM holds the queue and enforces the limit. The array's `%n` throttle is the pipeline's `dispatch.max_concurrent` setting, so the remaining tasks stay queued in SLURM rather than being resubmitted by a later invocation. Capsules are never submitted one `sbatch` at a time, and there is no polling of running job counts.
+
+A pipeline whose dispatcher is still on the cluster is skipped. The live array already holds that pipeline's pending tasks, so a second one would only duplicate them. Capsules formed after it was submitted wait for it to be exhausted and go out with the next dispatch. This makes repeated invocations from a crontab safe: they add nothing while an array is working.
+
+Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeline_configs.json` under its `dispatch` key:
+
+```json
+"dispatch": {
+    "max_concurrent": 2,
+    "max_array_tasks": 500,
+    "partition": "mit_normal",
+    "memory": "1GB",
+    "cpus_per_task": 1,
+    "time_limit": "12:00:00"
+}
+```
+
+`max_concurrent` is the per-pipeline concurrency limit and `max_array_tasks` caps how many capsules one array may hold, keeping it inside the cluster's `MaxArraySize`. The remaining keys are the allocation each capsule run receives. A capsule script is executed by an array task rather than submitted as a job of its own, so the `#SBATCH` directives written into the capsule have no effect and these take their place. They need to cover what the pipeline actually asks for in its submission template.
+
+The dispatch directory created under `--processing` holds the manifest, the generated array script, and the array's logs. It has to stay readable from the compute nodes for as long as the array lives, so it is not cleaned up at submission time.
+
+To dispatch a single pipeline, or to override its configured concurrency limit for one invocation:
+
+```bash
+dandicompute queue process --processing ./processing/ --pipeline lfp --max 4
+```
+
+
+
 ## Contributing Non-Code Files
 
 Non-code files for the AIND ephys pipeline are organized under the following subdirectories of `src/dandi_compute_code/aind_ephys_pipeline/`:

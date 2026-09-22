@@ -49,6 +49,55 @@ classes:
         inlined: true
         inlined_as_list: false
         required: false
+      dispatch:
+        description: >-
+          Settings for the single SLURM array job that runs this pipeline's job
+          capsules. Omitted entirely for a pipeline that is dispatched with the
+          built-in defaults.
+        range: Dispatch
+        multivalued: false
+        inlined: true
+        required: false
+  Dispatch:
+    description: >-
+      Settings for one pipeline's array dispatcher. One array job per pipeline owns
+      every run of that pipeline on the cluster. Its throttle caps how many capsules
+      run at once, and its resource requests are the allocation each capsule run gets,
+      since the capsule scripts are executed as array tasks rather than submitted as
+      jobs of their own.
+    attributes:
+      max_concurrent:
+        description: >-
+          How many array tasks SLURM is allowed to run at once. This is the per-pipeline
+          concurrency limit, applied as the `%n` throttle of the array specification.
+        range: integer
+        minimum_value: 1
+        required: false
+      max_array_tasks:
+        description: >-
+          Upper bound on the number of capsules placed in one array. Keeps the array
+          within the cluster's `MaxArraySize` limit. Capsules beyond it stay pending and
+          are picked up by the next dispatch.
+        range: integer
+        minimum_value: 1
+        required: false
+      partition:
+        description: The SLURM partition the array job is submitted to.
+        range: string
+        required: false
+      memory:
+        description: Memory requested per array task, in SLURM `--mem` syntax (e.g. "16GB").
+        range: string
+        required: false
+      cpus_per_task:
+        description: CPUs requested per array task.
+        range: integer
+        minimum_value: 1
+        required: false
+      time_limit:
+        description: Wall time requested per array task, in SLURM `--time` syntax (e.g. "48:00:00").
+        range: string
+        required: false
   AssetOverride:
     description: >-
       An override configuration for a single asset, identified by its

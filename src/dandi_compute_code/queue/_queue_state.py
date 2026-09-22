@@ -24,12 +24,13 @@ import pathlib
 import random
 import shutil
 import subprocess
-import tempfile
 import time
 from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ._dispatch import DispatchResult, dispatch_pipeline_jobs
+from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY, _PARAMS_REGISTRIES
@@ -508,130 +509,6 @@ class QueueState:
         _log.info("Found %d pending queue entries", len(pending_entries))
         return len(pending_entries) > 0
 
-    @classmethod
-    def submit_next(
-        cls,
-        *,
-        processing_directory: pathlib.Path,
-        max_submissions: int = 2,
-        test: bool = False,
-    ) -> bool:
-        """
-        Submit the next eligible pending entries from the DANDI assets metadata.
-
-        Identifies all job capsule directories that contain a ``code/submit.sh`` asset
-        but no adjacent submitted-marker asset (see :meth:`pending_code_dirs`). For
-        each candidate (up to *max_submissions*), a temporary working directory is
-        created inside *processing_directory*, the ``code/`` tree is downloaded via
-        ``dandi download --preserve-tree``, the submission script is executed via
-        ``sbatch``, a submitted marker is written adjacent to ``submit.sh``, the
-        marker is pushed back to the archive via ``dandi upload --allow-any-path``,
-        and the temporary directory is removed on success.
-
-        :param processing_directory: Directory in which temporary per-job working
-            trees are created.
-        :type processing_directory: pathlib.Path
-        :param max_submissions: Maximum number of pending jobs to submit.
-        :type max_submissions: int
-        :param test: When ``True``, leave temporary working directories on disk
-            after successful submission for debugging.
-        :type test: bool
-        :returns: ``True`` if at least one job was submitted, ``False`` otherwise.
-        :rtype: bool
-        :raises RuntimeError: If ``dandi download``, ``sbatch``, or ``dandi upload``
-            returns a non-zero exit code for any candidate.
-        """
-        if max_submissions < 1:
-            return False
-
-        candidates = cls.pending_code_dirs()
-
-        if not candidates:
-            _log.info("No eligible pending entries available for submission")
-            return False
-
-        for code_dir_path in candidates[:max_submissions]:
-            dandi_url = f"dandi://dandi/{_DANDISET_ID}/{code_dir_path}/"
-            # Temporary directory is intentionally left on disk when any step fails
-            # so that it can be inspected for debugging.
-            temp_dir = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="submit-next-"))
-            _log.info("Submitting job run for %s in %s", code_dir_path, temp_dir)
-
-            result = subprocess.run(
-                ["dandi", "download", "--preserve-tree", dandi_url],
-                capture_output=True,
-                text=True,
-                cwd=temp_dir,
-            )
-            _log.info("dandi download returned code %d for %s", result.returncode, dandi_url)
-            _log.debug("dandi download stdout: %s\nstderr: %s", result.stdout, result.stderr)
-            if result.returncode != 0:
-                _log.warning("dandi download stdout: %s\nstderr: %s", result.stdout, result.stderr)
-                message = f"dandi download failed for {dandi_url}"
-                raise RuntimeError(message)
-
-            dandiset_directory = temp_dir / _DANDISET_ID
-            submit_sh_path = dandiset_directory / code_dir_path / "submit.sh"
-            result = subprocess.run(
-                ["sbatch", str(submit_sh_path.absolute())],
-                capture_output=True,
-                text=True,
-            )
-            _log.info("sbatch returned code %d; stdout %s", result.returncode, result.stdout)
-            _log.debug("sbatch stdout: %s\nstderr: %s", result.stdout, result.stderr)
-            if result.returncode != 0:
-                _log.warning("sbatch stdout: %s\nstderr: %s", result.stdout, result.stderr)
-                message = "sbatch submission failed - please check the logs to see more details."
-                raise RuntimeError(message)
-
-            now = datetime.datetime.now()
-            submitted_marker = submit_sh_path.parent / (
-                f"submitted_date-{now.year:04d}+{now.month:02d}+{now.day:02d}"
-                f"_time-{now.hour:02d}+{now.minute:02d}+{now.second:02d}"
-            )
-            submitted_marker.write_bytes(b"1")
-            _log.info("Created `submitted` file at: %s", submitted_marker.absolute())
-
-            result = subprocess.run(
-                ["dandi", "upload", "--allow-any-path"],
-                capture_output=True,
-                text=True,
-                cwd=dandiset_directory,
-            )
-            _log.info("dandi upload returned code %d", result.returncode)
-            _log.debug("dandi upload stdout: %s\nstderr: %s", result.stdout, result.stderr)
-            if result.returncode != 0:
-                _log.warning("dandi upload stdout: %s\nstderr: %s", result.stdout, result.stderr)
-                message = "dandi upload failed - please check the logs to see more details."
-                raise RuntimeError(message)
-
-            if test:
-                _log.info("Leaving temporary directory in place for test mode: %s", temp_dir)
-            else:
-                shutil.rmtree(temp_dir)
-
-        return True
-
-    @staticmethod
-    def count_running_aind_ephys_pipeline_jobs() -> int:
-        """
-        Count currently running AIND Ephys pipeline jobs via the SLURM scheduler.
-
-        Calls ``squeue --me --format=%j`` and counts jobs whose name is exactly
-        ``AIND-Ephys-Pipeline``.
-
-        :raises RuntimeError: If the ``squeue`` invocation exits non-zero and writes
-            to standard error.
-        """
-        command = ["squeue", "--me", "--format=%j"]
-        result = subprocess.run(command, capture_output=True, text=True)
-        if result.returncode != 0 and result.stderr:
-            message = f"command: {command}\nstdout: {result.stdout}\nstderr: {result.stderr}"
-            raise RuntimeError(message)
-        if result.stderr:
-            _log.warning(result.stderr)
-        return sum(1 for line in result.stdout.splitlines() if line.strip() == "AIND-Ephys-Pipeline")
-
     @staticmethod
     def load_queue_config() -> dict:
         """
@@ -1026,49 +903,80 @@ class QueueState:
         cls,
         *,
         processing_directory: pathlib.Path,
-        max_concurrent_aind_jobs: int = 2,
+        only_pipeline: str | None = None,
+        max_concurrent: int | None = None,
         jitter_seconds: float = 30.0,
+        dandiset_id: str = _DANDISET_ID,
         test: bool = False,
-    ) -> Literal["submitted", "no-pending", "slots-unavailable"]:
+    ) -> dict[str, DispatchResult]:
         """
-        Submit jobs from the live queue state up to ``max_concurrent_aind_jobs`` total
-        running ``AIND-Ephys-Pipeline`` SLURM jobs.
+        Hand every pending job capsule to its pipeline's SLURM array dispatcher.
 
-        The queue state is always fetched fresh -- there is no local queue directory. Presence of
-        pending work is checked live via :meth:`has_pending_jobs`, and submission itself works
-        entirely from the DANDI assets metadata (see :meth:`submit_next`).
+        Each configured pipeline is run on the cluster by exactly one array job, which is the
+        only thing that triggers actual capsule runs. How many of its tasks run at once is the
+        pipeline's ``dispatch.max_concurrent`` setting in the packaged pipeline configuration,
+        applied by SLURM itself as the array's throttle. A pipeline whose dispatcher is still
+        working through its array is skipped, so repeated invocations from a crontab never
+        stack a second array on top of a live one.
 
-        :param processing_directory: Directory for temporary working trees during submission.
-        :param max_concurrent_aind_jobs: Maximum concurrent ``AIND-Ephys-Pipeline`` jobs.
+        The queue state is always fetched fresh. Pending capsules are read live from the DANDI
+        assets metadata (see :meth:`pending_code_dirs`), so there is no local queue directory.
+
+        :param processing_directory: Directory the per-pipeline dispatch directories are
+            created in. Each holds a manifest, a dispatch script and the array's logs, so it
+            has to stay readable from the compute nodes for as long as the array lives.
+        :param only_pipeline: Dispatch only this pipeline instead of every configured one.
+        :param max_concurrent: Overrides every dispatched pipeline's configured concurrency
+            limit.
         :param jitter_seconds: Maximum random delay (seconds) before processing; ``0`` disables.
-        :param test: If ``True``, preserve temporary processing directories on success.
-        :raises ValueError: If *jitter_seconds* is negative or *max_concurrent_aind_jobs* < 1.
+            Spreads concurrent invocations out so they do not read the cluster state at once.
+        :param dandiset_id: The Dandiset capsules are downloaded from and uploaded back to.
+        :param test: If ``True``, array tasks leave their working trees on disk for debugging.
+        :returns: The dispatch outcome per pipeline, keyed by pipeline name.
+        :rtype: dict[str, DispatchResult]
+        :raises ValueError: If *jitter_seconds* is negative, if *max_concurrent* is less than
+            1, or if *only_pipeline* is not configured.
         """
         if jitter_seconds < 0:
             message = "jitter_seconds must be non-negative"
             raise ValueError(message)
+        if max_concurrent is not None and max_concurrent < 1:
+            message = "max_concurrent must be at least 1"
+            raise ValueError(message)
+
+        queue_config = _load_queue_config()
+        pipelines = queue_config.get("pipelines", {})
+        if only_pipeline is not None and only_pipeline not in pipelines:
+            configured = list(pipelines.keys())
+            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
+            raise ValueError(message)
+
         if jitter_seconds > 0:
             delay = random.uniform(0, jitter_seconds)
             _log.info("Sleeping %.2f seconds (jitter) before processing queue", delay)
             time.sleep(delay)
 
-        if max_concurrent_aind_jobs < 1:
-            message = "max_concurrent_aind_jobs must be at least 1"
-            raise ValueError(message)
-        if not cls.has_pending_jobs():
-            return "no-pending"
+        code_dir_paths = cls.pending_code_dirs()
+        _log.info("Found %d pending queue entries", len(code_dir_paths))
 
-        running_count = cls.count_running_aind_ephys_pipeline_jobs()
-        available_slots = max(0, max_concurrent_aind_jobs - running_count)
-        if available_slots < 1:
-            return "slots-unavailable"
-
-        submitted_any = cls.submit_next(
-            processing_directory=processing_directory,
-            max_submissions=available_slots,
-            test=test,
-        )
-        return "submitted" if submitted_any else "no-pending"
+        results: dict[str, DispatchResult] = {}
+        for pipeline_name in pipelines:
+            if only_pipeline is not None and pipeline_name != only_pipeline:
+                continue
+            dispatch_config = DispatchConfig.from_queue_config(
+                pipeline=pipeline_name,
+                queue_config=queue_config,
+                max_concurrent=max_concurrent,
+            )
+            results[pipeline_name] = dispatch_pipeline_jobs(
+                pipeline=pipeline_name,
+                code_dir_paths=code_dir_paths,
+                processing_directory=processing_directory,
+                dispatch_config=dispatch_config,
+                dandiset_id=dandiset_id,
+                test=test,
+            )
+        return results
 
     def existing_capsule_keys(self) -> set[tuple[str, str, str, str]]:
         """

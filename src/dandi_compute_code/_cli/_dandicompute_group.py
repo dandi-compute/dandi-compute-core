@@ -524,18 +524,25 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
 @click.option(
     "--processing",
     "processing_directory",
-    help="Path to the directory used for temporary working trees during job submission.",
+    help="Path to the directory the per-pipeline dispatch directories are created in.",
     required=True,
     type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
 )
 @click.option(
+    "--pipeline",
+    "only_pipeline",
+    help="Dispatch only this pipeline instead of every configured one.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
     "--max",
-    "max_concurrent_aind_jobs",
-    help="Maximum number of AIND jobs allowed to be running before submission is skipped.",
+    "max_concurrent",
+    help="Override the configured number of capsules each dispatched pipeline may run at once.",
     required=False,
     type=click.IntRange(min=1),
-    default=2,
-    show_default=True,
+    default=None,
 )
 @click.option(
     "--silent",
@@ -563,24 +570,33 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
 )
 def _queue_process_command(
     processing_directory: pathlib.Path,
-    max_concurrent_aind_jobs: int = 2,
+    only_pipeline: str | None = None,
+    max_concurrent: int | None = None,
     silent: bool = False,
     test: bool = False,
     jitter_seconds: float = 30.0,
 ) -> None:
-    """Submit queued jobs when no active dandicompute jobs are running."""
+    """Hand every pending job capsule to its pipeline's SLURM array dispatcher."""
     _configure_logging(silent=silent)
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    queue_status = QueueState.process_queue(
+    results = QueueState.process_queue(
         processing_directory=processing_directory,
-        max_concurrent_aind_jobs=max_concurrent_aind_jobs,
+        only_pipeline=only_pipeline,
+        max_concurrent=max_concurrent,
         jitter_seconds=jitter_seconds,
         test=test,
     )
-    if not silent and queue_status == "no-pending":
-        _styled_echo(text="\nNo jobs were found waiting to be submitted.", color="yellow")
+    if silent:
+        return
+
+    if not results:
+        _styled_echo(text="\nNo pipelines are configured for dispatch.", color="yellow")
+        return
+    for result in results.values():
+        color = "green" if result.status == "dispatched" else "yellow"
+        _styled_echo(text=f"\n{result.summary()}", color=color)
 
 
 # dandicompute issues

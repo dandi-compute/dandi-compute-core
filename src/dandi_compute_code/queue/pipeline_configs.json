@@ -2,11 +2,27 @@
     "pipelines": {
         "aind+ephys": {
             "params": ["default"],
-            "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": null}
+            "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": null},
+            "dispatch": {
+                "max_concurrent": 2,
+                "max_array_tasks": 500,
+                "partition": "mit_normal",
+                "memory": "1GB",
+                "cpus_per_task": 1,
+                "time_limit": "12:00:00"
+            }
         },
         "lfp": {
             "params": ["default"],
-            "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": null}
+            "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": null},
+            "dispatch": {
+                "max_concurrent": 2,
+                "max_array_tasks": 500,
+                "partition": "mit_preemptable",
+                "memory": "16GB",
+                "cpus_per_task": 1,
+                "time_limit": "48:00:00"
+            }
         }
     }
 }

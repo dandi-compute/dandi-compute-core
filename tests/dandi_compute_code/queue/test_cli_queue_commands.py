@@ -5,7 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from dandi_compute_code._cli import _dandicompute_group
-from dandi_compute_code.queue import TEST_QUEUE_CONTENT_ID
+from dandi_compute_code.queue import TEST_QUEUE_CONTENT_ID, DispatchResult
 
 # These tests exercise CLI argument wiring. Each command delegates directly to
 # the ``QueueState`` model, so the model methods are mocked here to isolate the
@@ -298,13 +298,58 @@ def test_cli_queue_process_requires_processing_directory() -> None:
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_passes_processing_directory(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process forwards --processing to QueueState.process_queue."""
+@pytest.mark.parametrize(
+    ("extra_arguments", "expected_keyword_arguments"),
+    [
+        pytest.param([], {}, id="defaults"),
+        pytest.param(["--pipeline", "lfp"], {"only_pipeline": "lfp"}, id="pipeline"),
+        pytest.param(["--max", "4"], {"max_concurrent": 4}, id="max"),
+        pytest.param(["--test"], {"test": True}, id="test"),
+        pytest.param(["--jitter", "120.0"], {"jitter_seconds": 120.0}, id="jitter"),
+        pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
+    ],
+)
+def test_cli_queue_process_forwards_its_options(
+    tmp_path: pathlib.Path, extra_arguments: list[str], expected_keyword_arguments: dict
+) -> None:
+    """dandicompute queue process forwards each of its options to QueueState.process_queue."""
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue") as mock_process:
+    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}) as mock_process:
+        result = runner.invoke(
+            _dandicompute_group,
+            ["queue", "process", "--processing", str(processing_dir), *extra_arguments],
+            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_process.assert_called_once_with(
+        **{
+            "processing_directory": processing_dir,
+            "only_pipeline": None,
+            "max_concurrent": None,
+            "jitter_seconds": 30.0,
+            "test": False,
+            **expected_keyword_arguments,
+        }
+    )
+
+
+@pytest.mark.ai_generated
+def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(tmp_path: pathlib.Path) -> None:
+    """dandicompute queue process prints one summary line per configured pipeline."""
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    runner = CliRunner()
+
+    results = {
+        "aind+ephys": DispatchResult(pipeline="aind+ephys", status="dispatched", task_count=3, array_job_id="4242"),
+        "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
+    }
+
+    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir)],
@@ -312,68 +357,20 @@ def test_cli_queue_process_passes_processing_directory(tmp_path: pathlib.Path) -
         )
 
     assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
-        processing_directory=processing_dir,
-        max_concurrent_aind_jobs=2,
-        jitter_seconds=30.0,
-        test=False,
-    )
+    assert "aind+ephys: dispatched 3 capsules as array job 4242." in result.output
+    assert "lfp: no capsules are waiting to be submitted." in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_passes_max_concurrent_aind_jobs(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process forwards --max to QueueState.process_queue."""
+def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(tmp_path: pathlib.Path) -> None:
+    """A pipeline left alone because its array is still live is reported as such."""
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue") as mock_process:
-        result = runner.invoke(
-            _dandicompute_group,
-            ["queue", "process", "--processing", str(processing_dir), "--max", "4"],
-            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
-        )
+    results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", array_job_id="9001")}
 
-    assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
-        processing_directory=processing_dir,
-        max_concurrent_aind_jobs=4,
-        jitter_seconds=30.0,
-        test=False,
-    )
-
-
-@pytest.mark.ai_generated
-def test_cli_queue_process_passes_test_flag(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process forwards --test to QueueState.process_queue."""
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
-    runner = CliRunner()
-
-    with mock.patch(f"{_GROUP}.QueueState.process_queue") as mock_process:
-        result = runner.invoke(
-            _dandicompute_group,
-            ["queue", "process", "--processing", str(processing_dir), "--test"],
-            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
-        )
-
-    assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
-        processing_directory=processing_dir,
-        max_concurrent_aind_jobs=2,
-        jitter_seconds=30.0,
-        test=True,
-    )
-
-
-@pytest.mark.ai_generated
-def test_cli_queue_process_reports_when_no_jobs_waiting(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process reports when no jobs are waiting for submission."""
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
-    runner = CliRunner()
-
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value="no-pending"):
+    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir)],
@@ -381,7 +378,7 @@ def test_cli_queue_process_reports_when_no_jobs_waiting(tmp_path: pathlib.Path) 
         )
 
     assert result.exit_code == 0, result.output
-    assert "No jobs were found waiting to be submitted." in result.output
+    assert "the dispatcher is already running" in result.output
 
 
 @pytest.mark.ai_generated
@@ -399,29 +396,6 @@ def test_cli_queue_process_requires_dandi_devel(tmp_path: pathlib.Path) -> None:
 
     assert result.exit_code != 0
     assert "DANDI_DEVEL" in result.output
-
-
-@pytest.mark.ai_generated
-def test_cli_queue_process_passes_jitter_seconds(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process forwards --jitter to QueueState.process_queue."""
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
-    runner = CliRunner()
-
-    with mock.patch(f"{_GROUP}.QueueState.process_queue") as mock_process:
-        result = runner.invoke(
-            _dandicompute_group,
-            ["queue", "process", "--processing", str(processing_dir), "--jitter", "120.0"],
-            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
-        )
-
-    assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
-        processing_directory=processing_dir,
-        max_concurrent_aind_jobs=2,
-        jitter_seconds=120.0,
-        test=False,
-    )
 
 
 @pytest.mark.ai_generated
@@ -459,23 +433,18 @@ def test_cli_queue_pending_silent_suppresses_output(tmp_path: pathlib.Path) -> N
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_passes_zero_jitter(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue process forwards --jitter 0 to QueueState.process_queue."""
+def test_cli_queue_process_reports_when_no_pipelines_are_configured(tmp_path: pathlib.Path) -> None:
+    """dandicompute queue process says so rather than staying silent with nothing to dispatch."""
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue") as mock_process:
+    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--processing", str(processing_dir), "--jitter", "0"],
+            ["queue", "process", "--processing", str(processing_dir)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
     assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
-        processing_directory=processing_dir,
-        max_concurrent_aind_jobs=2,
-        jitter_seconds=0.0,
-        test=False,
-    )
+    assert "No pipelines are configured for dispatch." in result.output
