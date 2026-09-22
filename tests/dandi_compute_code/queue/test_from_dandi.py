@@ -164,6 +164,58 @@ def test_from_dandi_submitted_marker_sets_has_been_submitted() -> None:
 
 
 @pytest.mark.ai_generated
+def test_from_dandi_records_submission_time_and_durations() -> None:
+    """from_dandi times submission from the earliest submitted marker and derives both durations."""
+    source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
+    capsule_prefix = "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/job-240101def567"
+    asset_paths_and_times = {
+        f"{capsule_prefix}/code/submit.sh": "2024-01-01T00:00:00+00:00",
+        f"{capsule_prefix}/code/submitted_date-date-2024+01+01_time-00+30+00": "2024-01-01T00:30:00+00:00",
+        f"{capsule_prefix}/code/submitted_date-date-2024+01+01_time-01+00+00": "2024-01-01T01:00:00+00:00",
+        f"{capsule_prefix}/logs/stdout.txt": "2024-01-01T02:00:00+00:00",
+    }
+    metadata = AssetsJsonldMetadata(
+        content_id_to_asset={},
+        path_to_asset_metadata={
+            asset_path: AssetMetadata(
+                path=asset_path,
+                date_modified=date_modified,
+                content_size=1,
+                content_id=f"content-id-{index}",
+            )
+            for index, (asset_path, date_modified) in enumerate(asset_paths_and_times.items())
+        },
+    )
+    upstream_metadata = AssetsJsonldMetadata(
+        content_id_to_asset={},
+        path_to_asset_metadata={
+            source_path: AssetMetadata(
+                path=source_path,
+                date_modified="2024-01-01T00:00:00+00:00",
+                content_size=1234,
+                content_id="source-id",
+            )
+        },
+    )
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch(
+            "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
+            return_value=upstream_metadata,
+        ),
+    ):
+        state = PipelineQueue.from_dandi()
+
+    state_entries = _entries(state)
+    assert len(state_entries) == 1
+    assert state_entries[0]["created_at"] == "2024-01-01T00:00:00+00:00"
+    assert state_entries[0]["job_submission_time"] == "2024-01-01T00:30:00+00:00"
+    assert state_entries[0]["job_completion_time"] == "2024-01-01T02:00:00+00:00"
+    assert state_entries[0]["queue_wait_seconds"] == 1800
+    assert state_entries[0]["run_duration_seconds"] == 5400
+
+
+@pytest.mark.ai_generated
 def test_from_dandi_parses_capsule_location_and_presence_flags_from_assets_paths() -> None:
     """from_dandi parses a capsule's location and lifecycle flags from derivatives asset paths."""
     source_path = "sub-mouse01/sourcedata/aind-sample.nwb"
