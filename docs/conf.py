@@ -53,7 +53,7 @@ html_title = "DANDI Compute (Code)"
 html_show_sourcelink = False
 
 html_theme_options = {
-    "github_url": "https://github.com/dandi-compute/code",
+    "github_url": "https://github.com/dandi-compute/dandi-compute-core",
     "use_edit_page_button": False,
     "show_toc_level": 2,
     "navigation_with_keys": False,

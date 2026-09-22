@@ -255,7 +255,7 @@ def prepare_lfp_job(
                 "Name": "DANDI Compute: Code",
                 "Description": "The primary source code for orchestration on MIT Engaging.",
                 "Version": f"v{codebase_version}+{dandi_compute_code_commit_hash}",
-                "CodeURL": "https://github.com/dandi-compute/code",
+                "CodeURL": "https://github.com/dandi-compute/dandi-compute-core",
             },
         ],
         "SourceDatasets": [{"URL": f"https://dandiarchive.org/dandiset/{dandiset_id}/"}],
