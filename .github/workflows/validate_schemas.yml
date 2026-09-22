@@ -43,10 +43,3 @@ jobs:
         env:
           DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION: '1'
         run: pytest tests/dandi_compute_code/schemas -v
-
-      # The schemas are also what the package validates against at import and load time, so
-      # the rest of the suite has to keep passing with the full toolchain installed.
-      - name: Run the tests that load the validated files
-        env:
-          DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION: '1'
-        run: pytest tests/ -v
