@@ -5,10 +5,10 @@ import pathlib
 
 import pytest
 
-from dandi_compute_code.queue import JobEntry, JobInfo, QueueState
+from dandi_compute_code.queue import JobCapsule, JobInfo, QueueState
 
 
-def _make_entry(**overrides: object) -> JobEntry:
+def _make_entry(**overrides: object) -> JobCapsule:
     job_kwargs = {
         "job_id": "job-250101abc123",
         "dandiset_id": "001849",
@@ -37,12 +37,12 @@ def _make_entry(**overrides: object) -> JobEntry:
             job_kwargs[key] = value
         else:
             entry_kwargs[key] = value
-    return JobEntry(job=JobInfo(**job_kwargs), **entry_kwargs)
+    return JobCapsule(job=JobInfo(**job_kwargs), **entry_kwargs)
 
 
 @pytest.mark.ai_generated
-def test_job_entry_to_tsv_row_flattens_nested_dicts_as_json() -> None:
-    """JobEntry.to_tsv_row serialises nested path/content-id mappings as JSON strings."""
+def test_job_capsule_to_tsv_row_flattens_nested_dicts_as_json() -> None:
+    """JobCapsule.to_tsv_row serialises nested path/content-id mappings as JSON strings."""
     entry = _make_entry()
     row = entry.to_tsv_row()
     assert row["dandiset_id"] == "001849"
@@ -53,8 +53,8 @@ def test_job_entry_to_tsv_row_flattens_nested_dicts_as_json() -> None:
 
 
 @pytest.mark.ai_generated
-def test_job_entry_to_tsv_row_empty_dict_becomes_empty_cell() -> None:
-    """JobEntry.to_tsv_row writes an empty string for empty nested mappings."""
+def test_job_capsule_to_tsv_row_empty_dict_becomes_empty_cell() -> None:
+    """JobCapsule.to_tsv_row writes an empty string for empty nested mappings."""
     entry = _make_entry(has_output=False, output_paths={}, has_logs=False, log_paths={})
     row = entry.to_tsv_row()
     assert row["output_paths"] == ""
@@ -62,8 +62,8 @@ def test_job_entry_to_tsv_row_empty_dict_becomes_empty_cell() -> None:
 
 
 @pytest.mark.ai_generated
-def test_job_entry_to_tsv_row_none_becomes_empty_cell() -> None:
-    """JobEntry.to_tsv_row writes an empty string for None fields."""
+def test_job_capsule_to_tsv_row_none_becomes_empty_cell() -> None:
+    """JobCapsule.to_tsv_row writes an empty string for None fields."""
     entry = _make_entry(created_at=None, job_completion_time=None, content_id=None, asset_size_bytes=None)
     row = entry.to_tsv_row()
     assert row["created_at"] == ""

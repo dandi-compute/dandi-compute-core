@@ -2,7 +2,7 @@
 Private helpers for the :mod:`._queue_state` model.
 
 This companion module holds the lower-level utilities the ``QueueState`` /
-``JobEntry`` model depends on (assets-path parsing, capsule-record construction,
+``JobCapsule`` model depends on (assets-path parsing, capsule-record construction,
 upstream-metadata lookup, queue-config validation, content-id ordering, and log
 parsing).
 """

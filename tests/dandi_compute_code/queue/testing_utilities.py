@@ -10,13 +10,13 @@ fixtures (temporary directories, environment and network setup) live in
 import pathlib
 
 from dandi_compute_code.dandiset._globals import _dandiset_derivatives_relative_dir
-from dandi_compute_code.queue import JobEntry
+from dandi_compute_code.queue import JobCapsule
 
 
 def create_job_capsule_directory(
     *,
     base_dir: pathlib.Path,
-    entry: JobEntry,
+    entry: JobCapsule,
     with_code: bool = True,
     with_output: bool = False,
     with_logs: bool = False,
@@ -25,7 +25,7 @@ def create_job_capsule_directory(
     """
     Materialize the on-disk job capsule directory for *entry* under *base_dir*.
 
-    The layout is derived from the entry itself (via the public ``JobEntry.capsule_dir``)
+    The layout is derived from the entry itself (via the public ``JobCapsule.capsule_dir``)
     so the directory tree always matches the ground-truth example state rather than a
     separately specified set of coordinates.
     """
