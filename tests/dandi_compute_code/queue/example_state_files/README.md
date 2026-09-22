@@ -4,7 +4,8 @@
 It is the shared ground truth for the queue test suite.
 
 Each row is one job capsule, matching the format produced by `PipelineQueue.to_tsv` and consumed by `PipelineQueue.from_tsv`.
-No capsule here records any asset paths, so there is no `paths.tsv` beside it. `PipelineQueue.from_tsv` leaves the paths empty when that table is absent.
+`paths.tsv` beside it holds the asset paths of those capsules, one per row, keyed by `job_id`.
+Every capsule has a dataset description. The failed and successful ones also have a log, and the successful ones an output.
 Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `dandi_path`, which is named to describe the scenario it covers.
 Rows that share a `dandi_path` are told apart by their `config`.
 

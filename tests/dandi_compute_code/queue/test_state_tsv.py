@@ -275,3 +275,14 @@ def test_pipeline_queue_from_tsv_reads_table_without_submission_column(tmp_path:
     assert pipeline_queue.entries[0].job_submission_time is None
     assert pipeline_queue.entries[0].queue_wait_seconds is None
     assert pipeline_queue.entries[0].run_duration_seconds is None
+
+
+@pytest.mark.ai_generated
+def test_example_queue_reads_paths_from_sibling_table(example_pipeline_queue: PipelineQueue) -> None:
+    """The example queue picks up the asset paths recorded in the paths.tsv beside it."""
+    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    capsule_path = entry.capsule_path()
+
+    assert entry.output_paths == {f"{capsule_path}/derivatives/output.nwb": "output-aa0002"}
+    assert entry.log_paths == {f"{capsule_path}/logs/stdout.txt": "log-aa0002"}
+    assert all(capsule.dataset_description_path != {} for capsule in example_pipeline_queue)
