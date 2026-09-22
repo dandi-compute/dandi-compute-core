@@ -3,8 +3,7 @@ name: dandi_compute_queue_config
 title: DANDI Compute Queue Config
 description: >-
   A LinkML schema describing a configuration structure for DANDI Compute pipelines,
-  including version priorities, parameter priorities, failure limits,
-  and asset overrides.
+  including the parameter sets each pipeline forms job capsules for and asset overrides.
 prefixes:
   linkml: https://w3id.org/linkml/
 default_prefix: linkml
@@ -32,17 +31,12 @@ classes:
         identifier: true
         range: string
         required: true
-      version_priority:
+      params:
         description: >-
-          An ordered list of pipeline versions, in priority order
-          (highest priority first).
-        range: string
-        multivalued: true
-        required: false
-      params_priority:
-        description: >-
-          An ordered list of parameter set names, in priority order
-          (highest priority first).
+          The registered parameter set names this pipeline forms job capsules for.
+          This is the global queue setting for the pipeline. It does not take
+          precedence over the per-asset overrides in `asset_overrides`. An asset
+          named there is governed by its own override instead.
         range: string
         multivalued: true
         required: false
@@ -54,13 +48,6 @@ classes:
         multivalued: true
         inlined: true
         inlined_as_list: false
-        required: false
-      max_fail_per_dandiset:
-        description: >-
-          The maximum number of failures permitted per dandiset
-          before the pipeline is considered failed.
-        range: integer
-        minimum_value: 0
         required: false
   AssetOverride:
     description: >-

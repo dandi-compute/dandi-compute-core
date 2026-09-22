@@ -9,7 +9,6 @@ import pathlib
 import re
 import subprocess
 import tempfile
-import typing
 import urllib.request
 
 import dandi
@@ -21,7 +20,13 @@ from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE, 
 from ._handle_template import generate_lfp_submission_script
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset._globals import _SANDBOX_DANDISET_ID
-from ..dandiset._job_id import _PROVENANCE_KEY, _compute_job_hash, _format_job_id, _parse_job_hash
+from ..dandiset._job_id import (
+    _PROVENANCE_KEY,
+    _capsule_names_from_asset_paths,
+    _compute_job_hash,
+    _find_existing_capsule_path,
+    _next_available_job_id,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -42,7 +47,7 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
     return pipeline_path
 
 
-def build_lfp_job_id(
+def build_lfp_job_hash(
     *,
     dandiset_id: str,
     dandi_path: str,
@@ -51,13 +56,13 @@ def build_lfp_job_id(
     content_id: str,
 ) -> str:
     """
-    Build the ``job-{YYMMDD}{hash}`` directory name for one LFP job capsule.
+    Build the six-character hash that identifies one LFP job.
 
     The LFP pipeline has no config, so an empty config takes part in the hash. The codebase
     version is left out for the same reason it is on the AIND side: a job is the same logical
     job whichever release of this package formed it.
 
-    :return: The job ID naming the capsule directory.
+    :return: The hash half of the job ID naming the capsule directory.
     :rtype: str
     """
     job_hash = _compute_job_hash(
@@ -69,26 +74,7 @@ def build_lfp_job_id(
         config="",
         content_id=content_id,
     )
-    job_id = _format_job_id(job_hash=job_hash)
-    return job_id
-
-
-def find_existing_lfp_capsule_path(*, asset_paths: typing.Iterable[str], pipeline_path: str, job_id: str) -> str | None:
-    """
-    Find an already formed LFP capsule for this job among *asset_paths*, if there is one.
-
-    Matching is on the job hash alone, so a capsule prepared on an earlier date is still
-    recognised.
-
-    :return: The capsule path, or ``None`` when no capsule exists for this job yet.
-    :rtype: str or None
-    """
-    job_hash = _parse_job_hash(job_id)
-    for asset_path in asset_paths:
-        capsule_name = asset_path.removeprefix(f"{pipeline_path}/").split("/")[0]
-        if job_hash is not None and _parse_job_hash(capsule_name) == job_hash:
-            return f"{pipeline_path}/{capsule_name}"
-    return None
+    return job_hash
 
 
 def _resolve_parameters_file(parameters_key: str, /) -> tuple[pathlib.Path, str]:
@@ -126,6 +112,7 @@ def prepare_lfp_job(
     dandiset_id: str | None = None,
     dandiset_path: str | None = None,
     parameters_key: str = "default",
+    force_new_capsule: bool = False,
     silent: bool = False,
 ) -> pathlib.Path | None:
     """
@@ -142,6 +129,9 @@ def prepare_lfp_job(
     :param dandiset_id: The Dandiset ID, used to look up the content ID if it is not provided.
     :param dandiset_path: The asset path, used to look up the content ID if it is not provided.
     :param parameters_key: The registered LFP parameters key.
+    :param force_new_capsule: Whether to form a new capsule even when one already exists for
+        this job, under a job ID disambiguated with a counter when the existing one was
+        formed on the same day.
     :param silent: Whether to suppress DANDI client output.
     :return: The path to the generated submission script, or ``None`` if a capsule already existed.
     :rtype: pathlib.Path or None
@@ -201,25 +191,31 @@ def prepare_lfp_job(
     codebase_version = importlib.metadata.version("dandi-compute-code")
     bidsy_pipeline_version = pipeline_version.replace("-", "+")
     pipeline_dandiset_path = build_lfp_pipeline_path(dandiset_id=dandiset_id, output_dandi_path=output_dandi_path)
-    job_id = build_lfp_job_id(
+    job_hash = build_lfp_job_hash(
         dandiset_id=dandiset_id,
         dandi_path=dandiset_path,
         bidsy_version=bidsy_pipeline_version,
         params_id=params_id,
         content_id=content_id,
     )
-    output_dandiset_path_base = f"{pipeline_dandiset_path}/{job_id}"
 
     client = dandi.dandiapi.DandiAPIClient(token=os.environ["DANDI_API_KEY"])
     dandiset = client.get_dandiset(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
-    existing_capsule_path = find_existing_lfp_capsule_path(
+    existing_capsule_names = _capsule_names_from_asset_paths(
         asset_paths=(asset.path for asset in dandiset.get_assets_with_path_prefix(path=f"{pipeline_dandiset_path}/")),
-        pipeline_path=pipeline_dandiset_path,
-        job_id=job_id,
+        pipeline_dandiset_path=pipeline_dandiset_path,
     )
-    if existing_capsule_path is not None:
+    existing_capsule_path = _find_existing_capsule_path(
+        capsule_names=existing_capsule_names,
+        pipeline_dandiset_path=pipeline_dandiset_path,
+        job_hash=job_hash,
+    )
+    if existing_capsule_path is not None and not force_new_capsule:
         _log.info(f"LFP capsule already exists at {existing_capsule_path}; skipping preparation.")
         return None
+
+    job_id = _next_available_job_id(job_hash=job_hash, taken_job_ids=existing_capsule_names)
+    output_dandiset_path_base = f"{pipeline_dandiset_path}/{job_id}"
 
     blob_head = content_id[0]
     partition = "001" if ord(blob_head) - ord("0") <= 8 else "002"

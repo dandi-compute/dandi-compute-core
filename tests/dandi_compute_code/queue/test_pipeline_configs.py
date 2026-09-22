@@ -23,8 +23,8 @@ def test_load_queue_config_raises_when_packaged_config_fails_linkml_validation(t
     invalid_config_file = tmp_path / "pipeline_configs.json"
     invalid_queue_config = {
         "pipelines": {
-            # Violates schema minimum_value: 0 constraint.
-            "test": {"version_priority": ["v1.0"], "params_priority": ["default"], "max_fail_per_dandiset": -1}
+            # 'retries' is not an attribute the Pipeline class declares.
+            "test": {"params": ["default"], "retries": 3}
         }
     }
     invalid_config_file.write_text(json.dumps(invalid_queue_config))
