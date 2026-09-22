@@ -48,14 +48,18 @@ classes:
       rather than what was asked for.
     attributes:
       job_id:
-        description: The `job-{YYMMDD}{hash}` directory name of the capsule.
+        description: >-
+          The `job-{YYMMDD}{hash}` directory name of the capsule. A `-2`, `-3` counter is
+          appended when one logical job forms a second capsule on the same day.
         range: string
         required: true
+        pattern: "^job-\\d{6}[0-9a-f]{6}(?:-(?:[2-9]|\\d{2,}))?$"
 
       dandiset_id:
-        description: The Dandiset the source asset belongs to.
+        description: The six-digit Dandiset the source asset belongs to.
         range: string
         required: true
+        pattern: "^\\d{6}$"
 
       dandi_path:
         description: The source asset's path within its Dandiset.
@@ -68,9 +72,13 @@ classes:
         required: true
 
       version:
-        description: The pipeline release the capsule was prepared against.
+        description: >-
+          The pipeline release the capsule was prepared against, such as `v1.2.2`. The
+          leading `v` is optional, a release need not carry three parts, and a pre-release
+          or build suffix may follow, as in `v1.0.0-fixes` or `v1.1.1+b268fd2+a66c8df`.
         range: string
         required: true
+        pattern: "^v?\\d+(?:\\.\\d+)*(?:[-+][0-9A-Za-z.+-]+)?$"
 
       params:
         description: The registered parameter set key the capsule was formed with.
@@ -88,11 +96,13 @@ classes:
         description: >-
           The version of this repository that formed the capsule. Deliberately excluded
           from a capsule's identity, since a capsule is the same logical job regardless of
-          which codebase version produced it.
+          which codebase version produced it. Reads `unknown` when the package is running
+          from a source tree with no installed distribution to report a version.
         range: string
         required: true
+        pattern: "^(?:unknown|v?\\d+(?:\\.\\d+)*(?:[-+][0-9A-Za-z.+-]+)?)$"
 
-  JobCapsuleRecord:
+  JobCapsule:
     description: >-
       One job capsule as it is serialised. This is a `JobInfo` flattened together with the
       capsule's lifecycle status, its source asset, its timestamps and its output mappings.
@@ -154,6 +164,7 @@ classes:
           timestamp, treated as UTC when it carries no offset.
         range: string
         required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
 
       job_submission_time:
         description: >-
@@ -161,12 +172,14 @@ classes:
           may carry several markers after a resubmission, so the earliest is the one used.
         range: string
         required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
 
       job_completion_time:
         description: >-
           When the job last wrote a log. Null for a capsule that has not run.
         range: string
         required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
 
       queue_wait_seconds:
         description: >-
@@ -191,7 +204,7 @@ classes:
     attributes:
       capsules:
         description: One entry per job capsule, in the table's sort order.
-        range: JobCapsuleRecord
+        range: JobCapsule
         multivalued: true
         inlined: true
         inlined_as_list: true

@@ -7,6 +7,7 @@ everywhere the rest of the suite does. The stricter checks live in
 ``test_strict_linkml_validation.py`` and need the full ``linkml`` distribution.
 """
 
+import csv
 import dataclasses
 import json
 import pathlib
@@ -101,7 +102,7 @@ def test_packaged_registries_validate(registry_file_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
-def test_job_capsule_record_validates() -> None:
+def test_job_capsule_validates() -> None:
     """A serialised job capsule conforms to the job capsule schema."""
     capsule = JobCapsule(
         job=_EXAMPLE_JOB_INFO,
@@ -117,6 +118,47 @@ def test_job_capsule_record_validates() -> None:
     record = capsule.to_dict()
 
     assert validate_against_schema(record, schema="job_capsule") == record
+
+
+@pytest.mark.ai_generated
+def test_every_row_of_the_example_state_table_validates() -> None:
+    """
+    Every row of the committed ``state.tsv`` conforms to the job capsule schema.
+
+    The schema constrains the shape of several of these fields with a regular expression,
+    and a pattern written too narrowly would reject records the queue really produces. This
+    checks them against recorded ones rather than against invented examples. Those carry
+    versions such as ``v1.0`` and ``v1.1.1+b268fd2+a66c8df``, which a plain three-part
+    semantic version pattern would refuse.
+    """
+    state_table_path = _REPOSITORY_ROOT / "tests" / "dandi_compute_code" / "queue" / "example_state_files" / "state.tsv"
+    with state_table_path.open() as state_table:
+        rows = list(csv.DictReader(state_table, delimiter="\t"))
+
+    assert rows != []
+    for row in rows:
+        record = JobCapsule.from_tsv_row(row).to_dict()
+        validate_against_schema(record, schema="job_capsule", description=f"row for {row['job_id']}")
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("job_id", "not-a-job-id"),
+        ("dandiset_id", "12"),
+        ("version", "version one"),
+        ("codebase", "nightly build"),
+        ("created_at", "last Tuesday"),
+    ],
+)
+def test_job_capsule_rejects_a_malformed_field(field: str, value: str) -> None:
+    """The patterns actually reject, rather than being decorative."""
+    record = JobCapsule(job=_EXAMPLE_JOB_INFO, content_id=None, asset_size_bytes=None).to_dict()
+    record[field] = value
+
+    with pytest.raises(ValueError, match="LinkML validation"):
+        validate_against_schema(record, schema="job_capsule")
 
 
 @pytest.mark.ai_generated
@@ -166,11 +208,11 @@ def test_schema_class_matches_its_dataclass(schema_name: str, class_name: str, m
 
 
 @pytest.mark.ai_generated
-def test_job_capsule_record_matches_the_serialised_capsule() -> None:
+def test_job_capsule_matches_the_serialised_capsule() -> None:
     """The job capsule schema carries exactly the fields a serialised capsule holds."""
     record = JobCapsule(job=_EXAMPLE_JOB_INFO, content_id=None, asset_size_bytes=None).to_dict()
 
-    assert _slot_names("job_capsule", "JobCapsuleRecord") == set(record)
+    assert _slot_names("job_capsule", "JobCapsule") == set(record)
 
 
 @pytest.mark.ai_generated

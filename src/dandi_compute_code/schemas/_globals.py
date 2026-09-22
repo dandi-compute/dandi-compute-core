@@ -22,7 +22,7 @@ SCHEMA_PATHS: dict[str, pathlib.Path] = {
 SCHEMA_TREE_ROOTS: dict[str, str] = {
     "assets_metadata": "AssetsJsonldMetadata",
     "dispatch": "DispatchConfig",
-    "job_capsule": "JobCapsuleRecord",
+    "job_capsule": "JobCapsule",
     "pipeline_config": "PipelinesConfig",
     "registry": "Registry",
 }

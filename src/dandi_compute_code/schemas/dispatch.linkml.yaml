@@ -39,9 +39,12 @@ classes:
       little itself, while the LFP script does its work in process and needs a lot.
     attributes:
       memory:
-        description: The `--mem` request, as SLURM writes it (for example "16GB").
+        description: >-
+          The `--mem` request, as SLURM writes it (for example "16GB"). Empty when the
+          capsule's submission script states no `--mem` directive.
         range: string
         required: true
+        pattern: "^$|^\\d+(?:\\.\\d+)?[KMGT]?B?$"
 
       cpus_per_task:
         description: The `--cpus-per-task` request.
@@ -55,9 +58,12 @@ classes:
         required: true
 
       time_limit:
-        description: The `--time` limit, as SLURM writes it (for example "48:00:00").
+        description: >-
+          The `--time` limit, as SLURM writes it (for example "48:00:00"). Empty when the
+          capsule's submission script states no `--time` directive.
         range: string
         required: true
+        pattern: "^$|^(?:\\d+-)?\\d{1,3}(?::\\d{2}){0,2}$"
 
   DispatchConfig:
     description: >-
@@ -98,6 +104,7 @@ classes:
         description: The SLURM job ID `sbatch` reported for this array.
         range: string
         required: true
+        pattern: "^\\d+$"
 
       task_count:
         description: How many capsules this array covers.
@@ -147,6 +154,7 @@ classes:
         range: string
         multivalued: true
         required: false
+        pattern: "^\\d+$"
 
       dispatch_directory:
         description: >-
