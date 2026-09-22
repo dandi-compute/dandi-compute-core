@@ -1,6 +1,6 @@
 # Example queue state
 
-`state.tsv` is a single static example of a queue `state.tsv` file.
+`jobs.tsv` is a single static example of a queue `jobs.tsv` file.
 It is the shared ground truth for the queue test suite.
 
 Each row is one job capsule, matching the format produced by `PipelineQueue.to_tsv` and consumed by `PipelineQueue.from_tsv`.

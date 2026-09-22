@@ -20,7 +20,7 @@ from dandi_compute_code._cli import _dandicompute_group
             ["jobs", "create", "--help"],
             "Create a job capsule for every qualifying asset that does not have one yet.",
         ),
-        (["queue", "refresh", "--help"], "Rewrite state.tsv into both Dandisets."),
+        (["queue", "refresh", "--help"], "Rewrite jobs.tsv into both Dandisets."),
         (["queue", "clean", "--help"], "Delete unsubmitted capsules that are no longer present in the queue."),
         (["queue", "stats", "--help"], "Write aggregate queue statistics from the live queue state."),
         (["queue", "pending", "--help"], "Report whether any queued jobs are awaiting submission."),

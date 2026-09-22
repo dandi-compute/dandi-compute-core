@@ -388,7 +388,7 @@ def prepare_aind_ephys_job(
         ],
         "SourceDatasets": [{"URL": f"https://dandiarchive.org/dandiset/{dandiset_id}/"}],
         # Everything the capsule directory name used to spell out. This block is what the
-        # queue state table reads back to describe the job.
+        # queue jobs table reads back to describe the job.
         _PROVENANCE_KEY: {
             "job_id": job_id,
             "dandiset_id": dandiset_id,

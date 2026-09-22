@@ -16,7 +16,7 @@ from dandi_compute_code.dandiset import AssetsJsonldMetadata
 from dandi_compute_code.queue import PipelineQueue
 
 #: The committed example queue used as ground truth across the model tests.
-EXAMPLE_STATE_FILE = pathlib.Path(__file__).parent / "example_state_files" / "state.tsv"
+EXAMPLE_JOBS_FILE = pathlib.Path(__file__).parent / "example_jobs_files" / "jobs.tsv"
 
 
 @pytest.fixture(autouse=True)
@@ -45,8 +45,8 @@ def mock_dandi_assets_metadata() -> Iterator[None]:
 
 @pytest.fixture
 def example_pipeline_queue() -> PipelineQueue:
-    """The committed example queue (``example_state_files/state.tsv``) loaded into a fresh model."""
-    return PipelineQueue.from_tsv(EXAMPLE_STATE_FILE)
+    """The committed example queue (``example_jobs_files/jobs.tsv``) loaded into a fresh model."""
+    return PipelineQueue.from_tsv(EXAMPLE_JOBS_FILE)
 
 
 @pytest.fixture
