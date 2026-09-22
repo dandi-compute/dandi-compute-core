@@ -10,7 +10,7 @@ from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
-from ..queue import TEST_QUEUE_CONTENT_ID, QueueState
+from ..queue import TEST_QUEUE_CONTENT_ID, QueueState, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
 
@@ -54,9 +54,27 @@ def _dandicompute_group():
 @click.option(
     "--directory",
     "directory",
-    help="Path to the directory to clean (all contents except 'apptainer_cache' will be deleted).",
-    required=True,
+    help="Path to the work directory to clean (all contents except 'apptainer_cache' will be deleted).",
+    required=False,
     type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+    default=None,
+)
+@click.option(
+    "--dispatch",
+    "dispatch_directory",
+    help="Path to the processing directory whose finished dispatch directories should be removed.",
+    required=False,
+    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+    default=None,
+)
+@click.option(
+    "--age",
+    "minimum_age_hours",
+    help="Leave dispatch directories formed more recently than this many hours alone.",
+    required=False,
+    type=click.FloatRange(min=0),
+    default=24.0,
+    show_default=True,
 )
 @click.option(
     "--silent",
@@ -65,12 +83,35 @@ def _dandicompute_group():
     is_flag=True,
     default=False,
 )
-def _clean_command(directory: pathlib.Path, silent: bool = False) -> None:
-    """Remove all files and directories under a work directory except apptainer cache."""
+def _clean_command(
+    directory: pathlib.Path | None = None,
+    dispatch_directory: pathlib.Path | None = None,
+    minimum_age_hours: float = 24.0,
+    silent: bool = False,
+) -> None:
+    """Clean a work directory, finished dispatch directories, or both."""
+    if directory is None and dispatch_directory is None:
+        raise click.UsageError("Nothing to clean. Pass --directory, --dispatch, or both.")
+
     _configure_logging(silent=silent)
-    clean_work_directory(directory=directory)
-    if not silent:
-        _styled_echo(text="\nWork directory cleaned!", color="green")
+
+    if directory is not None:
+        clean_work_directory(directory=directory)
+        if not silent:
+            _styled_echo(text="\nWork directory cleaned!", color="green")
+
+    if dispatch_directory is not None:
+        removed = clean_dispatch_directories(
+            processing_directory=dispatch_directory,
+            minimum_age_hours=minimum_age_hours,
+        )
+        if silent:
+            return
+        if removed:
+            noun = "directory" if len(removed) == 1 else "directories"
+            _styled_echo(text=f"\nRemoved {len(removed)} finished dispatch {noun}.", color="green")
+        else:
+            _styled_echo(text="\nNo dispatch directories were ready to be removed.", color="yellow")
 
 
 # dandicompute submit [OPTIONS]

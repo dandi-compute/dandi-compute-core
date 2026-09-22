@@ -24,6 +24,10 @@ _SBATCH_JOB_ID_RE = re.compile(r"Submitted batch job (?P<job_id>\d+)")
 #: One ``#SBATCH`` directive in a submission template. The separator is ``=`` or whitespace,
 #: since the packaged templates use both.
 _SBATCH_DIRECTIVE_RE = re.compile(r"^#SBATCH\s+--(?P<name>[A-Za-z-]+)(?:=|\s+)(?P<value>\S+)\s*$", re.MULTILINE)
+#: A dispatch directory name, which carries its dispatcher's job name and when it was formed.
+_DISPATCH_DIRECTORY_RE = re.compile(rf"^(?P<job_name>{_DISPATCH_JOB_NAME_PREFIX}-.+)-(?P<timestamp>\d{{8}}-\d{{6}})$")
+#: How the timestamp in a dispatch directory name is written.
+_DISPATCH_DIRECTORY_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
 # Packaged pipeline configuration, committed directly to this repo. This is the canonical
 # source of truth for the queue's pipeline definitions. There is no local override for this
 # file; see ``_load_queue_config``.

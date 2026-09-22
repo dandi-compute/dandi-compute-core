@@ -484,3 +484,78 @@ def test_cli_queue_process_rejects_max_without_pipeline(tmp_path: pathlib.Path) 
     assert result.exit_code != 0
     assert "requires --pipeline" in result.output
     mock_process.assert_not_called()
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_requires_something_to_clean() -> None:
+    """dandicompute clean with neither target is a usage error rather than a silent no-op."""
+    runner = CliRunner()
+
+    result = runner.invoke(_dandicompute_group, ["clean"])
+
+    assert result.exit_code != 0
+    assert "Nothing to clean" in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_forwards_the_dispatch_directory_and_age(tmp_path: pathlib.Path) -> None:
+    """dandicompute clean --dispatch forwards its target and --age to the cleanup helper."""
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.clean_dispatch_directories", return_value=[]) as mock_clean:
+        result = runner.invoke(
+            _dandicompute_group,
+            ["clean", "--dispatch", str(processing_dir), "--age", "6"],
+        )
+
+    assert result.exit_code == 0, result.output
+    mock_clean.assert_called_once_with(processing_directory=processing_dir, minimum_age_hours=6.0)
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_reports_how_many_dispatch_directories_went(tmp_path: pathlib.Path) -> None:
+    """dandicompute clean --dispatch reports what it removed."""
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    runner = CliRunner()
+
+    removed = [processing_dir / "dandicompute-dispatch-lfp-20260101-000000"]
+    with mock.patch(f"{_GROUP}.clean_dispatch_directories", return_value=removed):
+        result = runner.invoke(_dandicompute_group, ["clean", "--dispatch", str(processing_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert "Removed 1 finished dispatch directory." in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_reports_when_nothing_was_ready_to_remove(tmp_path: pathlib.Path) -> None:
+    """A dispatch cleanup that removed nothing says so rather than claiming success."""
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.clean_dispatch_directories", return_value=[]):
+        result = runner.invoke(_dandicompute_group, ["clean", "--dispatch", str(processing_dir)])
+
+    assert result.exit_code == 0, result.output
+    assert "No dispatch directories were ready to be removed." in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_still_cleans_a_work_directory_on_its_own(tmp_path: pathlib.Path) -> None:
+    """--directory keeps working by itself, and does not trigger a dispatch cleanup."""
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    runner = CliRunner()
+
+    with (
+        mock.patch(f"{_GROUP}.clean_work_directory") as mock_work,
+        mock.patch(f"{_GROUP}.clean_dispatch_directories") as mock_dispatch,
+    ):
+        result = runner.invoke(_dandicompute_group, ["clean", "--directory", str(work_dir)])
+
+    assert result.exit_code == 0, result.output
+    mock_work.assert_called_once_with(directory=work_dir)
+    mock_dispatch.assert_not_called()

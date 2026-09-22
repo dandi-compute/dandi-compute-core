@@ -17,12 +17,18 @@ import dataclasses
 import datetime
 import logging
 import pathlib
+import shutil
 import subprocess
 from typing import Literal
 
 from ._capsule_resources import CapsuleResources
 from ._dispatch_config import DispatchConfig
-from ._globals import _ACTIVE_SLURM_JOB_STATES, _SBATCH_JOB_ID_RE
+from ._globals import (
+    _ACTIVE_SLURM_JOB_STATES,
+    _DISPATCH_DIRECTORY_RE,
+    _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT,
+    _SBATCH_JOB_ID_RE,
+)
 from ._handle_template import generate_array_dispatch_script
 
 _log = logging.getLogger(__name__)
@@ -94,6 +100,69 @@ class DispatchResult:
         lines = [self.summary()]
         lines.extend(f"  {array.summary()}" for array in self.arrays)
         return lines
+
+
+def clean_dispatch_directories(
+    *,
+    processing_directory: pathlib.Path,
+    minimum_age_hours: float = 24.0,
+) -> list[pathlib.Path]:
+    """
+    Remove dispatch directories whose arrays are finished with them.
+
+    A dispatch directory holds the manifest its array tasks read at startup, so removing one
+    while its array is still working would strand every task that had not started yet. Two
+    things guard against that. A directory is kept while its pipeline still has a dispatcher
+    on the cluster, and it is kept until it is at least *minimum_age_hours* old, which covers
+    the window between submitting an array and SLURM reporting it.
+
+    Only directories named like a dispatch directory are considered, so anything else sharing
+    *processing_directory* is left alone.
+
+    :param processing_directory: The directory dispatch directories were created in.
+    :param minimum_age_hours: Leave directories formed more recently than this alone.
+    :returns: The dispatch directories that were removed.
+    :rtype: list[pathlib.Path]
+    :raises RuntimeError: If ``squeue`` fails, since a live dispatcher cannot be ruled out.
+    """
+    if not processing_directory.is_dir():
+        message = f"The processing directory does not exist or is not a directory: {processing_directory}"
+        raise NotADirectoryError(message)
+
+    now = datetime.datetime.now()
+    active_by_job_name: dict[str, bool] = {}
+    removed: list[pathlib.Path] = []
+
+    for candidate in sorted(processing_directory.iterdir()):
+        if not candidate.is_dir():
+            continue
+        match = _DISPATCH_DIRECTORY_RE.fullmatch(candidate.name)
+        if match is None:
+            continue
+
+        try:
+            formed_at = datetime.datetime.strptime(match.group("timestamp"), _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT)
+        except ValueError:
+            _log.warning("Unreadable timestamp on dispatch directory %s; leaving it alone", candidate)
+            continue
+
+        age_hours = (now - formed_at).total_seconds() / 3600.0
+        if age_hours < minimum_age_hours:
+            _log.info("Keeping %s; it is %.1f hours old", candidate.name, age_hours)
+            continue
+
+        job_name = match.group("job_name")
+        if job_name not in active_by_job_name:
+            active_by_job_name[job_name] = bool(_active_dispatcher_job_ids(job_name))
+        if active_by_job_name[job_name]:
+            _log.info("Keeping %s; its dispatcher %s is still active", candidate.name, job_name)
+            continue
+
+        shutil.rmtree(candidate)
+        _log.info("Removed dispatch directory %s", candidate)
+        removed.append(candidate)
+
+    return removed
 
 
 def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str]) -> list[str]:

@@ -131,6 +131,16 @@ The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline
 
 It has to stay readable from the compute nodes for as long as the arrays live, so nothing in it is cleaned up at submission time. A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` directory, where the capsule uploads it from.
 
+Finished dispatch directories are swept up by `clean`:
+
+```bash
+dandicompute clean --dispatch ./processing/
+```
+
+A dispatch directory is removed only once its pipeline has no dispatcher left on the cluster and it is at least `--age` hours old (24 by default). Both guards matter, since an array task reads its manifest as it starts, and removing the directory under a live array would strand every task that had not begun yet. Anything in the processing directory that is not a dispatch directory is left alone.
+
+`clean` still takes `--directory` for a work directory, and the two can be given together.
+
 
 
 ## Contributing Non-Code Files
