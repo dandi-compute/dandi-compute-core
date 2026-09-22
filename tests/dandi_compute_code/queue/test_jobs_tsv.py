@@ -44,7 +44,7 @@ def _make_entry(**overrides: object) -> JobCapsule:
 
 @pytest.mark.ai_generated
 def test_job_capsule_to_tsv_row_leaves_out_path_mappings() -> None:
-    """JobCapsule.to_tsv_row keeps the path mappings out of the state.tsv row."""
+    """JobCapsule.to_tsv_row keeps the path mappings out of the jobs.tsv row."""
     entry = _make_entry()
     row = entry.to_tsv_row()
     assert row["dandiset_id"] == "001849"
@@ -114,7 +114,7 @@ def test_pipeline_queue_to_tsv_string_empty_state_has_only_header() -> None:
 def test_pipeline_queue_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.to_tsv writes the TSV table to the given file path."""
     state = PipelineQueue(entries=[_make_entry()])
-    output_file = tmp_path / "state.tsv"
+    output_file = tmp_path / "jobs.tsv"
     state.to_tsv(output_file)
     assert output_file.exists()
     assert output_file.read_text() == state.to_tsv_string()
@@ -123,12 +123,12 @@ def test_pipeline_queue_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
 @pytest.mark.ai_generated
 def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.from_tsv preserves dataset_description_path entries."""
-    state_file = tmp_path / "state.tsv"
+    jobs_file = tmp_path / "jobs.tsv"
     dataset_description_path = {f"{_CAPSULE_PATH}/dataset_description.json": "dataset-description-id"}
     entry = _make_entry(dataset_description_path=dataset_description_path)
-    PipelineQueue(entries=[entry]).to_tsv(state_file)
+    PipelineQueue(entries=[entry]).to_tsv(jobs_file)
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert len(pipeline_queue) == 1
     assert pipeline_queue.entries[0].dataset_description_path == dataset_description_path
@@ -136,18 +136,18 @@ def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pa
 
 @pytest.mark.ai_generated
 def test_pipeline_queue_to_tsv_writes_paths_table_beside_state(tmp_path: pathlib.Path) -> None:
-    """PipelineQueue.to_tsv writes paths.tsv next to state.tsv, and from_tsv reads every mapping back."""
+    """PipelineQueue.to_tsv writes paths.tsv next to jobs.tsv, and from_tsv reads every mapping back."""
     entry = _make_entry(
         output_paths={
             f"{_CAPSULE_PATH}/derivatives/output.nwb": "out-id",
             f"{_CAPSULE_PATH}/derivatives/other.nwb": "other-id",
         }
     )
-    state_file = tmp_path / "state.tsv"
-    PipelineQueue(entries=[entry]).to_tsv(state_file)
+    jobs_file = tmp_path / "jobs.tsv"
+    PipelineQueue(entries=[entry]).to_tsv(jobs_file)
 
     paths_file = tmp_path / "paths.tsv"
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert paths_file.read_text() == PipelineQueue(entries=[entry]).to_paths_tsv_string()
     assert paths_file.read_text().splitlines()[0].split("\t") == ["job_id", "path", "content_id"]
@@ -159,10 +159,10 @@ def test_pipeline_queue_to_tsv_writes_paths_table_beside_state(tmp_path: pathlib
 @pytest.mark.ai_generated
 def test_pipeline_queue_from_tsv_without_paths_table(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.from_tsv leaves the path mappings empty when there is no paths.tsv."""
-    state_file = tmp_path / "state.tsv"
-    state_file.write_text(PipelineQueue(entries=[_make_entry()]).to_tsv_string())
+    jobs_file = tmp_path / "jobs.tsv"
+    jobs_file.write_text(PipelineQueue(entries=[_make_entry()]).to_tsv_string())
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].output_paths == {}
     assert pipeline_queue.entries[0].log_paths == {}
@@ -170,7 +170,7 @@ def test_pipeline_queue_from_tsv_without_paths_table(tmp_path: pathlib.Path) -> 
 
 @pytest.mark.ai_generated
 def test_pipeline_queue_from_tsv_reads_legacy_json_path_columns(tmp_path: pathlib.Path) -> None:
-    """A state.tsv written before the paths moved to paths.tsv still reads its JSON path columns."""
+    """A jobs.tsv written before the paths moved to paths.tsv still reads its JSON path columns."""
     entry = _make_entry()
     row = {
         **entry.to_tsv_row(),
@@ -178,13 +178,13 @@ def test_pipeline_queue_from_tsv_reads_legacy_json_path_columns(tmp_path: pathli
         "output_paths": json.dumps(entry.output_paths),
         "log_paths": "",
     }
-    state_file = tmp_path / "state.tsv"
-    with state_file.open("w", newline="") as file_stream:
+    jobs_file = tmp_path / "jobs.tsv"
+    with jobs_file.open("w", newline="") as file_stream:
         writer = csv.DictWriter(file_stream, fieldnames=list(row), delimiter="\t", lineterminator="\n")
         writer.writeheader()
         writer.writerow(row)
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].dataset_description_path == entry.dataset_description_path
     assert pipeline_queue.entries[0].output_paths == entry.output_paths
@@ -194,11 +194,11 @@ def test_pipeline_queue_from_tsv_reads_legacy_json_path_columns(tmp_path: pathli
 @pytest.mark.ai_generated
 def test_pipeline_queue_empty_dataset_description_path_cell(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.from_tsv reads an entry without a dataset description path back as an empty dict."""
-    state_file = tmp_path / "state.tsv"
+    jobs_file = tmp_path / "jobs.tsv"
     entry = _make_entry(dataset_description_path={})
-    PipelineQueue(entries=[entry]).to_tsv(state_file)
+    PipelineQueue(entries=[entry]).to_tsv(jobs_file)
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert len(pipeline_queue) == 1
     assert pipeline_queue.entries[0].dataset_description_path == {}
@@ -249,10 +249,10 @@ def test_job_capsule_durations_empty_when_a_timestamp_is_unusable(
 @pytest.mark.ai_generated
 def test_pipeline_queue_from_tsv_round_trips_submission_time(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.from_tsv reads job_submission_time back and recomputes the durations."""
-    state_file = tmp_path / "state.tsv"
-    PipelineQueue(entries=[_make_entry()]).to_tsv(state_file)
+    jobs_file = tmp_path / "jobs.tsv"
+    PipelineQueue(entries=[_make_entry()]).to_tsv(jobs_file)
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].job_submission_time == "2025-01-01T00:15:00+00:00"
     assert pipeline_queue.entries[0].queue_wait_seconds == 900
@@ -262,15 +262,15 @@ def test_pipeline_queue_from_tsv_round_trips_submission_time(tmp_path: pathlib.P
 @pytest.mark.ai_generated
 def test_pipeline_queue_from_tsv_reads_table_without_submission_column(tmp_path: pathlib.Path) -> None:
     """A table written before job_submission_time existed still parses, without durations."""
-    state_file = tmp_path / "state.tsv"
+    jobs_file = tmp_path / "jobs.tsv"
     tsv_text = PipelineQueue(entries=[_make_entry()]).to_tsv_string()
     header, row = (line.split("\t") for line in tsv_text.splitlines())
     dropped_columns = {"job_submission_time", "queue_wait_seconds", "run_duration_seconds"}
     keep = [index for index, name in enumerate(header) if name not in dropped_columns]
     legacy_lines = ["\t".join([line[index] for index in keep]) for line in (header, row)]
-    state_file.write_text("\n".join(legacy_lines) + "\n")
+    jobs_file.write_text("\n".join(legacy_lines) + "\n")
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].job_submission_time is None
     assert pipeline_queue.entries[0].queue_wait_seconds is None
@@ -297,11 +297,11 @@ def test_example_queue_reads_paths_from_sibling_table(example_pipeline_queue: Pi
 def test_pipeline_queue_from_tsv_skips_paths_it_cannot_place(tmp_path: pathlib.Path, path: str) -> None:
     """A paths.tsv row that falls under none of the mappings is left out rather than guessed at."""
     entry = _make_entry(dataset_description_path={}, output_paths={}, log_paths={})
-    state_file = tmp_path / "state.tsv"
-    PipelineQueue(entries=[entry]).to_tsv(state_file)
+    jobs_file = tmp_path / "jobs.tsv"
+    PipelineQueue(entries=[entry]).to_tsv(jobs_file)
     (tmp_path / "paths.tsv").write_text(f"job_id\tpath\tcontent_id\njob-250101abc123\t{path}\tsome-id\n")
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].dataset_description_path == {}
     assert pipeline_queue.entries[0].output_paths == {}

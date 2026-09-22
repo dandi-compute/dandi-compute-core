@@ -42,11 +42,11 @@ def test_job_capsule_defaults_to_unknown() -> None:
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", JOB_STATUSES)
 def test_status_round_trips_through_the_table(status: str, tmp_path: pathlib.Path) -> None:
-    """Every status survives a write and read of ``state.tsv``."""
-    state_file = tmp_path / "state.tsv"
-    PipelineQueue(entries=[_entry(status)]).to_tsv(state_file)
+    """Every status survives a write and read of ``jobs.tsv``."""
+    jobs_file = tmp_path / "jobs.tsv"
+    PipelineQueue(entries=[_entry(status)]).to_tsv(jobs_file)
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].status == status
 
@@ -55,13 +55,13 @@ def test_status_round_trips_through_the_table(status: str, tmp_path: pathlib.Pat
 @pytest.mark.parametrize("cell", ["", "running", "not-a-status"], ids=["empty", "retired", "unrecognised"])
 def test_unreadable_status_cell_falls_back_to_unknown(cell: str, tmp_path: pathlib.Path) -> None:
     """A status cell this version does not recognise reads back as unknown rather than raising."""
-    state_file = tmp_path / "state.tsv"
-    PipelineQueue(entries=[_entry("failed")]).to_tsv(state_file)
-    header, row = (line.split("\t") for line in state_file.read_text().splitlines())
+    jobs_file = tmp_path / "jobs.tsv"
+    PipelineQueue(entries=[_entry("failed")]).to_tsv(jobs_file)
+    header, row = (line.split("\t") for line in jobs_file.read_text().splitlines())
     row[header.index("status")] = cell
-    state_file.write_text("\n".join(["\t".join(header), "\t".join(row)]) + "\n")
+    jobs_file.write_text("\n".join(["\t".join(header), "\t".join(row)]) + "\n")
 
-    pipeline_queue = PipelineQueue.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(jobs_file)
 
     assert pipeline_queue.entries[0].status == "unknown"
 

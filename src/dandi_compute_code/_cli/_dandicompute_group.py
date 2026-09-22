@@ -386,7 +386,7 @@ def _queue_group() -> None:
 @click.option(
     "--processing",
     "processing_directory",
-    help="Directory for the temporary working trees used to write each state.tsv and paths.tsv "
+    help="Directory for the temporary working trees used to write each jobs.tsv and paths.tsv "
     "(defaults to the system temporary location).",
     required=False,
     type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
@@ -395,7 +395,7 @@ def _queue_group() -> None:
 @click.option(
     "--test",
     "test",
-    help="Preserve the temporary working trees used to write each state.tsv and paths.tsv instead of cleaning them up.",
+    help="Preserve the temporary working trees used to write each jobs.tsv and paths.tsv instead of cleaning them up.",
     required=False,
     is_flag=True,
     default=False,
@@ -415,10 +415,10 @@ def _queue_refresh_command(
     silent: bool = False,
 ) -> None:
     """
-    Rewrite state.tsv into both Dandisets.
+    Rewrite jobs.tsv into both Dandisets.
 
-    Ephemerally rebuilds and rewrites derivatives/state.tsv within both the source and
-    archived Dandisets themselves (see PipelineQueue.write_dandiset_state_table), so each always
+    Ephemerally rebuilds and rewrites derivatives/jobs.tsv within both the source and
+    archived Dandisets themselves (see PipelineQueue.write_dandiset_jobs_table), so each always
     reflects its current state fetched fresh from its own assets.jsonld. The asset paths of
     each job are written beside it to derivatives/paths.tsv.
     """
@@ -427,14 +427,14 @@ def _queue_refresh_command(
     _require_dandi_devel()
 
     for target_dandiset_id in (dandiset_id, archive_dandiset_id):
-        PipelineQueue.write_dandiset_state_table(
+        PipelineQueue.write_dandiset_jobs_table(
             dandiset_id=target_dandiset_id,
             processing_directory=processing_directory,
             test=test,
         )
         if not silent:
             _styled_echo(
-                text=f"\nWrote derivatives/state.tsv and derivatives/paths.tsv to Dandiset {target_dandiset_id}.",
+                text=f"\nWrote derivatives/jobs.tsv and derivatives/paths.tsv to Dandiset {target_dandiset_id}.",
                 color="green",
             )
 

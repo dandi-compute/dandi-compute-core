@@ -121,9 +121,9 @@ def test_job_capsule_validates() -> None:
 
 
 @pytest.mark.ai_generated
-def test_every_row_of_the_example_state_table_validates() -> None:
+def test_every_row_of_the_example_jobs_table_validates() -> None:
     """
-    Every row of the committed ``state.tsv`` conforms to the job capsule schema.
+    Every row of the committed ``jobs.tsv`` conforms to the job capsule schema.
 
     The schema constrains the shape of several of these fields with a regular expression,
     and a pattern written too narrowly would reject records the queue really produces. This
@@ -131,9 +131,9 @@ def test_every_row_of_the_example_state_table_validates() -> None:
     versions such as ``v1.0`` and ``v1.1.1+b268fd2+a66c8df``, which a plain three-part
     semantic version pattern would refuse.
     """
-    state_table_path = _REPOSITORY_ROOT / "tests" / "dandi_compute_code" / "queue" / "example_state_files" / "state.tsv"
-    with state_table_path.open() as state_table:
-        rows = list(csv.DictReader(state_table, delimiter="\t"))
+    jobs_table_path = _REPOSITORY_ROOT / "tests" / "dandi_compute_code" / "queue" / "example_jobs_files" / "jobs.tsv"
+    with jobs_table_path.open() as jobs_table:
+        rows = list(csv.DictReader(jobs_table, delimiter="\t"))
 
     assert rows != []
     for row in rows:

@@ -11,7 +11,7 @@ import pytest
 from dandi_compute_code.dandiset import write_dandiset_file
 
 _DANDISET_ID = "001697"
-_RELATIVE_PATH = "derivatives/state.tsv"
+_RELATIVE_PATH = "derivatives/jobs.tsv"
 _CONTENT = "dandiset_id\tdandi_path\n001849\tsub-mouse01/sub-mouse01_ecephys.nwb\n"
 
 

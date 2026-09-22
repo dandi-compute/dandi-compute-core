@@ -17,7 +17,7 @@ that already formed the same job does.
 
 Everything the name used to spell out (pipeline version, codebase version, parameters and
 config) is recorded in the capsule's ``dataset_description.json`` provenance and in the
-``state.tsv`` summary table.
+``jobs.tsv`` summary table.
 """
 
 import datetime

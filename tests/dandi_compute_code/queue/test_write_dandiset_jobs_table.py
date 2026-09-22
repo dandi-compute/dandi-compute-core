@@ -10,8 +10,8 @@ _FAILED_RUNS_ARCHIVE_DANDISET_ID = "001873"
 
 
 @pytest.mark.ai_generated
-def test_write_dandiset_state_table_builds_state_and_uploads() -> None:
-    """write_dandiset_state_table builds the state from the given Dandiset and uploads state.tsv and paths.tsv."""
+def test_write_dandiset_jobs_table_builds_state_and_uploads() -> None:
+    """write_dandiset_jobs_table builds the state from the given Dandiset and uploads jobs.tsv and paths.tsv."""
     source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
     capsule_path = (
         "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-aind+ephys/"
@@ -50,11 +50,11 @@ def test_write_dandiset_state_table_builds_state_and_uploads() -> None:
         ),
         mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file,
     ):
-        PipelineQueue.write_dandiset_state_table(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
+        PipelineQueue.write_dandiset_jobs_table(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
 
     state_kwargs, paths_kwargs = (call.kwargs for call in mock_write_file.call_args_list)
     assert state_kwargs["dandiset_id"] == _JOB_CAPSULES_DANDISET_ID
-    assert state_kwargs["relative_path"] == "derivatives/state.tsv"
+    assert state_kwargs["relative_path"] == "derivatives/jobs.tsv"
     assert "dandiset_id\t" in state_kwargs["content"].splitlines()[0]
     assert source_path in state_kwargs["content"]
     assert paths_kwargs["dandiset_id"] == _JOB_CAPSULES_DANDISET_ID
@@ -63,8 +63,8 @@ def test_write_dandiset_state_table_builds_state_and_uploads() -> None:
 
 
 @pytest.mark.ai_generated
-def test_write_dandiset_state_table_empty_state_writes_header_only() -> None:
-    """write_dandiset_state_table uploads header-only state and paths tables when there are no entries."""
+def test_write_dandiset_jobs_table_empty_state_writes_header_only() -> None:
+    """write_dandiset_jobs_table uploads header-only state and paths tables when there are no entries."""
     with (
         mock.patch(
             "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
@@ -72,10 +72,10 @@ def test_write_dandiset_state_table_empty_state_writes_header_only() -> None:
         ),
         mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file,
     ):
-        PipelineQueue.write_dandiset_state_table(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
+        PipelineQueue.write_dandiset_jobs_table(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
 
     assert [call.kwargs["relative_path"] for call in mock_write_file.call_args_list] == [
-        "derivatives/state.tsv",
+        "derivatives/jobs.tsv",
         "derivatives/paths.tsv",
     ]
     for call in mock_write_file.call_args_list:

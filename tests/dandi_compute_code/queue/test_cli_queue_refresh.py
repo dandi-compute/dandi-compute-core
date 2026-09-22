@@ -13,9 +13,9 @@ _DANDI_ENV = {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}
 
 @pytest.mark.ai_generated
 def test_cli_queue_refresh_writes_tables_to_source_and_archived() -> None:
-    """dandicompute queue refresh rewrites derivatives/state.tsv into both Dandisets."""
+    """dandicompute queue refresh rewrites derivatives/jobs.tsv into both Dandisets."""
     runner = CliRunner()
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_state_table") as mock_write:
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_jobs_table") as mock_write:
         result = runner.invoke(_dandicompute_group, ["queue", "refresh"], env=_DANDI_ENV)
     assert result.exit_code == 0, result.output
     called_dandiset_ids = {call.kwargs["dandiset_id"] for call in mock_write.call_args_list}
@@ -24,9 +24,9 @@ def test_cli_queue_refresh_writes_tables_to_source_and_archived() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_queue_refresh_forwards_custom_dandiset_ids() -> None:
-    """dandicompute queue refresh forwards --dandiset-id/--archive-dandiset-id to write_dandiset_state_table."""
+    """dandicompute queue refresh forwards --dandiset-id/--archive-dandiset-id to write_dandiset_jobs_table."""
     runner = CliRunner()
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_state_table") as mock_write:
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_jobs_table") as mock_write:
         result = runner.invoke(
             _dandicompute_group,
             [
@@ -46,9 +46,9 @@ def test_cli_queue_refresh_forwards_custom_dandiset_ids() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_queue_refresh_forwards_processing_and_test_flags() -> None:
-    """dandicompute queue refresh forwards --processing/--test to write_dandiset_state_table."""
+    """dandicompute queue refresh forwards --processing/--test to write_dandiset_jobs_table."""
     runner = CliRunner()
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_state_table") as mock_write:
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_jobs_table") as mock_write:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "refresh", "--test"],

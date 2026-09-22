@@ -1,5 +1,5 @@
 """
-``JobCapsule`` — one row of ``state.tsv``: a job's identity plus its status.
+``JobCapsule`` — one row of ``jobs.tsv``: a job's identity plus its status.
 
 Its asset path mappings are the one part kept apart, as rows of ``paths.tsv``.
 
@@ -27,9 +27,9 @@ JobStatus = Literal["pending", "stalled", "failed", "successful", "unknown"]
 #: Every value :data:`JobStatus` allows, for validating a status read back from a table.
 JOB_STATUSES: tuple[JobStatus, ...] = ("pending", "stalled", "failed", "successful", "unknown")
 
-#: Column order for the ``state.tsv`` table. The asset path mappings are left out and kept in
-#: ``paths.tsv`` instead, so each ``state.tsv`` row stays short enough to read as a table.
-_STATE_TSV_FIELD_NAMES = [
+#: Column order for the ``jobs.tsv`` table. The asset path mappings are left out and kept in
+#: ``paths.tsv`` instead, so each ``jobs.tsv`` row stays short enough to read as a table.
+_JOBS_TSV_FIELD_NAMES = [
     "job_id",
     "dandiset_id",
     "dandi_path",
@@ -383,7 +383,7 @@ class JobCapsule:
 
     def to_tsv_row(self) -> dict[str, str]:
         """
-        Flatten this entry to a single ``state.tsv`` row.
+        Flatten this entry to a single ``jobs.tsv`` row.
 
         Every value from :meth:`to_dict` is coerced to a plain string, and ``None`` becomes
         an empty cell. The path mappings (``dataset_description_path``, ``output_paths``,
@@ -392,7 +392,7 @@ class JobCapsule:
         """
         raw = self.to_dict()
         row: dict[str, str] = {}
-        for field_name in _STATE_TSV_FIELD_NAMES:
+        for field_name in _JOBS_TSV_FIELD_NAMES:
             value = raw[field_name]
             row[field_name] = "" if value is None else str(value)
         return row
@@ -401,7 +401,7 @@ class JobCapsule:
         """
         Flatten this entry's path mappings to ``paths.tsv`` rows, one per asset path.
 
-        Each row carries the ``job_id`` linking it back to this entry's ``state.tsv`` row. The
+        Each row carries the ``job_id`` linking it back to this entry's ``jobs.tsv`` row. The
         mapping a path came from is not recorded, since the path itself tells them apart.
         """
         rows = [
@@ -414,7 +414,7 @@ class JobCapsule:
     @classmethod
     def from_tsv_row(cls, row: dict[str, str], /) -> JobCapsule:
         """
-        Construct from a single ``state.tsv`` row (the inverse of :meth:`to_tsv_row`).
+        Construct from a single ``jobs.tsv`` row (the inverse of :meth:`to_tsv_row`).
 
         Reverses the coercions applied by :meth:`to_tsv_row`: empty cells become
         ``None`` and ``asset_size_bytes`` is parsed back to ``int``.

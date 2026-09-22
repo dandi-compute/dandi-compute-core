@@ -1,9 +1,9 @@
 """
-PipelineQueue — typed container for ``state.tsv``.
+PipelineQueue — typed container for ``jobs.tsv``.
 
-``state.tsv`` is a tab-separated table where each row is one job
+``jobs.tsv`` is a tab-separated table where each row is one job
 capsule. The asset paths of each capsule are kept apart in a sibling ``paths.tsv`` table,
-one row per path, so that ``state.tsv`` stays narrow enough to render as a table.
+one row per path, so that ``jobs.tsv`` stays narrow enough to render as a table.
 :class:`PipelineQueue` is the container over both, a list of
 :class:`~._job_capsule.JobCapsule` objects (the typed row model, defined in
 :mod:`._job_capsule`) with convenience helpers for filtering and round-trip I/O.
@@ -38,8 +38,8 @@ from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
 from ._job_capsule import (
+    _JOBS_TSV_FIELD_NAMES,
     _PATHS_TSV_FIELD_NAMES,
-    _STATE_TSV_FIELD_NAMES,
     JobCapsule,
     JobStatus,
     _path_field_name,
@@ -77,17 +77,17 @@ _log = logging.getLogger(__name__)
 #: Dandiset whose assets back the pending/submission queries (the job capsules Dandiset).
 _DANDISET_ID = _JOB_CAPSULES_DANDISET_ID
 
-#: Default subpath (relative to a Dandiset root) that ``state.tsv`` is written to.
-_STATE_TSV_RELATIVE_PATH = "derivatives/state.tsv"
+#: Default subpath (relative to a Dandiset root) that ``jobs.tsv`` is written to.
+_JOBS_TSV_RELATIVE_PATH = "derivatives/jobs.tsv"
 
-#: File name of the ``paths.tsv`` table, which always sits beside its ``state.tsv``.
+#: File name of the ``paths.tsv`` table, which always sits beside its ``jobs.tsv``.
 _PATHS_TSV_FILE_NAME = "paths.tsv"
 
 
 @dataclass
 class PipelineQueue:
     """
-    Container for all entries in ``state.tsv``.
+    Container for all entries in ``jobs.tsv``.
 
     Also the base class every pipeline specific queue derives from. The base class
     itself owns any pipeline no subclass claims, which is how the LFP pipeline is
@@ -370,9 +370,9 @@ class PipelineQueue:
         return cls.from_metadata(load_assets_jsonld_metadata(dandiset_id=dandiset_id))
 
     def to_tsv_string(self) -> str:
-        """Serialise all entries to a tab-separated ``state.tsv`` table (including header)."""
+        """Serialise all entries to a tab-separated ``jobs.tsv`` table (including header)."""
         buffer = io.StringIO()
-        writer = csv.DictWriter(buffer, fieldnames=_STATE_TSV_FIELD_NAMES, delimiter="\t", lineterminator="\n")
+        writer = csv.DictWriter(buffer, fieldnames=_JOBS_TSV_FIELD_NAMES, delimiter="\t", lineterminator="\n")
         writer.writeheader()
         for entry in self.entries:
             writer.writerow(entry.to_tsv_row())
@@ -389,7 +389,7 @@ class PipelineQueue:
 
     def to_tsv(self, file_path: pathlib.Path, /) -> None:
         """
-        Write all entries to *file_path* as a tab-separated ``state.tsv`` table.
+        Write all entries to *file_path* as a tab-separated ``jobs.tsv`` table.
 
         The asset paths of the entries are written to a ``paths.tsv`` table beside it.
 
@@ -403,20 +403,20 @@ class PipelineQueue:
         file_path.with_name(_PATHS_TSV_FILE_NAME).write_text(self.to_paths_tsv_string())
 
     @classmethod
-    def write_dandiset_state_table(
+    def write_dandiset_jobs_table(
         cls,
         *,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-        relative_path: str = _STATE_TSV_RELATIVE_PATH,
+        relative_path: str = _JOBS_TSV_RELATIVE_PATH,
         processing_directory: pathlib.Path | None = None,
         test: bool = False,
     ) -> None:
         """
-        Write this Dandiset's queue state as a ``state.tsv`` table within itself.
+        Write this Dandiset's queue state as a ``jobs.tsv`` table within itself.
 
         Builds the state from *dandiset_id*'s remote ``assets.jsonld`` metadata (see
         :meth:`from_dandi`) and uploads it as a tab-separated table to *relative_path* within
-        *dandiset_id* (default ``derivatives/state.tsv``) via
+        *dandiset_id* (default ``derivatives/jobs.tsv``) via
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`. The asset paths of the
         entries are uploaded the same way to a ``paths.tsv`` beside it.
 
@@ -431,7 +431,7 @@ class PipelineQueue:
             The Dandiset whose ``assets.jsonld`` portrays the state, and which
             the table is written into. Defaults to the job capsules Dandiset.
         relative_path : str, optional
-            Path (relative to the Dandiset root) the ``state.tsv`` table is
+            Path (relative to the Dandiset root) the ``jobs.tsv`` table is
             written to. The ``paths.tsv`` table is written beside it.
         processing_directory : pathlib.Path, optional
             Directory for the temporary working tree used to upload the table.
@@ -1060,10 +1060,10 @@ class PipelineQueue:
     @classmethod
     def from_tsv(cls, file_path: pathlib.Path, /) -> PipelineQueue:
         """
-        Load from an existing ``state.tsv`` file.
+        Load from an existing ``jobs.tsv`` file.
 
         The inverse of :meth:`to_tsv`/:meth:`to_tsv_string`: parses the tab-separated
-        table (via :class:`csv.DictReader`, using :data:`_STATE_TSV_FIELD_NAMES` as
+        table (via :class:`csv.DictReader`, using :data:`_JOBS_TSV_FIELD_NAMES` as
         the expected column order) back into :class:`JobCapsule` objects via
         :meth:`JobCapsule.from_tsv_row`.
 
@@ -1074,7 +1074,7 @@ class PipelineQueue:
         Parameters
         ----------
         file_path : pathlib.Path
-            Path to the ``state.tsv`` file to read.
+            Path to the ``jobs.tsv`` file to read.
 
         Raises
         ------
