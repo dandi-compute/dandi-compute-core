@@ -15,18 +15,18 @@ _GROUP = "dandi_compute_code._cli._dandicompute_group"
 
 
 @pytest.mark.ai_generated
-def test_cli_prepare_test_calls_prepare_with_test_content_id() -> None:
-    """dandicompute prepare aind --test calls QueueState.prepare with the known test content ID."""
+def test_cli_prepare_test_creates_capsules_for_the_test_content_id() -> None:
+    """dandicompute prepare aind --test creates job capsules for the known test content ID."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.prepare") as mock_prepare,
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["prepare", "aind", "--test"])
 
     assert result.exit_code == 0
-    mock_prepare.assert_called_once_with(
+    mock_create.assert_called_once_with(
         content_ids=[TEST_QUEUE_CONTENT_ID],
         pipeline_directory=None,
         config_key="default",
@@ -34,32 +34,78 @@ def test_cli_prepare_test_calls_prepare_with_test_content_id() -> None:
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_prepare_forwards_pipeline_as_only_pipeline() -> None:
-    """dandicompute queue prepare --pipeline <name> forwards only_pipeline to QueueState.prepare."""
+def test_cli_jobs_create_forwards_pipeline_as_only_pipeline() -> None:
+    """dandicompute jobs create --pipeline <name> forwards only_pipeline to the creation helper."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.prepare") as mock_prepare,
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
     ):
-        result = runner.invoke(_dandicompute_group, ["queue", "prepare", "--pipeline", "lfp", "--limit", "5"])
+        result = runner.invoke(_dandicompute_group, ["jobs", "create", "--pipeline", "lfp", "--limit", "5"])
 
     assert result.exit_code == 0
-    mock_prepare.assert_called_once_with(
+    mock_create.assert_called_once_with(
         config_key="default",
         limit=5,
         only_pipeline="lfp",
+        force_latest_versions=False,
     )
 
 
 @pytest.mark.ai_generated
-def test_cli_prepare_test_passes_config_key() -> None:
-    """dandicompute prepare aind --test forwards --config to QueueState.prepare."""
+def test_cli_jobs_create_forwards_latest_flag() -> None:
+    """dandicompute jobs create --latest forwards force_latest_versions to the creation helper."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.prepare") as mock_prepare,
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
+    ):
+        result = runner.invoke(_dandicompute_group, ["jobs", "create", "--latest"])
+
+    assert result.exit_code == 0
+    assert mock_create.call_args.kwargs["force_latest_versions"] is True
+
+
+@pytest.mark.ai_generated
+def test_cli_jobs_create_defaults_to_no_limit() -> None:
+    """dandicompute jobs create with no --limit creates capsules without a cap."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
+    ):
+        result = runner.invoke(_dandicompute_group, ["jobs", "create"])
+
+    assert result.exit_code == 0
+    assert mock_create.call_args.kwargs["limit"] is None
+
+
+@pytest.mark.ai_generated
+def test_cli_jobs_create_requires_a_dandi_api_key() -> None:
+    """dandicompute jobs create fails clearly when DANDI_API_KEY is not set."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict("os.environ", {"DANDI_API_KEY": ""}),
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
+    ):
+        result = runner.invoke(_dandicompute_group, ["jobs", "create"])
+
+    assert result.exit_code != 0
+    assert mock_create.call_count == 0
+
+
+@pytest.mark.ai_generated
+def test_cli_prepare_test_passes_config_key() -> None:
+    """dandicompute prepare aind --test forwards --config to the creation helper."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
+        mock.patch(f"{_GROUP}.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(
             _dandicompute_group,
@@ -67,7 +113,7 @@ def test_cli_prepare_test_passes_config_key() -> None:
         )
 
     assert result.exit_code == 0
-    mock_prepare.assert_called_once_with(
+    mock_create.assert_called_once_with(
         content_ids=[TEST_QUEUE_CONTENT_ID],
         pipeline_directory=None,
         config_key="mit+engaging+revision-1",

@@ -10,6 +10,7 @@ from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
+from ..jobs import create_job_capsules
 from ..queue import TEST_QUEUE_CONTENT_ID, QueueState
 
 logging.basicConfig(level=logging.INFO)
@@ -98,7 +99,7 @@ def _submit_command(script_file_path: pathlib.Path, silent: bool = False) -> Non
 # dandicompute prepare
 @_dandicompute_group.group(name="prepare")
 def _prepare_group() -> None:
-    """Run preparation workflows that generate queue entries or scripts."""
+    """Run preparation workflows that generate submission scripts."""
     pass
 
 
@@ -107,7 +108,7 @@ def _prepare_group() -> None:
 @click.option(
     "--test",
     "test",
-    help="Prepare test queue entries for all configured AIND ephys version/params combinations.",
+    help="Create test job capsules for all configured AIND ephys params combinations.",
     required=False,
     is_flag=True,
     default=False,
@@ -193,13 +194,13 @@ def _prepare_aind_command(
     submit: bool = False,
     silent: bool = False,
 ) -> None:
-    """Prepare an AIND ephys job, or prepare test queue entries with --test."""
+    """Prepare an AIND ephys job, or create test job capsules with --test."""
     _configure_logging(silent=silent)
     if "DANDI_API_KEY" not in os.environ:
         raise click.ClickException("`DANDI_API_KEY` environment variable is not set.")
 
     if test:
-        QueueState.prepare(
+        create_job_capsules(
             content_ids=[TEST_QUEUE_CONTENT_ID],
             pipeline_directory=pipeline_directory,
             config_key=config_key,
@@ -243,10 +244,82 @@ def _prepare_aind_command(
     )
 
 
+# dandicompute jobs
+@_dandicompute_group.group(name="jobs")
+def _jobs_group() -> None:
+    """Create new job capsules for qualifying assets."""
+    pass
+
+
+# dandicompute jobs create [OPTIONS]
+@_jobs_group.command(name="create")
+@click.option(
+    "--pipeline",
+    "only_pipeline",
+    help="Create capsules only for the named pipeline (e.g. 'lfp' or 'aind+ephys'). "
+    "Defaults to all configured pipelines.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
+    "--config",
+    "config_key",
+    help="Registered configuration key to use.",
+    required=False,
+    type=str,
+    default="default",
+)
+@click.option(
+    "--limit",
+    "limit",
+    help="Create at most N job capsules in total. Defaults to no limit.",
+    required=False,
+    type=click.IntRange(min=1),
+    default=None,
+)
+@click.option(
+    "--latest",
+    "force_latest_versions",
+    help="Create a capsule for every qualifying asset against the latest locally available "
+    "pipeline and codebase versions, even where one already exists.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "--silent",
+    help="Suppress informational log output.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+def _jobs_create_command(
+    only_pipeline: str | None = None,
+    config_key: str = "default",
+    limit: int | None = None,
+    force_latest_versions: bool = False,
+    silent: bool = False,
+) -> None:
+    """Create a job capsule for every qualifying asset that does not have one yet."""
+    _configure_logging(silent=silent)
+    _require_dandi_api_key()
+
+    created_count = create_job_capsules(
+        config_key=config_key,
+        limit=limit,
+        only_pipeline=only_pipeline,
+        force_latest_versions=force_latest_versions,
+    )
+    if not silent:
+        noun = "job capsule" if created_count == 1 else "job capsules"
+        _styled_echo(text=f"\nCreated {created_count} {noun}.", color="green" if created_count else "yellow")
+
+
 # dandicompute queue
 @_dandicompute_group.group(name="queue")
 def _queue_group() -> None:
-    """Manage queue ordering, preparation, and execution."""
+    """Manage queue ordering, inspection, and execution."""
     pass
 
 
@@ -509,60 +582,6 @@ def _queue_process_command(
     )
     if not silent and queue_status == "no-pending":
         _styled_echo(text="\nNo jobs were found waiting to be submitted.", color="yellow")
-
-
-# dandicompute queue prepare [OPTIONS]
-@_queue_group.command(name="prepare")
-@click.option(
-    "--pipeline",
-    "only_pipeline",
-    help="Prepare only the named pipeline (e.g. 'lfp' or 'aind+ephys'). Defaults to all configured pipelines.",
-    required=False,
-    type=str,
-    default=None,
-)
-@click.option(
-    "--config",
-    "config_key",
-    help="Registered configuration key to use.",
-    required=False,
-    type=str,
-    default="default",
-)
-@click.option(
-    "--limit",
-    "limit",
-    help="Form at most N job capsules in total. Useful for testing.",
-    required=False,
-    type=click.IntRange(min=1),
-    default=None,
-)
-@click.option(
-    "--silent",
-    help="Suppress informational log output.",
-    required=False,
-    is_flag=True,
-    default=False,
-)
-def _queue_prepare_command(
-    only_pipeline: str | None = None,
-    config_key: str = "default",
-    limit: int | None = None,
-    silent: bool = False,
-) -> None:
-    """Prepare queued jobs without submitting them, optionally for a single pipeline."""
-    _configure_logging(silent=silent)
-    if "DANDI_API_KEY" not in os.environ:
-        raise click.ClickException("`DANDI_API_KEY` environment variable is not set.")
-
-    prepared_count = QueueState.prepare(
-        config_key=config_key,
-        limit=limit,
-        only_pipeline=only_pipeline,
-    )
-    if not silent:
-        noun = "job capsule" if prepared_count == 1 else "job capsules"
-        _styled_echo(text=f"\nFormed {prepared_count} {noun}.", color="green" if prepared_count else "yellow")
 
 
 # dandicompute issues

@@ -9,7 +9,6 @@ import pathlib
 import re
 import subprocess
 import tempfile
-import typing
 import urllib.request
 
 import dandi
@@ -24,33 +23,19 @@ from ..dandiset._globals import (
     _SANDBOX_DANDISET_ID,
     _dandiset_derivatives_relative_dir,
 )
-from ..dandiset._job_id import _PROVENANCE_KEY, _compute_job_hash, _format_job_id, _parse_job_hash
+from ..dandiset._job_id import (
+    _PROVENANCE_KEY,
+    _capsule_names_from_asset_paths,
+    _compute_job_hash,
+    _find_existing_capsule_path,
+    _next_available_job_id,
+)
 
 _log = logging.getLogger(__name__)
 
 
 class UnmappedContentIDError(ValueError):
     """Raised when a content ID cannot be resolved to a unique Dandiset path."""
-
-
-def _find_existing_capsule_path(
-    *,
-    asset_paths: typing.Iterable[str],
-    pipeline_dandiset_path: str,
-    job_hash: str,
-) -> str | None:
-    """
-    Find an already formed job capsule for this job among *asset_paths*, if there is one.
-
-    Matching is on the job hash alone, so a capsule prepared on an earlier date is still
-    recognised.
-    """
-    for asset_path in asset_paths:
-        capsule_name = asset_path.removeprefix(f"{pipeline_dandiset_path}/").split("/")[0]
-        if _parse_job_hash(capsule_name) == job_hash:
-            return f"{pipeline_dandiset_path}/{capsule_name}"
-
-    return None
 
 
 def _parse_pipeline_version(version: str, *, label: str) -> tuple[int, int, int]:
@@ -70,6 +55,7 @@ def prepare_aind_ephys_job(
     config_key: str = "default",
     parameters_key: str = "default",
     pipeline_directory: pathlib.Path | None = None,
+    force_new_capsule: bool = False,
     silent: bool = False,
 ) -> pathlib.Path | None:
     """
@@ -77,7 +63,8 @@ def prepare_aind_ephys_job(
 
     A job capsule is never formed twice. When one already exists on the archive for the
     requested pipeline version, parameters and config, nothing is prepared and ``None`` is
-    returned.
+    returned. Pass ``force_new_capsule`` to form another capsule anyway, under a job ID
+    disambiguated with a counter when the existing one was formed on the same day.
 
     Parameters
     ----------
@@ -99,6 +86,9 @@ def prepare_aind_ephys_job(
         Must be a key registered in `registries/registered_params.json`.
     pipeline_directory : pathlib.Path, optional
         Local path to the AIND pipeline repository.
+    force_new_capsule : bool, optional
+        Whether to form a new job capsule even when one already exists for this job.
+        Default is False.
     silent : bool, optional
         Whether to suppress output messages from the DANDI client.
         Default is False.
@@ -319,19 +309,23 @@ def prepare_aind_ephys_job(
         config=config_id,
         content_id=content_id,
     )
-    job_id = _format_job_id(job_hash=job_hash)
-    output_dandiset_path = f"{pipeline_dandiset_path}/{job_id}"
-
     client = dandi.dandiapi.DandiAPIClient(token=os.environ["DANDI_API_KEY"])
     dandiset = client.get_dandiset(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
-    existing_capsule_path = _find_existing_capsule_path(
+    existing_capsule_names = _capsule_names_from_asset_paths(
         asset_paths=(asset.path for asset in dandiset.get_assets_with_path_prefix(path=f"{pipeline_dandiset_path}/")),
+        pipeline_dandiset_path=pipeline_dandiset_path,
+    )
+    existing_capsule_path = _find_existing_capsule_path(
+        capsule_names=existing_capsule_names,
         pipeline_dandiset_path=pipeline_dandiset_path,
         job_hash=job_hash,
     )
-    if existing_capsule_path is not None:
+    if existing_capsule_path is not None and not force_new_capsule:
         _log.info(f"A job capsule already exists at {existing_capsule_path}; skipping preparation.")
         return None
+
+    job_id = _next_available_job_id(job_hash=job_hash, taken_job_ids=existing_capsule_names)
+    output_dandiset_path = f"{pipeline_dandiset_path}/{job_id}"
 
     blob_head = content_id[0]
     partition = "001" if ord(blob_head) - ord("0") <= 8 else "002"  # TODO: pull from source to keep up to date

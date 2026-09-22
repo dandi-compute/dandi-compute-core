@@ -9,10 +9,11 @@ keeps capsules for different parameters, configs or assets apart within a single
 Both halves are fixed width, six characters each, so the two are unambiguous without a
 separator between them.
 
-Two capsules can still land on one name, when they are the same logical job submitted on the
-same day: re-attempts differ only by details the hash deliberately ignores. A ``-2``, ``-3``
-counter is appended to tell those apart. Preparation never produces one, because it does not
-form a capsule for a job that already has one, but a migration of older capsules does.
+Two capsules can still land on one name, when they are the same logical job created on the
+same day: re-runs differ only by details the hash deliberately ignores. A ``-2``, ``-3``
+counter is appended to tell those apart. Ordinary creation never produces one, because it
+does not form a capsule for a job that already has one, but ``--latest`` creation on a day
+that already formed the same job does.
 
 Everything the name used to spell out (pipeline version, codebase version, parameters and
 config) is recorded in the capsule's ``dataset_description.json`` provenance and in the
@@ -22,6 +23,7 @@ config) is recorded in the capsule's ``dataset_description.json`` provenance and
 import datetime
 import hashlib
 import re
+from collections.abc import Collection, Iterable
 
 #: Job capsule directory name, e.g. ``job-260916a1b2c3``, or ``job-260916a1b2c3-2`` for the
 #: second capsule of one job on one day.
@@ -76,3 +78,51 @@ def _parse_job_hash(job_id: str, /) -> str | None:
     match = _JOB_ID_RE.fullmatch(job_id)
     job_hash = match.group("job_hash") if match is not None else None
     return job_hash
+
+
+def _capsule_names_from_asset_paths(*, asset_paths: Iterable[str], pipeline_dandiset_path: str) -> set[str]:
+    """
+    The distinct job capsule directory names sitting directly under *pipeline_dandiset_path*.
+
+    :param asset_paths: Asset paths of the form ``{pipeline_dandiset_path}/{job_id}/<subpath>``.
+    :param pipeline_dandiset_path: The ``.../pipeline-{name}`` path the capsules live under.
+    """
+    capsule_names = {asset_path.removeprefix(f"{pipeline_dandiset_path}/").split("/")[0] for asset_path in asset_paths}
+    return capsule_names
+
+
+def _find_existing_capsule_path(
+    *,
+    capsule_names: Collection[str],
+    pipeline_dandiset_path: str,
+    job_hash: str,
+) -> str | None:
+    """
+    Find an already formed job capsule for this job among *capsule_names*, if there is one.
+
+    Matching is on the job hash alone, so a capsule formed on an earlier date is still
+    recognised.
+
+    :return: The capsule path, or ``None`` when no capsule exists for this job yet.
+    :rtype: str or None
+    """
+    for capsule_name in sorted(capsule_names):
+        if _parse_job_hash(capsule_name) == job_hash:
+            return f"{pipeline_dandiset_path}/{capsule_name}"
+
+    return None
+
+
+def _next_available_job_id(*, job_hash: str, taken_job_ids: Collection[str], date: datetime.date | None = None) -> str:
+    """
+    The ``job-{YYMMDD}{hash}`` name for *date* that no existing capsule already carries.
+
+    The first capsule of a job on a given day carries no counter. Forming another capsule for
+    the same job on the same day appends ``-2``, then ``-3``, and so on.
+    """
+    index = 1
+    job_id = _format_job_id(job_hash=job_hash, date=date, index=index)
+    while job_id in taken_job_ids:
+        index += 1
+        job_id = _format_job_id(job_hash=job_hash, date=date, index=index)
+    return job_id

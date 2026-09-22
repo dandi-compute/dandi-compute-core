@@ -5,6 +5,12 @@ import re
 _AIND_EPHYS_PARAMS_REGISTRY_PATH = (
     pathlib.Path(__file__).parent.parent / "aind_ephys_pipeline" / "registries" / "registered_params.json"
 )
+_AIND_EPHYS_CONFIGS_REGISTRY_PATH = (
+    pathlib.Path(__file__).parent.parent / "aind_ephys_pipeline" / "registries" / "registered_configs.json"
+)
+_LFP_PARAMS_REGISTRY_PATH = (
+    pathlib.Path(__file__).parent.parent / "lfp_pipeline" / "registries" / "registered_params.json"
+)
 _QUEUE_CONFIG_SCHEMA_PATH = pathlib.Path(__file__).parent / "schemas" / "queue_config.linkml.yaml"
 # Packaged pipeline configuration, committed directly to this repo. This is the canonical
 # source of truth for the queue's pipeline definitions. There is no local override for this
@@ -21,7 +27,21 @@ _QUALIFYING_LFP_CONTENT_IDS_URL = (
     "derivatives/qualifying_lfp_content_ids.jsonl"
 )
 
-try:
-    _AIND_EPHYS_PARAMS_REGISTRY: dict = json.loads(_AIND_EPHYS_PARAMS_REGISTRY_PATH.read_text())
-except (OSError, json.JSONDecodeError):
-    _AIND_EPHYS_PARAMS_REGISTRY = {}
+
+def _load_registry(registry_path: pathlib.Path, /) -> dict:
+    """Read a packaged registry file, falling back to an empty registry when it is unreadable."""
+    try:
+        registry: dict = json.loads(registry_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        registry = {}
+    return registry
+
+
+#: Registered parameters per pipeline, keyed by the pipeline name used in job provenance.
+_PARAMS_REGISTRIES: dict[str, dict] = {
+    "aind+ephys": _load_registry(_AIND_EPHYS_PARAMS_REGISTRY_PATH),
+    "lfp": _load_registry(_LFP_PARAMS_REGISTRY_PATH),
+}
+
+#: Registered configs per pipeline. The LFP pipeline has no config of its own.
+_CONFIGS_REGISTRIES: dict[str, dict] = {"aind+ephys": _load_registry(_AIND_EPHYS_CONFIGS_REGISTRY_PATH)}

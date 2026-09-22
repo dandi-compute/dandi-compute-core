@@ -11,10 +11,15 @@ from dandi_compute_code._cli import _dandicompute_group
     ("args", "expected_text"),
     [
         (["--help"], "Run compute workflows and queue management tasks for DANDI assets."),
-        (["prepare", "--help"], "Run preparation workflows that generate queue entries or scripts."),
-        (["prepare", "aind", "--help"], "Prepare an AIND ephys job, or prepare test queue entries with --test."),
+        (["prepare", "--help"], "Run preparation workflows that generate submission scripts."),
+        (["prepare", "aind", "--help"], "Prepare an AIND ephys job, or create test job capsules with --test."),
         (["submit", "--help"], "Submit a previously prepared pipeline script via sbatch."),
-        (["queue", "--help"], "Manage queue ordering, preparation, and execution."),
+        (["queue", "--help"], "Manage queue ordering, inspection, and execution."),
+        (["jobs", "--help"], "Create new job capsules for qualifying assets."),
+        (
+            ["jobs", "create", "--help"],
+            "Create a job capsule for every qualifying asset that does not have one yet.",
+        ),
         (["queue", "refresh", "--help"], "Rewrite state.tsv into both Dandisets."),
         (["queue", "clean", "--help"], "Delete unsubmitted capsules that are no longer present in the queue."),
         (["queue", "stats", "--help"], "Write aggregate queue statistics from the live queue state."),

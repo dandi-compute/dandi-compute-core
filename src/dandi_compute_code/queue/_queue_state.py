@@ -29,9 +29,7 @@ from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
 
-from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
-from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
-from ._globals import _AIND_EPHYS_PARAMS_REGISTRY
+from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
 from ._job_info import JobInfo
 from ._queue_utils import (
     _CapsuleProvenanceCache,
@@ -42,12 +40,10 @@ from ._queue_utils import (
     _finalize_job_capsule_records,
     _list_capsule_log_directories,
     _load_queue_config,
-    _order_content_ids_for_uniform_dandiset_sampling,
     _remove_empty_parents,
     _sort_key,
     _UpstreamMetadataCache,
 )
-from ..aind_ephys_pipeline import UnmappedContentIDError, prepare_aind_ephys_job
 from ..dandiset import move_job_capsule, write_dandiset_file
 from ..dandiset._globals import (
     _FAILED_RUNS_ARCHIVE_DANDISET_ID,
@@ -60,7 +56,6 @@ from ..dandiset._load_assets_jsonld_metadata import (
     _build_asset_metadata,
     load_assets_jsonld_metadata,
 )
-from ..lfp_pipeline import prepare_lfp_job
 
 _log = logging.getLogger(__name__)
 
@@ -446,24 +441,6 @@ class QueueState:
             and not isinstance(entry.asset_size_bytes, bool)
         )
 
-    def content_id_to_dandiset_ids(self) -> dict[str, set[str]]:
-        """
-        Map each ``content_id`` to the set of source Dandiset IDs it appears under.
-
-        A content ID is expected to map to a single source Dandiset in normal
-        operation; ambiguous mappings (more than one) are surfaced so callers can
-        handle them conservatively.
-        """
-        mapping: dict[str, set[str]] = {}
-        for entry in self.entries:
-            if entry.content_id and entry.job.dandiset_id:
-                mapping.setdefault(entry.content_id, set()).add(entry.job.dandiset_id)
-        return mapping
-
-    def failures_for(self, *, pipeline: str, version: str) -> list[JobEntry]:
-        """Failed entries matching a given pipeline and version."""
-        return [e for e in self.failed if e.job.pipeline == pipeline and e.job.version == version]
-
     def entry_for(self, *, dandi_path: str, config: str | None = None) -> JobEntry:
         """
         Return the entry with the given ``dandi_path`` (and ``config``).
@@ -662,20 +639,32 @@ class QueueState:
         return _load_queue_config()
 
     @staticmethod
-    def resolve_params_key_to_id(pipeline: str, params_key: str) -> str:
+    def resolve_params_key_to_id(*, pipeline: str, params_key: str) -> str:
         """
         Resolve a human-readable parameters key to its 7-character hash ID.
 
-        For the ``aind+ephys`` pipeline the lookup is performed against the
-        registered params registry. For any other pipeline, or if the key is not
-        found, *params_key* is returned unchanged so callers that already store raw
-        hash IDs continue to work.
+        The lookup is performed against the pipeline's registered params registry. For a
+        pipeline without one, or if the key is not found, *params_key* is returned unchanged
+        so callers that already store raw hash IDs continue to work.
         """
-        if pipeline == "aind+ephys":
-            entry = _AIND_EPHYS_PARAMS_REGISTRY.get(params_key)
-            if entry:
-                return entry["md5"][:7]
-        return params_key
+        entry = _PARAMS_REGISTRIES.get(pipeline, {}).get(params_key)
+        params_id = entry["md5"][:7] if entry else params_key
+        return params_id
+
+    @staticmethod
+    def resolve_config_key_to_id(*, pipeline: str, config_key: str) -> str:
+        """
+        Resolve a human-readable config key to its 7-character hash ID.
+
+        The LFP pipeline has no config of its own, so it resolves to the empty string, which
+        is what its job capsules record. Otherwise the lookup mirrors
+        :meth:`resolve_params_key_to_id`.
+        """
+        if pipeline == "lfp":
+            return ""
+        entry = _CONFIGS_REGISTRIES.get(pipeline, {}).get(config_key)
+        config_id = entry["md5"][:7] if entry else config_key
+        return config_id
 
     @classmethod
     def from_metadata(cls, metadata: AssetsJsonldMetadata, /) -> QueueState:
@@ -1074,147 +1063,21 @@ class QueueState:
         )
         return "submitted" if submitted_any else "no-pending"
 
-    def _existing_capsule_keys(self) -> set[tuple[str, str, str, str]]:
+    def existing_capsule_keys(self) -> set[tuple[str, str, str, str]]:
         """
         Keys of the job capsules that already exist, as
-        ``(pipeline, version, params, content_id)`` tuples.
+        ``(pipeline, params, config, content_id)`` tuples.
 
-        Used to skip re-forming a capsule that is already on the archive, whatever point of
-        the lifecycle it has reached.
+        Used to skip forming a capsule for an asset that already has one, whatever point of
+        the lifecycle it has reached. The pipeline and codebase versions are deliberately
+        left out: a capsule already covers its asset for a parameters and config combination
+        whichever version formed it.
         """
         return {
-            (entry.job.pipeline, entry.job.version, entry.job.params, entry.content_id)
+            (entry.job.pipeline, entry.job.params, entry.job.config, entry.content_id)
             for entry in self.entries
             if entry.content_id
         }
-
-    def _capped_dandiset_ids(self, *, pipeline: str, version: str, max_fail: int) -> set[str]:
-        """Dandiset IDs whose failure count for *pipeline*/*version* has reached *max_fail*."""
-        failure_count_by_dandiset: collections.Counter[str] = collections.Counter(
-            entry.job.dandiset_id for entry in self.failures_for(pipeline=pipeline, version=version)
-        )
-        return {
-            dandiset_id
-            for dandiset_id, failure_count in failure_count_by_dandiset.items()
-            if dandiset_id and failure_count >= max_fail
-        }
-
-    @classmethod
-    def prepare(
-        cls,
-        *,
-        pipeline_directory: pathlib.Path | None = None,
-        config_key: str = "default",
-        content_ids: list[str] | None = None,
-        limit: int | None = None,
-        only_pipeline: str | None = None,
-    ) -> int:
-        """
-        En-masse preparation of qualifying assets based on the packaged pipeline config.
-
-        Every pipeline/version/params combination declared in the packaged pipeline
-        configuration (see :func:`_load_queue_config`) is crossed with the qualifying content
-        IDs to give one flat list of job capsules to form, and the whole list is formed in a
-        single pass by :func:`~dandi_compute_code.aind_ephys_pipeline.prepare_aind_ephys_job`.
-
-        Anything already accounted for in the live queue state (see :meth:`from_dandi`) is
-        left out of that list. A capsule that already exists is never formed a second time,
-        so only the cases that never reached a successful run are prepared. The per-pipeline
-        failure cap (``max_fail_per_dandiset``) is enforced against the same live state.
-
-        :param pipeline_directory: Local path to the AIND pipeline repository.
-        :param config_key: Key for a registered job configuration.
-        :param content_ids: Explicit content IDs to prepare; when provided, the
-            qualifying list is not fetched from the network.
-        :param limit: If provided, form at most *limit* job capsules in total.
-        :param only_pipeline: If provided, prepare only this pipeline instead of
-            every pipeline in the config. Raises if the name is not configured.
-        :returns: The number of job capsules that were formed.
-        :rtype: int
-        """
-        queue_config = _load_queue_config()
-        pipelines = queue_config.get("pipelines", {})
-        if only_pipeline is not None and only_pipeline not in pipelines:
-            configured = list(pipelines.keys())
-            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
-            raise ValueError(message)
-
-        state = cls.from_dandi()
-        existing_capsule_keys = state._existing_capsule_keys()
-        content_id_to_dandiset_ids = state.content_id_to_dandiset_ids()
-
-        prepared_count = 0
-        for pipeline_name, pipeline_data in pipelines.items():
-            if only_pipeline is not None and pipeline_name != only_pipeline:
-                continue
-            if limit is not None and prepared_count >= limit:
-                break
-            if content_ids is not None:
-                pipeline_content_ids = content_ids
-            elif pipeline_name == "lfp":
-                pipeline_content_ids = _order_content_ids_for_uniform_dandiset_sampling(
-                    content_ids=_fetch_qualifying_lfp_content_ids()
-                )
-            else:
-                pipeline_content_ids = _order_content_ids_for_uniform_dandiset_sampling(
-                    content_ids=_fetch_qualifying_aind_content_ids()
-                )
-            for version in pipeline_data.get("version_priority", []):
-                max_fail = pipeline_data.get("max_fail_per_dandiset")
-                capped_dandiset_ids = (
-                    state._capped_dandiset_ids(pipeline=pipeline_name, version=version, max_fail=max_fail)
-                    if max_fail is not None
-                    else set()
-                )
-
-                for params in pipeline_data.get("params_priority", []):
-                    params_id = cls.resolve_params_key_to_id(pipeline_name, params)
-
-                    for content_id in pipeline_content_ids:
-                        if limit is not None and prepared_count >= limit:
-                            _log.info(f"Reached the preparation limit of {limit} job capsules.")
-                            return prepared_count
-
-                        label = f"{pipeline_name}/{version}/{params}/{content_id}"
-                        if (pipeline_name, version, params_id, content_id) in existing_capsule_keys:
-                            _log.info(f"Skipping preparation for {label}: a job capsule already exists.")
-                            continue
-
-                        dandiset_ids = content_id_to_dandiset_ids.get(content_id, set())
-                        if len(dandiset_ids) == 1 and next(iter(dandiset_ids)) in capped_dandiset_ids:
-                            _log.info(
-                                f"Skipping preparation for {label}: dandiset-{next(iter(dandiset_ids))} has reached "
-                                f"max_fail_per_dandiset ({max_fail})."
-                            )
-                            continue
-
-                        _log.info(f"Preparing content ID: {content_id}")
-                        try:
-                            if pipeline_name == "lfp":
-                                script_file_path = prepare_lfp_job(
-                                    content_id=content_id,
-                                    parameters_key=params,
-                                    pipeline_version=version,
-                                    silent=True,
-                                )
-                            else:
-                                script_file_path = prepare_aind_ephys_job(
-                                    content_id=content_id,
-                                    parameters_key=params,
-                                    pipeline_version=version,
-                                    pipeline_directory=pipeline_directory,
-                                    config_key=config_key,
-                                    silent=True,
-                                )
-                        except UnmappedContentIDError as error:
-                            _log.warning(f"Skipping preparation for {label}: {error}")
-                            continue
-                        if script_file_path is None:
-                            _log.info(f"Skipped preparation for {label}: a job capsule already exists.")
-                            continue
-                        prepared_count += 1
-
-        return prepared_count
 
     @staticmethod
     def dump_issues(

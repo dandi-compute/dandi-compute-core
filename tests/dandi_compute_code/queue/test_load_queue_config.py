@@ -9,10 +9,8 @@ from dandi_compute_code.queue import QueueState
 _ISSUE_EXAMPLE_QUEUE_CONFIG = {
     "pipelines": {
         "aind+ephys": {
-            "version_priority": ["v1.1.1"],
-            "params_priority": ["default"],
+            "params": ["default"],
             "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": None},
-            "max_fail_per_dandiset": 10,
         }
     }
 }
