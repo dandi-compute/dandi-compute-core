@@ -136,5 +136,7 @@ def read_capsule_resources(
 
     unreadable = len(code_dir_paths) - len(resources_by_code_dir)
     if unreadable:
-        _log.info("Could not read requested resources for %d capsule(s); they fall back to pipeline defaults", unreadable)
+        _log.info(
+            "Could not read requested resources for %d capsule(s); they fall back to pipeline defaults", unreadable
+        )
     return resources_by_code_dir
