@@ -23,9 +23,7 @@ def test_capsule_names_are_read_off_asset_paths() -> None:
         f"{_PIPELINE_PATH}/job-260922a1b2c3-2/code/submit.sh",
     ]
 
-    capsule_names = _capsule_names_from_asset_paths(
-        asset_paths=asset_paths, pipeline_dandiset_path=_PIPELINE_PATH
-    )
+    capsule_names = _capsule_names_from_asset_paths(asset_paths=asset_paths, pipeline_dandiset_path=_PIPELINE_PATH)
 
     assert capsule_names == {"job-260922a1b2c3", "job-260922a1b2c3-2"}
 

@@ -300,7 +300,9 @@ def test_dispatches_lfp_to_the_lfp_job_builder(mock_latest_pipeline_version: moc
     assert mock_aind.call_count == 0
     assert mock_lfp.call_count == 2
     assert {call.kwargs["content_id"] for call in mock_lfp.call_args_list} == {"asset-1", "asset-2"}
-    assert all(call.kwargs["pipeline_version"] == mock_latest_pipeline_version.return_value for call in mock_lfp.call_args_list)
+    assert all(
+        call.kwargs["pipeline_version"] == mock_latest_pipeline_version.return_value for call in mock_lfp.call_args_list
+    )
 
 
 @pytest.mark.ai_generated
