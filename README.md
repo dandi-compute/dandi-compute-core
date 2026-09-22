@@ -68,78 +68,9 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 ## Array dispatch
 
-Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects the pipeline's pending job capsules, writes them to a manifest, and submits a single array covering them. Each array task reads its capsule out of the manifest by task index, downloads the capsule's `code/` tree, claims it with a submitted marker, and runs its `submit.sh`.
+Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects that pipeline's pending job capsules, groups them by the resources their submission scripts request, and submits an array per group. SLURM holds the queue, and each array's throttle holds the pipeline's share of the concurrency limit. A pipeline whose dispatcher is still on the cluster is skipped, so repeated invocations from a crontab add nothing while an array is working.
 
-SLURM holds the queue and enforces the limit. The array's `%n` throttle is the pipeline's `dispatch.max_concurrent` setting, so the remaining tasks stay queued in SLURM rather than being resubmitted by a later invocation. Capsules are never submitted one `sbatch` at a time, and there is no polling of running job counts.
-
-A pipeline whose dispatcher is still on the cluster is skipped. The live array already holds that pipeline's pending tasks, so a second one would only duplicate them. Capsules formed after it was submitted wait for it to be exhausted and go out with the next dispatch. This makes repeated invocations from a crontab safe: they add nothing while an array is working.
-
-Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeline_configs.json` under its `dispatch` key:
-
-```json
-"dispatch": {
-    "max_concurrent": 2,
-    "max_array_tasks": 500
-}
-```
-
-`max_concurrent` is the per-pipeline concurrency limit. `max_array_tasks` caps how many capsules one array may hold, and capsules beyond it stay pending for the next dispatch. Set `max_array_tasks` to `null` for no upper bound, which places every pending capsule in one array and relies on the cluster's own `MaxArraySize` being large enough. An omitted key is not the same as `null`: it takes the default of 500.
-
-Those two limits are the whole of what is configurable, and deliberately so.
-
-A capsule runs inside its array task rather than being submitted as a job of its own, which means the task's allocation is the one the capsule actually gets. `#SBATCH` directives are read by the `sbatch` command when it parses a script at submission time, so the header inside a capsule run with `bash` is a block of inert comments.
-
-Rather than restate those requests in the queue configuration, the dispatcher reads each pending capsule's own `code/submit.sh` back out of the archive and groups capsules by what they ask for. Each group gets an array sized for it.
-
-Pipelines differ here for real reasons. The AIND submission script is a Nextflow driver that dispatches the heavy work to its own jobs and needs very little itself, so its array comes out at 1GB / 1 CPU / `mit_normal` / 12h. The LFP script does its work in process and needs a lot, so its array comes out at 16GB / 1 CPU / `mit_preemptable` / 48h.
-
-Capsules of one pipeline normally agree, since one template renders them all, so this is one array per pipeline in practice. They can diverge when a template changed between the releases that prepared them, and a capsule needing more than its neighbours would otherwise be truncated by an array sized for them. The configured concurrency limit is what the pipeline may run at once in total, so it is shared out across the arrays rather than applied to each.
-
-A capsule whose script cannot be read falls back to its pipeline's packaged submission template, and a pipeline with no packaged template falls back to deliberately generous requests. Under-provisioning a task means the capsule inside it is killed mid-run, so both fallbacks err high.
-
-Running the capsule in the task is what keeps the throttle honest with no coordination of our own: a task finishing *is* its capsule finishing, so SLURM admits the next one at exactly the right moment. The alternative of submitting the capsule separately and waiting on it would spend two job slots per unit of work and would free the slot early whenever the waiting task was killed first.
-
-The one directive that still has to be reproduced by hand is `#SBATCH --output`. It points into the capsule's own `logs/` directory, which is where the capsule uploads its SLURM log from and where `issues dump` reads it back, so the array task parses that path out of the capsule script and tees the run into it.
-
-The dispatch directory created under `--processing` holds the manifest, the generated array script, and the array's logs. It has to stay readable from the compute nodes for as long as the array lives, so it is not cleaned up at submission time.
-
-`queue process` reports what each pipeline dispatched, with one line per array naming that group's size, its requests and its share of the limit:
-
-```
-aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requested resources.
-  array 900: 12 capsules requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time
-  array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
-
-lfp: dispatched 1 capsule as array job 902.
-  array 902: 1 capsule requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 4 at a time
-```
-
-To dispatch a single pipeline, or to override its configured concurrency limit for one invocation:
-
-```bash
-dandicompute queue process --processing ./processing/ --pipeline lfp --max 4
-```
-
-The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once.
-
-`--processing` has no default. It is the directory each dispatch directory is created under, named `dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}`, and one holds:
-
-- `manifest-{n}.txt`, the capsules covered by resource group `n`
-- `dispatch-{n}.sh`, the generated array script for that group
-- `dispatch-{array job id}_{task id}.log`, each array task's own output
-- `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into, removed when the task finishes unless `--test` is passed
-
-It has to stay readable from the compute nodes for as long as the arrays live, so nothing in it is cleaned up at submission time. A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` directory, where the capsule uploads it from.
-
-Finished dispatch directories are swept up by `clean`:
-
-```bash
-dandicompute clean --dispatch ./processing/
-```
-
-A dispatch directory is removed only once its pipeline has no dispatcher left on the cluster and it is at least `--age` hours old (24 by default). Both guards matter, since an array task reads its manifest as it starts, and removing the directory under a live array would strand every task that had not begun yet. Anything in the processing directory that is not a dispatch directory is left alone.
-
-`clean` still takes `--directory` for a work directory, and the two can be given together.
+See [docs/dispatch.md](docs/dispatch.md) for how it works, how it is configured, and how to operate and clean up after it.
 
 
 
