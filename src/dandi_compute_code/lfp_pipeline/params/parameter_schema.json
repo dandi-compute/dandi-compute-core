@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/dandi-compute/code/main/src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json",
+    "$id": "https://raw.githubusercontent.com/dandi-compute/dandi-compute-core/main/src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json",
     "title": "DANDI Compute LFP Extraction Parameters",
     "description": "One complete set of LFP extraction parameters, as stored in a file under the pipeline's `params/` directory. Every field is required, so a parameters file always states the whole configuration rather than leaning on defaults applied somewhere else.",
     "type": "object",

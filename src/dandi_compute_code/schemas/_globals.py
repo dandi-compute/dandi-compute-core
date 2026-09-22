@@ -41,7 +41,7 @@ PARAMETER_JSON_SCHEMAS: dict[str, PublishedParameterSchema] = {
     "lfp_parameters": PublishedParameterSchema(
         output_path=_PACKAGE_DIR / "lfp_pipeline" / "params" / "parameter_schema.json",
         schema_id=(
-            "https://raw.githubusercontent.com/dandi-compute/code/main/"
+            "https://raw.githubusercontent.com/dandi-compute/dandi-compute-core/main/"
             "src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json"
         ),
     ),
