@@ -68,27 +68,7 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 ## Schemas
 
-The internal structures this package defines and passes around are described by [LinkML](https://linkml.io) schemas under `src/dandi_compute_code/schemas/`. The schemas are the source of truth for what these structures may contain. The Python classes carry the behaviour.
-
-A pipeline's *parameter* schema is not among them. Those stay plain JSON Schema, written by hand, because that is the form the documentation website renders and the form the pipelines validate against directly.
-
-| Schema | Describes |
-| --- | --- |
-| `pipeline_config.linkml.yaml` | `queue/pipeline_configs.json`: which parameter sets each pipeline forms capsules for, its per-asset overrides and its dispatcher limits. |
-| `registry.linkml.yaml` | Every `registries/*.json` file, which maps a short key onto a packaged file and the MD5 it must still have. |
-| `job_capsule.linkml.yaml` | A job capsule's identity and lifecycle status, which is one row of `state.tsv`. |
-| `dispatch.linkml.yaml` | One pipeline's array dispatcher settings, and what one dispatch attempt produced. |
-| `assets_metadata.linkml.yaml` | The slice of a Dandiset's `assets.jsonld` this package indexes. |
-
-Validation happens twice, because the two validators are good at different things.
-
-At runtime, `dandi_compute_code.schemas.validate_against_schema` validates against these schemas using `linkml-runtime`, which the base install already carries. Loading the pipeline configuration or a registry goes through it, so a malformed file is rejected where it is read rather than misread.
-
-In CI, the `Validate LinkML schemas` workflow installs the full `linkml` distribution (`pip install --group schemas`), compiles every schema to JSON Schema and validates every packaged data file against the schema that describes it. That validator rejects mismatched scalar types where the runtime one quietly normalizes them, and compiling the schemas catches one that loads but does not express what it appears to. The workflow sets `DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION=1`, so those checks fail rather than skip if the toolchain ever goes missing there.
-
-The same test module also asserts that each schema class carries exactly the fields of the dataclass it describes, so a schema cannot drift once its model changes.
-
-To add a schema, put it in `src/dandi_compute_code/schemas/` named `[name].linkml.yaml` and add it to `SCHEMA_PATHS` and `SCHEMA_TREE_ROOTS` in `schemas/_globals.py`. Both validation layers enumerate those, so it is covered by CI from then on.
+The internal structures this package passes around are described by LinkML schemas under `src/dandi_compute_code/schemas/`, and validated against them at runtime and in CI. Pipeline parameter schemas stay plain JSON Schema. See [docs/schemas.md](docs/schemas.md).
 
 ## Contributing Non-Code Files
 
