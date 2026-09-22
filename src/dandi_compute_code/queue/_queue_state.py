@@ -15,6 +15,7 @@ from __future__ import annotations
 import collections
 import csv
 import datetime
+import importlib.metadata
 import io
 import json
 import logging
@@ -29,7 +30,9 @@ from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
 
-from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
+from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
+from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
+from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY, _PARAMS_REGISTRIES
 from ._job_info import JobInfo
 from ._queue_utils import (
     _CapsuleProvenanceCache,
@@ -38,12 +41,15 @@ from ._queue_utils import (
     _extract_error_lines,
     _extract_nextflow_timeline_data,
     _finalize_job_capsule_records,
+    _latest_repository_version_tag,
     _list_capsule_log_directories,
     _load_queue_config,
+    _order_content_ids_for_uniform_dandiset_sampling,
     _remove_empty_parents,
     _sort_key,
     _UpstreamMetadataCache,
 )
+from ..aind_ephys_pipeline import UnmappedContentIDError, prepare_aind_ephys_job
 from ..dandiset import move_job_capsule, write_dandiset_file
 from ..dandiset._globals import (
     _FAILED_RUNS_ARCHIVE_DANDISET_ID,
@@ -56,6 +62,7 @@ from ..dandiset._load_assets_jsonld_metadata import (
     _build_asset_metadata,
     load_assets_jsonld_metadata,
 )
+from ..lfp_pipeline import prepare_lfp_job
 
 _log = logging.getLogger(__name__)
 
@@ -1078,6 +1085,141 @@ class QueueState:
             for entry in self.entries
             if entry.content_id
         }
+
+    @staticmethod
+    def resolve_latest_pipeline_version(*, pipeline: str, pipeline_directory: pathlib.Path | None = None) -> str:
+        """
+        The latest version of *pipeline* available on this machine.
+
+        New job capsules always run the latest locally available pipeline version, so there is
+        no version priority list to maintain. What "locally available" means depends on the
+        pipeline. The AIND ephys pipeline lives in its own repository, checked out next to
+        this one on the cluster, so its latest version is the highest release tag in that
+        checkout. The LFP pipeline ships inside this package, so its latest version is this
+        package's own version.
+
+        :param pipeline: The pipeline name as it appears in the packaged pipeline configuration.
+        :param pipeline_directory: Local checkout of the pipeline repository, for pipelines
+            that live in one. Defaults to the AIND ephys pipeline checkout on MIT Engaging.
+        :return: The version string to form new job capsules against.
+        :rtype: str
+        """
+        if pipeline == "lfp":
+            latest_version = f"v{importlib.metadata.version('dandi-compute-code')}"
+            return latest_version
+
+        latest_version = _latest_repository_version_tag(pipeline_directory or _DEFAULT_AIND_PIPELINE_DIRECTORY)
+        return latest_version
+
+    @staticmethod
+    def _qualifying_content_ids(pipeline: str, /) -> list[str]:
+        """Content IDs qualifying for *pipeline*, ordered so a limit samples Dandisets uniformly."""
+        fetch = _fetch_qualifying_lfp_content_ids if pipeline == "lfp" else _fetch_qualifying_aind_content_ids
+        ordered_content_ids = _order_content_ids_for_uniform_dandiset_sampling(content_ids=fetch())
+        return ordered_content_ids
+
+    @classmethod
+    def create_job_capsules(
+        cls,
+        *,
+        only_pipeline: str | None = None,
+        config_key: str = "default",
+        content_ids: list[str] | None = None,
+        limit: int | None = None,
+        force_latest_versions: bool = False,
+        pipeline_directory: pathlib.Path | None = None,
+    ) -> int:
+        """
+        Form new job capsules for qualifying assets that do not have one yet.
+
+        The rule is deliberately narrow. Every pipeline and parameters combination declared in
+        the packaged pipeline configuration (see :meth:`load_queue_config`) is crossed with the
+        qualifying content IDs, and an asset that already has a capsule for that combination is
+        skipped. What already exists is read from the live queue state (see :meth:`from_dandi`),
+        which is why creation lives on this class. New capsules are formed against the latest
+        versions available locally.
+
+        ``force_latest_versions`` breaks that rule on purpose. It forms a fresh capsule against
+        the latest versions for every qualifying asset, whether or not one already exists, which
+        is how a new pipeline release gets rolled out over assets that have already been
+        processed.
+
+        :param only_pipeline: Form capsules only for this pipeline instead of every pipeline in
+            the configuration. Raises if the name is not configured.
+        :param config_key: Key for a registered job configuration.
+        :param content_ids: Explicit content IDs to form capsules for. The qualifying list is
+            not fetched from the network when these are provided.
+        :param limit: Form at most this many capsules in total. Unlimited when ``None``.
+        :param force_latest_versions: Form a capsule for every qualifying asset against the
+            latest pipeline and codebase versions, whether or not one already exists.
+        :param pipeline_directory: Local checkout of the AIND pipeline repository.
+        :return: The number of job capsules that were formed.
+        :rtype: int
+        """
+        queue_config = _load_queue_config()
+        pipelines = queue_config.get("pipelines", {})
+        if only_pipeline is not None and only_pipeline not in pipelines:
+            configured = list(pipelines.keys())
+            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
+            raise ValueError(message)
+
+        existing_capsule_keys = set() if force_latest_versions else cls.from_dandi().existing_capsule_keys()
+
+        created_count = 0
+        for pipeline_name, pipeline_data in pipelines.items():
+            if only_pipeline is not None and pipeline_name != only_pipeline:
+                continue
+            if limit is not None and created_count >= limit:
+                break
+
+            version = cls.resolve_latest_pipeline_version(pipeline=pipeline_name, pipeline_directory=pipeline_directory)
+            config_id = cls.resolve_config_key_to_id(pipeline=pipeline_name, config_key=config_key)
+            pipeline_content_ids = (
+                content_ids if content_ids is not None else cls._qualifying_content_ids(pipeline_name)
+            )
+
+            for params_key in pipeline_data.get("params", []):
+                params_id = cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
+
+                for content_id in pipeline_content_ids:
+                    if limit is not None and created_count >= limit:
+                        _log.info(f"Reached the creation limit of {limit} job capsules.")
+                        return created_count
+
+                    label = f"{pipeline_name}/{version}/{params_key}/{content_id}"
+                    if (pipeline_name, params_id, config_id, content_id) in existing_capsule_keys:
+                        _log.info(f"Skipping {label}: a job capsule already exists.")
+                        continue
+
+                    _log.info(f"Creating a job capsule for {label}.")
+                    try:
+                        if pipeline_name == "lfp":
+                            script_file_path = prepare_lfp_job(
+                                content_id=content_id,
+                                parameters_key=params_key,
+                                pipeline_version=version,
+                                force_new_capsule=force_latest_versions,
+                                silent=True,
+                            )
+                        else:
+                            script_file_path = prepare_aind_ephys_job(
+                                content_id=content_id,
+                                parameters_key=params_key,
+                                pipeline_version=version,
+                                pipeline_directory=pipeline_directory,
+                                config_key=config_key,
+                                force_new_capsule=force_latest_versions,
+                                silent=True,
+                            )
+                    except UnmappedContentIDError as error:
+                        _log.warning(f"Skipping {label}: {error}")
+                        continue
+                    if script_file_path is None:
+                        _log.info(f"Skipped {label}: a job capsule already exists.")
+                        continue
+                    created_count += 1
+
+        return created_count
 
     @staticmethod
     def dump_issues(

@@ -17,6 +17,10 @@ _QUEUE_CONFIG_SCHEMA_PATH = pathlib.Path(__file__).parent / "schemas" / "queue_c
 # file; see ``_load_queue_config``.
 _PACKAGED_PIPELINE_CONFIGS_PATH = pathlib.Path(__file__).parent / "pipeline_configs.json"
 _DURATION_PART_RE = re.compile(r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|m|h|d)\b")
+#: Release tags of the form ``v1.2.3``, optionally with a pre-release or build suffix.
+_VERSION_TAG_RE = re.compile(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?")
+#: Local checkout of the AIND ephys pipeline repository on MIT Engaging.
+_DEFAULT_AIND_PIPELINE_DIRECTORY = pathlib.Path("/orcd/data/dandi/001/dandi-compute/aind-ephys-pipeline")
 TEST_QUEUE_CONTENT_ID = "048d1ee9-83b7-491f-8f02-1ca615b1d455"
 _QUALIFYING_AIND_CONTENT_IDS_URL = (
     "https://raw.githubusercontent.com/dandi-cache/qualifying-aind-content-ids/dist/"

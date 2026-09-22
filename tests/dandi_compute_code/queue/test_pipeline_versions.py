@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.jobs import resolve_latest_pipeline_version
+from dandi_compute_code.queue import QueueState
 
 
 def _initialize_repository_with_tags(directory: pathlib.Path, /, *, tags: list[str]) -> None:
@@ -35,7 +35,7 @@ def test_resolve_latest_pipeline_version_from_repository_tags(
     """The latest AIND pipeline version is the highest release tag in the local checkout."""
     _initialize_repository_with_tags(tmp_path, tags=tags)
 
-    latest_version = resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
+    latest_version = QueueState.resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
 
     assert latest_version == expected_version
 
@@ -46,16 +46,16 @@ def test_resolve_latest_pipeline_version_raises_without_tags(tmp_path: pathlib.P
     _initialize_repository_with_tags(tmp_path, tags=[])
 
     with pytest.raises(ValueError, match="No release tags found"):
-        resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
+        QueueState.resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
 
 
 @pytest.mark.ai_generated
 def test_resolve_latest_lfp_version_is_the_installed_codebase_version() -> None:
     """The LFP pipeline ships in this package, so its latest version is this package's version."""
     with mock.patch(
-        "dandi_compute_code.jobs._pipeline_versions.importlib.metadata.version",
+        "dandi_compute_code.queue._queue_state.importlib.metadata.version",
         return_value="1.2.3",
     ):
-        latest_version = resolve_latest_pipeline_version(pipeline="lfp")
+        latest_version = QueueState.resolve_latest_pipeline_version(pipeline="lfp")
 
     assert latest_version == "v1.2.3"

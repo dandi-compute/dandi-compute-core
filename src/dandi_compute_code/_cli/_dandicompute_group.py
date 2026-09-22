@@ -10,7 +10,6 @@ from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
-from ..jobs import create_job_capsules
 from ..queue import TEST_QUEUE_CONTENT_ID, QueueState
 
 logging.basicConfig(level=logging.INFO)
@@ -200,7 +199,7 @@ def _prepare_aind_command(
         raise click.ClickException("`DANDI_API_KEY` environment variable is not set.")
 
     if test:
-        create_job_capsules(
+        QueueState.create_job_capsules(
             content_ids=[TEST_QUEUE_CONTENT_ID],
             pipeline_directory=pipeline_directory,
             config_key=config_key,
@@ -305,7 +304,7 @@ def _jobs_create_command(
     _configure_logging(silent=silent)
     _require_dandi_api_key()
 
-    created_count = create_job_capsules(
+    created_count = QueueState.create_job_capsules(
         config_key=config_key,
         limit=limit,
         only_pipeline=only_pipeline,

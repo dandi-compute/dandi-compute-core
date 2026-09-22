@@ -1,14 +1,29 @@
 import gzip
 import json
 import pathlib
+from collections.abc import Iterator
 from unittest import mock
 
 import pytest
 
-from dandi_compute_code.jobs import create_job_capsules
 from dandi_compute_code.queue import JobEntry, JobInfo, QueueState
 
-_MODULE = "dandi_compute_code.jobs._create_job_capsules"
+_MODULE = "dandi_compute_code.queue._queue_state"
+
+
+@pytest.fixture(autouse=True)
+def mock_latest_pipeline_version() -> Iterator[mock.MagicMock]:
+    """
+    Resolve every pipeline's latest version without touching a local repository checkout.
+
+    Tests that care which version was used read it back from ``return_value``.
+    """
+    with mock.patch(
+        f"{_MODULE}.QueueState.resolve_latest_pipeline_version",
+        return_value="v9.9.9",
+    ) as mock_resolve:
+        yield mock_resolve
+
 
 _TEST_QUEUE_CONFIG = {"pipelines": {"test": {"params": ["default"]}}}
 _LFP_QUEUE_CONFIG = {"pipelines": {"lfp": {"params": ["default"]}}}
@@ -54,7 +69,7 @@ def test_creates_a_capsule_for_each_qualifying_asset() -> None:
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
         mock_urlopen.return_value = _mock_urlopen_response(["asset-bbb", "asset-ccc"])
-        created_count = create_job_capsules()
+        created_count = QueueState.create_job_capsules()
 
     assert created_count == 2
     prepared_ids = {call.kwargs["content_id"] for call in mock_prepare.call_args_list}
@@ -68,7 +83,7 @@ def test_forms_capsules_against_the_latest_pipeline_version(mock_latest_pipeline
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_TEST_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        create_job_capsules(content_ids=["asset-bbb"])
+        QueueState.create_job_capsules(content_ids=["asset-bbb"])
 
     assert mock_prepare.call_args.kwargs["pipeline_version"] == mock_latest_pipeline_version.return_value
 
@@ -85,7 +100,7 @@ def test_skips_an_asset_that_already_has_a_capsule(mock_latest_pipeline_version:
         mock.patch(f"{_MODULE}.QueueState.from_dandi", return_value=state),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-bbb", "asset-zzz"])
+        created_count = QueueState.create_job_capsules(content_ids=["asset-bbb", "asset-zzz"])
 
     assert created_count == 1
     prepared_ids = [call.kwargs["content_id"] for call in mock_prepare.call_args_list]
@@ -102,7 +117,7 @@ def test_skips_an_existing_capsule_formed_against_an_older_version() -> None:
         mock.patch(f"{_MODULE}.QueueState.from_dandi", return_value=state),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-bbb"])
+        created_count = QueueState.create_job_capsules(content_ids=["asset-bbb"])
 
     assert created_count == 0
     assert mock_prepare.call_count == 0
@@ -122,7 +137,7 @@ def test_creates_a_capsule_for_different_params_on_the_same_asset(
         mock.patch(f"{_MODULE}.QueueState.from_dandi", return_value=state),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-bbb"])
+        created_count = QueueState.create_job_capsules(content_ids=["asset-bbb"])
 
     assert created_count == 1
     assert mock_prepare.call_count == 1
@@ -140,7 +155,7 @@ def test_latest_versions_forms_a_capsule_even_where_one_exists(mock_latest_pipel
         mock.patch(f"{_MODULE}.QueueState.from_dandi", return_value=state) as mock_from_dandi,
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-bbb"], force_latest_versions=True)
+        created_count = QueueState.create_job_capsules(content_ids=["asset-bbb"], force_latest_versions=True)
 
     assert created_count == 1
     assert mock_from_dandi.call_count == 0
@@ -154,7 +169,7 @@ def test_does_not_force_a_new_capsule_by_default() -> None:
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_TEST_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        create_job_capsules(content_ids=["asset-bbb"])
+        QueueState.create_job_capsules(content_ids=["asset-bbb"])
 
     assert mock_prepare.call_args.kwargs["force_new_capsule"] is False
 
@@ -166,7 +181,7 @@ def test_limit_stops_after_n_assets() -> None:
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_TEST_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=2)
+        created_count = QueueState.create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=2)
 
     assert mock_prepare.call_count == 2
     assert created_count == 2
@@ -179,7 +194,7 @@ def test_no_limit_creates_every_capsule() -> None:
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_TEST_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        created_count = create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=None)
+        created_count = QueueState.create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=None)
 
     assert mock_prepare.call_count == 3
     assert created_count == 3
@@ -193,7 +208,7 @@ def test_capsule_that_already_existed_is_not_counted_or_limited() -> None:
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
         mock_prepare.side_effect = [None, pathlib.Path("submit.sh"), None]
-        created_count = create_job_capsules(content_ids=["asset-bbb", "asset-ccc", "asset-ddd"], limit=1)
+        created_count = QueueState.create_job_capsules(content_ids=["asset-bbb", "asset-ccc", "asset-ddd"], limit=1)
 
     assert mock_prepare.call_count == 2
     assert created_count == 1
@@ -219,7 +234,7 @@ def test_limit_samples_uniformly_over_dandisets() -> None:
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
         mock_urlopen.return_value = _mock_urlopen_response(["asset-a1", "asset-a2", "asset-b1"])
-        create_job_capsules(limit=2)
+        QueueState.create_job_capsules(limit=2)
 
     prepared_ids = [call.kwargs["content_id"] for call in mock_prepare.call_args_list]
     assert prepared_ids == ["asset-a1", "asset-b1"]
@@ -245,7 +260,7 @@ def test_excludes_non_qualifying_content_ids() -> None:
         ),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        create_job_capsules()
+        QueueState.create_job_capsules()
 
     assert mock_prepare.call_count == 1
     assert mock_prepare.call_args.kwargs["content_id"] == "asset-bbb"
@@ -259,7 +274,7 @@ def test_explicit_content_ids_skip_the_network_fetch() -> None:
         mock.patch("urllib.request.urlopen") as mock_urlopen,
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        create_job_capsules(content_ids=["explicit-asset-001"])
+        QueueState.create_job_capsules(content_ids=["explicit-asset-001"])
 
     mock_urlopen.assert_not_called()
     assert mock_prepare.call_count == 1
@@ -276,7 +291,7 @@ def test_passes_optional_args_through(tmp_path: pathlib.Path) -> None:
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_TEST_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_prepare,
     ):
-        create_job_capsules(
+        QueueState.create_job_capsules(
             content_ids=["asset-bbb"],
             pipeline_directory=fake_pipeline_dir,
             config_key="v1",
@@ -295,7 +310,7 @@ def test_dispatches_lfp_to_the_lfp_job_builder(mock_latest_pipeline_version: moc
         mock.patch(f"{_MODULE}.prepare_lfp_job") as mock_lfp,
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_aind,
     ):
-        create_job_capsules(content_ids=["asset-1", "asset-2"])
+        QueueState.create_job_capsules(content_ids=["asset-1", "asset-2"])
 
     assert mock_aind.call_count == 0
     assert mock_lfp.call_count == 2
@@ -312,7 +327,7 @@ def test_lfp_skip_does_not_count_toward_limit() -> None:
         mock.patch(f"{_MODULE}._load_queue_config", return_value=_LFP_QUEUE_CONFIG),
         mock.patch(f"{_MODULE}.prepare_lfp_job", return_value=None) as mock_lfp,
     ):
-        create_job_capsules(content_ids=["asset-1", "asset-2", "asset-3"], limit=2)
+        QueueState.create_job_capsules(content_ids=["asset-1", "asset-2", "asset-3"], limit=2)
 
     assert mock_lfp.call_count == 3
 
@@ -325,7 +340,7 @@ def test_only_pipeline_creates_just_that_pipeline() -> None:
         mock.patch(f"{_MODULE}.prepare_lfp_job") as mock_lfp,
         mock.patch(f"{_MODULE}.prepare_aind_ephys_job") as mock_aind,
     ):
-        create_job_capsules(content_ids=["asset-1"], only_pipeline="lfp")
+        QueueState.create_job_capsules(content_ids=["asset-1"], only_pipeline="lfp")
 
     assert mock_aind.call_count == 0
     assert mock_lfp.call_count == 1
@@ -336,4 +351,4 @@ def test_only_pipeline_unknown_raises() -> None:
     """A pipeline name that is not configured raises a clear error."""
     with mock.patch(f"{_MODULE}._load_queue_config", return_value=_LFP_QUEUE_CONFIG):
         with pytest.raises(ValueError, match="is not configured"):
-            create_job_capsules(content_ids=["asset-1"], only_pipeline="does-not-exist")
+            QueueState.create_job_capsules(content_ids=["asset-1"], only_pipeline="does-not-exist")

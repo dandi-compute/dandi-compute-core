@@ -15,6 +15,7 @@ import json
 import logging
 import pathlib
 import random
+import subprocess
 import urllib.error
 import urllib.request
 from collections.abc import Collection
@@ -23,8 +24,14 @@ from dataclasses import dataclass
 import linkml_runtime.processing.referencevalidator
 import linkml_runtime.utils.schemaview
 
-from ._globals import _DURATION_PART_RE, _PACKAGED_PIPELINE_CONFIGS_PATH, _QUEUE_CONFIG_SCHEMA_PATH
+from ._globals import (
+    _DURATION_PART_RE,
+    _PACKAGED_PIPELINE_CONFIGS_PATH,
+    _QUEUE_CONFIG_SCHEMA_PATH,
+    _VERSION_TAG_RE,
+)
 from ._job_info import JobInfo
+from ..aind_ephys_pipeline._prepare_job import _parse_pipeline_version
 from ..dandiset._job_id import _JOB_ID_RE, _PROVENANCE_KEY
 from ..dandiset._load_assets_jsonld_metadata import (
     AssetMetadata,
@@ -375,6 +382,25 @@ def _validate_queue_config(*, queue_config: dict) -> None:
             f"First error: {errors[0]!r}"
         )
         raise ValueError(message)
+
+
+def _latest_repository_version_tag(pipeline_directory: pathlib.Path, /) -> str:
+    """
+    The highest release tag in a local pipeline repository checkout.
+
+    :raises ValueError: If the checkout carries no release tags.
+    """
+    tag_output = subprocess.check_output(["git", "tag", "--list"], cwd=pipeline_directory, text=True)
+    version_tags = [tag.strip() for tag in tag_output.splitlines() if _VERSION_TAG_RE.fullmatch(tag.strip())]
+    if not version_tags:
+        message = (
+            f"No release tags found in the pipeline repository at '{pipeline_directory}'. "
+            "Fetch its tags (`git fetch --tags`) so the latest version can be resolved."
+        )
+        raise ValueError(message)
+
+    latest_version_tag = max(version_tags, key=lambda tag: _parse_pipeline_version(tag, label="pipeline tag"))
+    return latest_version_tag
 
 
 def _load_queue_config() -> dict:
