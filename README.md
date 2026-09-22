@@ -120,7 +120,16 @@ To dispatch a single pipeline, or to override its configured concurrency limit f
 dandicompute queue process --processing ./processing/ --pipeline lfp --max 4
 ```
 
-`--max` overrides the configured limit for every pipeline it dispatches, so pair it with `--pipeline` to change just one.
+The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once.
+
+`--processing` has no default. It is the directory each dispatch directory is created under, named `dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}`, and one holds:
+
+- `manifest-{n}.txt`, the capsules covered by resource group `n`
+- `dispatch-{n}.sh`, the generated array script for that group
+- `dispatch-{array job id}_{task id}.log`, each array task's own output
+- `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into, removed when the task finishes unless `--test` is passed
+
+It has to stay readable from the compute nodes for as long as the arrays live, so nothing in it is cleaned up at submission time. A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` directory, where the capsule uploads it from.
 
 
 

@@ -539,7 +539,7 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
 @click.option(
     "--max",
     "max_concurrent",
-    help="Override the configured number of capsules each dispatched pipeline may run at once.",
+    help="Override how many capsules the dispatched pipeline may run at once. Requires --pipeline.",
     required=False,
     type=click.IntRange(min=1),
     default=None,
@@ -577,6 +577,11 @@ def _queue_process_command(
     jitter_seconds: float = 30.0,
 ) -> None:
     """Hand every pending job capsule to its pipeline's SLURM array dispatcher."""
+    # The concurrency limit is a per-pipeline setting, so an override that silently applied to
+    # every pipeline at once would not mean the same thing as the setting it overrides.
+    if max_concurrent is not None and only_pipeline is None:
+        raise click.UsageError("--max overrides one pipeline's concurrency limit, so it requires --pipeline.")
+
     _configure_logging(silent=silent)
     _require_dandi_api_key()
     _require_dandi_devel()

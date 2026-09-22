@@ -303,7 +303,11 @@ def test_cli_queue_process_requires_processing_directory() -> None:
     [
         pytest.param([], {}, id="defaults"),
         pytest.param(["--pipeline", "lfp"], {"only_pipeline": "lfp"}, id="pipeline"),
-        pytest.param(["--max", "4"], {"max_concurrent": 4}, id="max"),
+        pytest.param(
+            ["--pipeline", "lfp", "--max", "4"],
+            {"only_pipeline": "lfp", "max_concurrent": 4},
+            id="pipeline-and-max",
+        ),
         pytest.param(["--test"], {"test": True}, id="test"),
         pytest.param(["--jitter", "120.0"], {"jitter_seconds": 120.0}, id="jitter"),
         pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
@@ -461,3 +465,22 @@ def test_cli_queue_process_reports_when_no_pipelines_are_configured(tmp_path: pa
 
     assert result.exit_code == 0, result.output
     assert "No pipelines are configured for dispatch." in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_queue_process_rejects_max_without_pipeline(tmp_path: pathlib.Path) -> None:
+    """--max overrides a per-pipeline setting, so it may not be given for every pipeline at once."""
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}) as mock_process:
+        result = runner.invoke(
+            _dandicompute_group,
+            ["queue", "process", "--processing", str(processing_dir), "--max", "4"],
+            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
+        )
+
+    assert result.exit_code != 0
+    assert "requires --pipeline" in result.output
+    mock_process.assert_not_called()
