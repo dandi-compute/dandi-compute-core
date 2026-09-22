@@ -38,11 +38,17 @@ def extract_lfp(*, recording, parameters: dict | None = None):
     filtering, re-referencing, resampling, and spatial decimation. Any step
     whose parameter selects "none" or an identity value is skipped.
 
-    :param recording: The raw SpikeInterface recording to process.
-    :param parameters: The validated LFP parameters. Defaults to the registered
-        ``default`` parameters loaded via :func:`.load_lfp_parameters`.
-    :type parameters: dict, optional
-    :return: The processed LFP SpikeInterface recording.
+    Parameters
+    ----------
+    recording
+        The raw SpikeInterface recording to process.
+    parameters : dict, optional
+        The validated LFP parameters. Defaults to the registered ``default``
+        parameters loaded via :func:`.load_lfp_parameters`.
+
+    Returns
+    -------
+    The processed LFP SpikeInterface recording.
     """
     parameters = parameters if parameters is not None else load_lfp_parameters()
 

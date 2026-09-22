@@ -59,9 +59,12 @@ def _format_job_id(*, job_hash: str, date: datetime.date | None = None, index: i
     """
     Build the ``job-{YYMMDD}{hash}`` directory name, defaulting to today's date.
 
-    :param index: Which capsule this is among those sharing the name. The first carries no
-        counter, so the common case reads as ``job-260916a1b2c3``; later ones are suffixed
-        ``-2``, ``-3`` and so on.
+    Parameters
+    ----------
+    index : int, optional
+        Which capsule this is among those sharing the name. The first carries no
+        counter, so the common case reads as ``job-260916a1b2c3``. Later ones
+        are suffixed ``-2``, ``-3`` and so on.
     """
     date = date if date is not None else datetime.datetime.now(tz=datetime.timezone.utc).date()
     counter = "" if index <= 1 else f"-{index}"
@@ -84,8 +87,12 @@ def _capsule_names_from_asset_paths(*, asset_paths: Iterable[str], pipeline_dand
     """
     The distinct job capsule directory names sitting directly under *pipeline_dandiset_path*.
 
-    :param asset_paths: Asset paths of the form ``{pipeline_dandiset_path}/{job_id}/<subpath>``.
-    :param pipeline_dandiset_path: The ``.../pipeline-{name}`` path the capsules live under.
+    Parameters
+    ----------
+    asset_paths : collections.abc.Iterable of str
+        Asset paths of the form ``{pipeline_dandiset_path}/{job_id}/<subpath>``.
+    pipeline_dandiset_path : str
+        The ``.../pipeline-{name}`` path the capsules live under.
     """
     capsule_names = {asset_path.removeprefix(f"{pipeline_dandiset_path}/").split("/")[0] for asset_path in asset_paths}
     return capsule_names
@@ -103,8 +110,10 @@ def _find_existing_capsule_path(
     Matching is on the job hash alone, so a capsule formed on an earlier date is still
     recognised.
 
-    :return: The capsule path, or ``None`` when no capsule exists for this job yet.
-    :rtype: str or None
+    Returns
+    -------
+    str or None
+        The capsule path, or ``None`` when no capsule exists for this job yet.
     """
     for capsule_name in sorted(capsule_names):
         if _parse_job_hash(capsule_name) == job_hash:

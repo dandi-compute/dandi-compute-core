@@ -19,11 +19,16 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
     The capsule directory name carries only the job ID, so the pipeline version, codebase
     version, parameters and config are read from its ``dataset_description.json`` provenance.
 
-    :param capsule_dir: The job capsule directory.
-    :type capsule_dir: pathlib.Path
-    :returns: A flat dict with all entities and the lifecycle status, or ``None`` if the path
-        does not match the expected structure.
-    :rtype: dict or None
+    Parameters
+    ----------
+    capsule_dir : pathlib.Path
+        The job capsule directory.
+
+    Returns
+    -------
+    dict or None
+        A flat dict with all entities and the lifecycle status, or ``None`` if
+        the path does not match the expected structure.
     """
     if _JOB_ID_RE.fullmatch(capsule_dir.name) is None:
         return None

@@ -119,11 +119,22 @@ def clean_dispatch_directories(
     Only directories named like a dispatch directory are considered, so anything else sharing
     *processing_directory* is left alone.
 
-    :param processing_directory: The directory dispatch directories were created in.
-    :param minimum_age_hours: Leave directories formed more recently than this alone.
-    :returns: The dispatch directories that were removed.
-    :rtype: list[pathlib.Path]
-    :raises RuntimeError: If ``squeue`` fails, since a live dispatcher cannot be ruled out.
+    Parameters
+    ----------
+    processing_directory : pathlib.Path
+        The directory dispatch directories were created in.
+    minimum_age_hours : float
+        Leave directories formed more recently than this alone.
+
+    Returns
+    -------
+    list of pathlib.Path
+        The dispatch directories that were removed.
+
+    Raises
+    ------
+    RuntimeError
+        If ``squeue`` fails, since a live dispatcher cannot be ruled out.
     """
     if not processing_directory.is_dir():
         message = f"The processing directory does not exist or is not a directory: {processing_directory}"
@@ -207,7 +218,10 @@ def _active_dispatcher_job_ids(job_name: str, /) -> list[str]:
     A non-empty result means a dispatcher still owns an array, whether it is running tasks or
     holding them back behind the concurrency throttle.
 
-    :raises RuntimeError: If the ``squeue`` invocation exits non-zero and writes to standard
+    Raises
+    ------
+    RuntimeError
+        If the ``squeue`` invocation exits non-zero and writes to standard
         error.
     """
     command = [
@@ -235,7 +249,10 @@ def _submit_array_job(script_file_path: pathlib.Path, /) -> str:
     """
     Submit a dispatch script with ``sbatch`` and return the array job ID it reports.
 
-    :raises RuntimeError: If ``sbatch`` exits non-zero, or if its output carries no job ID.
+    Raises
+    ------
+    RuntimeError
+        If ``sbatch`` exits non-zero, or if its output carries no job ID.
     """
     command = ["sbatch", str(script_file_path.absolute())]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -281,22 +298,39 @@ def dispatch_pipeline_jobs(
     Capsules formed after it was submitted wait for it to be exhausted and go out with the
     next dispatch.
 
-    :param pipeline: The pipeline to dispatch.
-    :param code_dir_paths: Capsule ``code`` directory paths (relative to the Dandiset root)
+    Parameters
+    ----------
+    pipeline : str
+        The pipeline to dispatch.
+    code_dir_paths : list of str
+        Capsule ``code`` directory paths (relative to the Dandiset root)
         awaiting submission, across all pipelines. See
         :meth:`~dandi_compute_code.queue.PipelineQueue.pending_code_dirs`.
-    :param processing_directory: Directory the dispatch directory is created in. It holds the
-        manifest, the dispatch script, and the array's logs, so it has to remain readable
+    processing_directory : pathlib.Path
+        Directory the dispatch directory is created in. It holds the manifest,
+        the dispatch script, and the array's logs, so it has to remain readable
         from the compute nodes for as long as the array lives.
-    :param dispatch_config: This pipeline's dispatcher settings.
-    :param dandiset_id: The Dandiset the capsules are downloaded from and uploaded back to.
-    :param capsule_resources: What each capsule asks SLURM for, keyed by ``code`` directory
-        path. See :func:`~dandi_compute_code.queue.read_capsule_resources`. A capsule missing
-        from it is grouped with the pipeline's own template.
-    :param test: When ``True``, each array task leaves its working tree on disk for debugging.
-    :returns: What was dispatched, or why nothing was.
-    :rtype: DispatchResult
-    :raises RuntimeError: If ``squeue`` or ``sbatch`` fails.
+    dispatch_config : DispatchConfig
+        This pipeline's dispatcher settings.
+    dandiset_id : str
+        The Dandiset the capsules are downloaded from and uploaded back to.
+    capsule_resources : dict of str to CapsuleResources
+        What each capsule asks SLURM for, keyed by ``code`` directory path. See
+        :func:`~dandi_compute_code.queue.read_capsule_resources`. A capsule
+        missing from it is grouped with the pipeline's own template.
+    test : bool
+        When ``True``, each array task leaves its working tree on disk for
+        debugging.
+
+    Returns
+    -------
+    DispatchResult
+        What was dispatched, or why nothing was.
+
+    Raises
+    ------
+    RuntimeError
+        If ``squeue`` or ``sbatch`` fails.
     """
     pipeline_code_dir_paths = _pending_code_dirs_for_pipeline(pipeline=pipeline, code_dir_paths=code_dir_paths)
     if not pipeline_code_dir_paths:

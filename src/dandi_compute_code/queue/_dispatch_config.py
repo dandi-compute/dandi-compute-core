@@ -119,11 +119,20 @@ class DispatchConfig:
         dispatches. The resource requests come from the pipeline's own submission template
         instead, so that an array task is allocated exactly what the capsule it runs asks for.
 
-        :param pipeline: The pipeline name as it appears in the pipeline configuration.
-        :param pipeline_config: A loaded pipeline configuration, as returned by
+        Parameters
+        ----------
+        pipeline : str
+            The pipeline name as it appears in the pipeline configuration.
+        pipeline_config : dict
+            A loaded pipeline configuration, as returned by
             :meth:`~dandi_compute_code.queue.PipelineQueue.load_pipeline_config`.
-        :param max_concurrent: Overrides the configured concurrency limit when given.
-        :raises ValueError: If *pipeline* is not present in *pipeline_config*.
+        max_concurrent : int, optional
+            Overrides the configured concurrency limit when given.
+
+        Raises
+        ------
+        ValueError
+            If *pipeline* is not present in *pipeline_config*.
         """
         pipelines = pipeline_config.get("pipelines", {})
         if pipeline not in pipelines:

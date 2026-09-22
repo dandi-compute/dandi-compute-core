@@ -69,14 +69,17 @@ def load_assets_jsonld_metadata(dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) ->
     """
     Load content-id and path metadata from a DANDI draft ``assets.jsonld`` stream.
 
-    :param dandiset_id:
-        The Dandiset whose draft ``assets.jsonld`` is loaded.  Defaults to the
-        job capsules Dandiset (``001697``), where jobs run; pass the failed runs
+    Parameters
+    ----------
+    dandiset_id : str, optional
+        The Dandiset whose draft ``assets.jsonld`` is loaded. Defaults to the
+        job capsules Dandiset (``001697``), where jobs run. Pass the failed runs
         archive Dandiset (``001873``) to describe the archived state instead.
-    :type dandiset_id: str
-    :returns:
+
+    Returns
+    -------
+    AssetsJsonldMetadata
         Indexed assets metadata.
-    :rtype: AssetsJsonldMetadata
     """
     assets_jsonld_url = _ASSETS_JSONLD_URL_TEMPLATE.format(dandiset_id=dandiset_id)
     content_id_to_asset: dict[str, dict[str, object]] = {}
