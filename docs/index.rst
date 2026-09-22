@@ -1,4 +1,4 @@
-DANDI Compute (Code)
+DANDI Compute (Core)
 ====================
 
 Contains essential code for performing computations on DANDI assets.

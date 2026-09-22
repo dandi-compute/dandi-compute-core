@@ -2,7 +2,7 @@
 
 FROM neurodebian:trixie
 
-LABEL org.opencontainers.image.source="https://github.com/dandi-compute/code"
+LABEL org.opencontainers.image.source="https://github.com/dandi-compute/dandi-compute-core"
 LABEL org.opencontainers.image.description="Runtime environment for the DANDI Compute LFP extraction pipeline (dandi_compute_code.lfp_pipeline)."
 
 RUN apt-get update \
