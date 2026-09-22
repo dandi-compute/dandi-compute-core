@@ -1,6 +1,7 @@
 import logging
 
-from ._create_dandi_api_client import _create_dandi_api_client
+import dandi.dandiapi
+
 from ._load_content_id_to_usage_dandiset_path import _load_content_id_to_usage_dandiset_path
 from ._normalize_asset_path import _normalize_asset_path
 
@@ -61,7 +62,7 @@ def _lookup_asset_size_bytes(
         )
         return None, None
 
-    client = _create_dandi_api_client(api_token=api_token, dandiset_id=dandiset_id)
+    client = dandi.dandiapi.DandiAPIClient(token=api_token)
     dandiset = client.get_dandiset(dandiset_id=dandiset_id)
     matching_assets = list(dandiset.get_assets_with_path_prefix(path=mapped_asset_path))
     if len(matching_assets) != 1:

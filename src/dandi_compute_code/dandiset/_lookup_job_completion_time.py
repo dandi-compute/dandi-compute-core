@@ -1,6 +1,6 @@
 import logging
 
-from ._create_dandi_api_client import _create_dandi_api_client
+import dandi.dandiapi
 
 _log = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ def _lookup_job_completion_time(
     log_asset_path: str,
 ) -> str | None:
     """Look up the ``dateModified`` field for a log asset in the DANDI API."""
-    client = _create_dandi_api_client(api_token=api_token, dandiset_id=dandiset_id)
+    client = dandi.dandiapi.DandiAPIClient(token=api_token)
     dandiset = client.get_dandiset(dandiset_id=dandiset_id)
 
     # TODO: offload this to helper function with LRU cache if this type of thing occurs anywhere else in codebase

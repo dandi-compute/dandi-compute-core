@@ -188,14 +188,14 @@ def test_prepare_aind_ephys_job_raises_on_missing_sub_entity(tmp_path: pathlib.P
 
 
 @pytest.mark.ai_generated
-def test_prepare_aind_ephys_job_raises_on_sandbox_dandiset() -> None:
-    """prepare_aind_ephys_job raises ValueError when the content_id maps to the sandbox dandiset."""
+def test_prepare_aind_ephys_job_raises_on_retired_dandiset() -> None:
+    """prepare_aind_ephys_job raises ValueError when the content_id maps to the retired dandiset."""
     content_id = "06000000-0000-0000-0000-000000000000"
     mapping = {content_id: {"214527": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
 
     with (
         mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
-        pytest.raises(ValueError, match="sandbox dandiset 214527"),
+        pytest.raises(ValueError, match="retired dandiset 214527"),
     ):
         prepare_aind_ephys_job(
             pipeline_version="v1.1.0",

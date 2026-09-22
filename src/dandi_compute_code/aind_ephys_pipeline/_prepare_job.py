@@ -20,7 +20,7 @@ import pydantic
 from ._handle_template import generate_aind_ephys_submission_script
 from ..dandiset._globals import (
     _JOB_CAPSULES_DANDISET_ID,
-    _SANDBOX_DANDISET_ID,
+    _RETIRED_DANDISET_ID,
     _dandiset_derivatives_relative_dir,
 )
 from ..dandiset._job_id import (
@@ -118,7 +118,7 @@ def prepare_aind_ephys_job(
         - The MD5 checksum of the resolved config or parameters file does not
           match its registry entry.
         - ``content_id`` is not present in the content-id-to-Dandiset mapping.
-        - ``content_id`` maps to the retired sandbox dandiset.
+        - ``content_id`` maps to the retired dandiset.
         - The ``sub`` BIDS entity cannot be extracted from the resolved
           Dandiset path.
         - A resolved git commit hash does not match the expected
@@ -241,9 +241,9 @@ def prepare_aind_ephys_job(
         raise UnmappedContentIDError(message)
 
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
-    if dandiset_id == _SANDBOX_DANDISET_ID:
+    if dandiset_id == _RETIRED_DANDISET_ID:
         message = (
-            f"Content ID {content_id} maps to sandbox dandiset {_SANDBOX_DANDISET_ID}, "
+            f"Content ID {content_id} maps to retired dandiset {_RETIRED_DANDISET_ID}, "
             "which is no longer active. This content ID cannot be prepared."
         )
         raise ValueError(message)
