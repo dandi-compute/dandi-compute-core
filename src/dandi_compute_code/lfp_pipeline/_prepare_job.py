@@ -19,7 +19,6 @@ import dandi.upload
 from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE, _LFP_CONTAINER_NAME
 from ._handle_template import generate_lfp_submission_script
 from ..aind_ephys_pipeline import UnmappedContentIDError
-from ..dandiset._globals import _RETIRED_DANDISET_ID
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
     _capsule_names_from_asset_paths,
@@ -169,12 +168,6 @@ def prepare_lfp_job(
         raise UnmappedContentIDError(message)
 
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
-    if dandiset_id == _RETIRED_DANDISET_ID:
-        message = (
-            f"Content ID {content_id} maps to retired dandiset {_RETIRED_DANDISET_ID}, "
-            "which is no longer active. This content ID cannot be prepared."
-        )
-        raise ValueError(message)
     output_dandi_path = dandiset_path.removesuffix(".nwb")
 
     dandi_compute_dir = pathlib.Path("/orcd/data/dandi/001/dandi-compute")
