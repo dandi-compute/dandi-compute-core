@@ -6,7 +6,7 @@ import pytest
 import dandi_compute_code
 from dandi_compute_code.queue import DispatchConfig, QueueState
 
-_QUEUE_CONFIG = {
+_PIPELINE_CONFIG = {
     "pipelines": {
         "aind+ephys": {
             "params": ["default"],
@@ -19,27 +19,27 @@ _QUEUE_CONFIG = {
 
 
 @pytest.mark.ai_generated
-def test_from_queue_config_reads_every_declared_setting() -> None:
+def test_from_pipeline_config_reads_every_declared_setting() -> None:
     """A declared dispatch block is read field for field."""
-    dispatch_config = DispatchConfig.from_queue_config(pipeline="aind+ephys", queue_config=_QUEUE_CONFIG)
+    dispatch_config = DispatchConfig.from_pipeline_config(pipeline="aind+ephys", pipeline_config=_PIPELINE_CONFIG)
 
     assert dispatch_config.max_concurrent == 3
     assert dispatch_config.max_array_tasks == 40
 
 
 @pytest.mark.ai_generated
-def test_from_queue_config_falls_back_to_defaults_without_a_dispatch_block() -> None:
+def test_from_pipeline_config_falls_back_to_defaults_without_a_dispatch_block() -> None:
     """A pipeline declaring no dispatch block still dispatches, on the built-in defaults."""
-    dispatch_config = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
+    dispatch_config = DispatchConfig.from_pipeline_config(pipeline="bare", pipeline_config=_PIPELINE_CONFIG)
 
     assert dispatch_config == DispatchConfig(pipeline="bare")
 
 
 @pytest.mark.ai_generated
-def test_from_queue_config_reads_a_null_max_array_tasks_as_no_upper_bound() -> None:
+def test_from_pipeline_config_reads_a_null_max_array_tasks_as_no_upper_bound() -> None:
     """An explicit null means no cap, as opposed to an omitted key which takes the default."""
-    unbounded = DispatchConfig.from_queue_config(pipeline="unbounded", queue_config=_QUEUE_CONFIG)
-    omitted = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
+    unbounded = DispatchConfig.from_pipeline_config(pipeline="unbounded", pipeline_config=_PIPELINE_CONFIG)
+    omitted = DispatchConfig.from_pipeline_config(pipeline="bare", pipeline_config=_PIPELINE_CONFIG)
 
     assert unbounded.max_array_tasks is None
     assert omitted.max_array_tasks == 500
@@ -52,10 +52,10 @@ def test_max_array_tasks_accepts_none() -> None:
 
 
 @pytest.mark.ai_generated
-def test_from_queue_config_max_concurrent_override_wins_over_the_configured_limit() -> None:
+def test_from_pipeline_config_max_concurrent_override_wins_over_the_configured_limit() -> None:
     """An explicit max_concurrent replaces the configured per-pipeline limit."""
-    dispatch_config = DispatchConfig.from_queue_config(
-        pipeline="aind+ephys", queue_config=_QUEUE_CONFIG, max_concurrent=9
+    dispatch_config = DispatchConfig.from_pipeline_config(
+        pipeline="aind+ephys", pipeline_config=_PIPELINE_CONFIG, max_concurrent=9
     )
 
     assert dispatch_config.max_concurrent == 9
@@ -63,10 +63,10 @@ def test_from_queue_config_max_concurrent_override_wins_over_the_configured_limi
 
 
 @pytest.mark.ai_generated
-def test_from_queue_config_raises_for_an_unconfigured_pipeline() -> None:
+def test_from_pipeline_config_raises_for_an_unconfigured_pipeline() -> None:
     """An unconfigured pipeline name is rejected, naming the ones that are configured."""
     with pytest.raises(ValueError, match="Pipeline 'nope' is not configured"):
-        DispatchConfig.from_queue_config(pipeline="nope", queue_config=_QUEUE_CONFIG)
+        DispatchConfig.from_pipeline_config(pipeline="nope", pipeline_config=_PIPELINE_CONFIG)
 
 
 @pytest.mark.ai_generated
@@ -122,7 +122,9 @@ def test_non_positive_counts_are_rejected(field_name: str, expected_message: str
 @pytest.mark.parametrize("pipeline", ["aind+ephys", "lfp"])
 def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipeline: str) -> None:
     """Every pipeline shipped in this repo carries its own dispatcher limits."""
-    dispatch_config = DispatchConfig.from_queue_config(pipeline=pipeline, queue_config=QueueState.load_queue_config())
+    dispatch_config = DispatchConfig.from_pipeline_config(
+        pipeline=pipeline, pipeline_config=QueueState.load_pipeline_config()
+    )
 
     assert dispatch_config.max_concurrent >= 1
 
@@ -130,7 +132,7 @@ def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipe
 @pytest.mark.ai_generated
 def test_packaged_configuration_declares_no_resource_settings() -> None:
     """Resources come from each pipeline's submission template, so the config must not carry them."""
-    pipelines = QueueState.load_queue_config()["pipelines"]
+    pipelines = QueueState.load_pipeline_config()["pipelines"]
 
     for pipeline_data in pipelines.values():
         assert set(pipeline_data.get("dispatch", {})) <= {"max_concurrent", "max_array_tasks"}
@@ -153,7 +155,9 @@ def test_resources_are_read_back_from_the_pipelines_submission_template(pipeline
     ).read_text()
     directives = dict(re.findall(r"^#SBATCH\s+--([A-Za-z-]+)(?:=|\s+)(\S+)\s*$", template, flags=re.MULTILINE))
 
-    dispatch_config = DispatchConfig.from_queue_config(pipeline=pipeline, queue_config=QueueState.load_queue_config())
+    dispatch_config = DispatchConfig.from_pipeline_config(
+        pipeline=pipeline, pipeline_config=QueueState.load_pipeline_config()
+    )
 
     assert dispatch_config.memory == directives["mem"]
     assert dispatch_config.partition == directives["partition"]
@@ -169,7 +173,7 @@ def test_resources_fall_back_when_a_pipeline_has_no_packaged_template() -> None:
     Under-provisioning an array task means the capsule inside it is killed mid-run, so the
     fallback deliberately errs high rather than low.
     """
-    dispatch_config = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
+    dispatch_config = DispatchConfig.from_pipeline_config(pipeline="bare", pipeline_config=_PIPELINE_CONFIG)
 
     assert dispatch_config.memory == "16GB"
     assert dispatch_config.time_limit == "48:00:00"

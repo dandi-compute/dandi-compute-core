@@ -81,7 +81,7 @@ class DispatchConfig:
 
     The two limits are configured. The resource requests are not: an array task runs its
     capsule's ``submit.sh`` directly, so they are read back out of the pipeline's own
-    submission template by :meth:`from_queue_config` to match what the capsule asks for.
+    submission template by :meth:`from_pipeline_config` to match what the capsule asks for.
     """
 
     pipeline: str
@@ -104,28 +104,28 @@ class DispatchConfig:
             raise ValueError(message)
 
     @classmethod
-    def from_queue_config(
+    def from_pipeline_config(
         cls,
         *,
         pipeline: str,
-        queue_config: dict,
+        pipeline_config: dict,
         max_concurrent: int | None = None,
     ) -> DispatchConfig:
         """
-        Read *pipeline*'s dispatcher settings out of a loaded queue configuration.
+        Read *pipeline*'s dispatcher settings out of a loaded pipeline configuration.
 
         The queue limits come from the configuration, and any the pipeline does not declare
         fall back to this module's default, so a pipeline with no ``dispatch`` block still
         dispatches. The resource requests come from the pipeline's own submission template
         instead, so that an array task is allocated exactly what the capsule it runs asks for.
 
-        :param pipeline: The pipeline name as it appears in the queue configuration.
-        :param queue_config: A loaded queue configuration, as returned by
-            :meth:`~dandi_compute_code.queue.QueueState.load_queue_config`.
+        :param pipeline: The pipeline name as it appears in the pipeline configuration.
+        :param pipeline_config: A loaded pipeline configuration, as returned by
+            :meth:`~dandi_compute_code.queue.QueueState.load_pipeline_config`.
         :param max_concurrent: Overrides the configured concurrency limit when given.
-        :raises ValueError: If *pipeline* is not present in *queue_config*.
+        :raises ValueError: If *pipeline* is not present in *pipeline_config*.
         """
-        pipelines = queue_config.get("pipelines", {})
+        pipelines = pipeline_config.get("pipelines", {})
         if pipeline not in pipelines:
             configured = list(pipelines.keys())
             message = f"Pipeline '{pipeline}' is not configured. Configured pipelines are: {configured}."

@@ -14,7 +14,7 @@ def test_process_queue_reports_no_pending_for_every_configured_pipeline(
     with mock.patch("dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs", return_value=[]):
         results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
-    assert set(results) == set(QueueState.load_queue_config()["pipelines"])
+    assert set(results) == set(QueueState.load_pipeline_config()["pipelines"])
     assert {result.status for result in results.values()} == {"no-pending"}
 
 
@@ -70,7 +70,7 @@ def test_process_queue_reads_the_pending_capsules_once_for_all_pipelines(
         QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
     mock_pending.assert_called_once_with()
-    assert mock_dispatch.call_count == len(QueueState.load_queue_config()["pipelines"])
+    assert mock_dispatch.call_count == len(QueueState.load_pipeline_config()["pipelines"])
     for call in mock_dispatch.call_args_list:
         assert call.kwargs["code_dir_paths"] == code_dir_paths
 

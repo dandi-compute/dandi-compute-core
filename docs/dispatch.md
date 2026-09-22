@@ -38,7 +38,7 @@ A capsule runs inside its array task rather than being submitted as a job of its
 
 This matters because `#SBATCH` directives are parsed by the `sbatch` command when it reads a script at submission time. The header inside a capsule run with `bash` is a block of inert comments, so an array sized wrongly would silently truncate the capsule it runs.
 
-Rather than restate those requests in the queue configuration, the dispatcher reads each pending capsule's own `code/submit.sh` back out of the archive and groups capsules by what they ask for. Each group gets an array sized for it.
+Rather than restate those requests in the pipeline configuration, the dispatcher reads each pending capsule's own `code/submit.sh` back out of the archive and groups capsules by what they ask for. Each group gets an array sized for it.
 
 Pipelines differ here for real reasons:
 
@@ -71,7 +71,7 @@ The array task therefore parses that path out of the capsule script, expands the
 
 ## Configuration
 
-Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeline_configs.json` under its `dispatch` key, and validated by the `Dispatch` class in `queue/schemas/queue_config.linkml.yaml`:
+Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeline_configs.json` under its `dispatch` key, and validated by the `Dispatch` class in `src/dandi_compute_code/schemas/pipeline_config.linkml.yaml`:
 
 ```json
 "dispatch": {

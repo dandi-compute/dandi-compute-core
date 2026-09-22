@@ -1,6 +1,6 @@
-id: https://github.com/dandi-compute/queue_config
-name: dandi_compute_queue_config
-title: DANDI Compute Queue Config
+id: https://github.com/dandi-compute/pipeline_config
+name: dandi_compute_pipeline_config
+title: DANDI Compute Pipeline Config
 description: >-
   A LinkML schema describing a configuration structure for DANDI Compute pipelines,
   including the parameter sets each pipeline forms job capsules for and asset overrides.

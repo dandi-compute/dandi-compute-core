@@ -27,7 +27,7 @@ import linkml_runtime.utils.schemaview
 from ._globals import (
     _DURATION_PART_RE,
     _PACKAGED_PIPELINE_CONFIGS_PATH,
-    _QUEUE_CONFIG_SCHEMA_PATH,
+    _PIPELINE_CONFIG_SCHEMA_PATH,
     _VERSION_TAG_RE,
 )
 from ._job_info import JobInfo
@@ -369,16 +369,16 @@ def _sort_key(record: dict[str, object]) -> tuple[str, str, str, str]:
     )
 
 
-def _validate_queue_config(*, queue_config: dict) -> None:
-    """Validate the queue config (top-level ``pipelines`` mapping) against the LinkML schema."""
+def _validate_pipeline_config(*, pipeline_config: dict) -> None:
+    """Validate the pipeline config (top-level ``pipelines`` mapping) against the LinkML schema."""
     validator = linkml_runtime.processing.referencevalidator.ReferenceValidator(
-        linkml_runtime.utils.schemaview.SchemaView(str(_QUEUE_CONFIG_SCHEMA_PATH))
+        linkml_runtime.utils.schemaview.SchemaView(str(_PIPELINE_CONFIG_SCHEMA_PATH))
     )
-    report = validator.validate(queue_config, target="PipelinesConfig")
+    report = validator.validate(pipeline_config, target="PipelinesConfig")
     errors = [result for result in report.results if not (result.normalized or result.repaired)]
     if errors:
         message = (
-            f"Invalid queue configuration: LinkML validation failed with {len(errors)} error(s). "
+            f"Invalid pipeline configuration: LinkML validation failed with {len(errors)} error(s). "
             f"First error: {errors[0]!r}"
         )
         raise ValueError(message)
@@ -403,7 +403,7 @@ def _latest_repository_version_tag(pipeline_directory: pathlib.Path, /) -> str:
     return latest_version_tag
 
 
-def _load_queue_config() -> dict:
+def _load_pipeline_config() -> dict:
     """
     Read the packaged pipeline configuration and validate it against the LinkML schema.
 
@@ -417,9 +417,9 @@ def _load_queue_config() -> dict:
         message = f"Packaged pipeline configuration is missing: '{_PACKAGED_PIPELINE_CONFIGS_PATH}'."
         raise FileNotFoundError(message)
 
-    queue_config = json.loads(_PACKAGED_PIPELINE_CONFIGS_PATH.read_text())
-    _validate_queue_config(queue_config=queue_config)
-    return queue_config
+    pipeline_config = json.loads(_PACKAGED_PIPELINE_CONFIGS_PATH.read_text())
+    _validate_pipeline_config(pipeline_config=pipeline_config)
+    return pipeline_config
 
 
 def _order_content_ids_for_uniform_dandiset_sampling(*, content_ids: list[str]) -> list[str]:
