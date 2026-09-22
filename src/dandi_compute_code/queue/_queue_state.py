@@ -45,7 +45,7 @@ from ._queue_utils import (
     _finalize_job_capsule_records,
     _latest_repository_version_tag,
     _list_capsule_log_directories,
-    _load_queue_config,
+    _load_pipeline_config,
     _order_content_ids_for_uniform_dandiset_sampling,
     _remove_empty_parents,
     _sort_key,
@@ -511,7 +511,7 @@ class QueueState:
         return len(pending_entries) > 0
 
     @staticmethod
-    def load_queue_config() -> dict:
+    def load_pipeline_config() -> dict:
         """
         Read and validate the packaged pipeline configuration.
 
@@ -521,7 +521,7 @@ class QueueState:
         :raises FileNotFoundError: If the packaged pipeline configuration file is missing.
         :raises ValueError: If the pipeline configuration fails LinkML validation.
         """
-        return _load_queue_config()
+        return _load_pipeline_config()
 
     @staticmethod
     def resolve_params_key_to_id(*, pipeline: str, params_key: str) -> str:
@@ -945,8 +945,8 @@ class QueueState:
             message = "max_concurrent must be at least 1"
             raise ValueError(message)
 
-        queue_config = _load_queue_config()
-        pipelines = queue_config.get("pipelines", {})
+        pipeline_config = _load_pipeline_config()
+        pipelines = pipeline_config.get("pipelines", {})
         if only_pipeline is not None and only_pipeline not in pipelines:
             configured = list(pipelines.keys())
             message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
@@ -965,9 +965,9 @@ class QueueState:
         for pipeline_name in pipelines:
             if only_pipeline is not None and pipeline_name != only_pipeline:
                 continue
-            dispatch_config = DispatchConfig.from_queue_config(
+            dispatch_config = DispatchConfig.from_pipeline_config(
                 pipeline=pipeline_name,
-                queue_config=queue_config,
+                pipeline_config=pipeline_config,
                 max_concurrent=max_concurrent,
             )
             results[pipeline_name] = dispatch_pipeline_jobs(
@@ -1044,7 +1044,7 @@ class QueueState:
         Form new job capsules for qualifying assets that do not have one yet.
 
         The rule is deliberately narrow. Every pipeline and parameters combination declared in
-        the packaged pipeline configuration (see :meth:`load_queue_config`) is crossed with the
+        the packaged pipeline configuration (see :meth:`load_pipeline_config`) is crossed with the
         qualifying content IDs, and an asset that already has a capsule for that combination is
         skipped. What already exists is read from the live queue state (see :meth:`from_dandi`),
         which is why creation lives on this class. New capsules are formed against the latest
@@ -1067,8 +1067,8 @@ class QueueState:
         :return: The number of job capsules that were formed.
         :rtype: int
         """
-        queue_config = _load_queue_config()
-        pipelines = queue_config.get("pipelines", {})
+        pipeline_config = _load_pipeline_config()
+        pipelines = pipeline_config.get("pipelines", {})
         if only_pipeline is not None and only_pipeline not in pipelines:
             configured = list(pipelines.keys())
             message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."

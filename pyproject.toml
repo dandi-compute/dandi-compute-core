@@ -9,7 +9,7 @@ packages = ["src/dandi_compute_code"]
 
 [project]
 name = "dandi-compute-code"
-version = "0.7.0"
+version = "0.7.1"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]

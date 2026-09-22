@@ -95,7 +95,7 @@ def test_process_queue_throttles_each_array_to_the_configured_limit(
     processing_directory: pathlib.Path,
 ) -> None:
     """The configured per-pipeline limit reaches SLURM as the array's concurrency throttle."""
-    configured_limit = QueueState.load_queue_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
+    configured_limit = QueueState.load_pipeline_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
 
     with (
         mock.patch(

@@ -6,7 +6,7 @@ import pytest
 
 from dandi_compute_code.queue import QueueState
 
-_ISSUE_EXAMPLE_QUEUE_CONFIG = {
+_ISSUE_EXAMPLE_PIPELINE_CONFIG = {
     "pipelines": {
         "aind+ephys": {
             "params": ["default"],
@@ -17,12 +17,12 @@ _ISSUE_EXAMPLE_QUEUE_CONFIG = {
 
 
 @pytest.mark.ai_generated
-def test_load_queue_config_validates_issue_example_schema(tmp_path: pathlib.Path) -> None:
-    """Issue-provided queue config validates against the LinkML schema."""
+def test_load_pipeline_config_validates_issue_example_schema(tmp_path: pathlib.Path) -> None:
+    """Issue-provided pipeline config validates against the LinkML schema."""
     config_file = tmp_path / "pipeline_configs.json"
-    config_file.write_text(json.dumps(_ISSUE_EXAMPLE_QUEUE_CONFIG))
+    config_file.write_text(json.dumps(_ISSUE_EXAMPLE_PIPELINE_CONFIG))
 
     with mock.patch("dandi_compute_code.queue._queue_utils._PACKAGED_PIPELINE_CONFIGS_PATH", config_file):
-        loaded = QueueState.load_queue_config()
+        loaded = QueueState.load_pipeline_config()
 
-    assert loaded == _ISSUE_EXAMPLE_QUEUE_CONFIG
+    assert loaded == _ISSUE_EXAMPLE_PIPELINE_CONFIG

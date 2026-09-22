@@ -11,7 +11,7 @@ _AIND_EPHYS_CONFIGS_REGISTRY_PATH = (
 _LFP_PARAMS_REGISTRY_PATH = (
     pathlib.Path(__file__).parent.parent / "lfp_pipeline" / "registries" / "registered_params.json"
 )
-_QUEUE_CONFIG_SCHEMA_PATH = pathlib.Path(__file__).parent / "schemas" / "queue_config.linkml.yaml"
+_PIPELINE_CONFIG_SCHEMA_PATH = pathlib.Path(__file__).parent.parent / "schemas" / "pipeline_config.linkml.yaml"
 _RAW_ARRAY_DISPATCH_TEMPLATE_FILE_PATH = pathlib.Path(__file__).parent / "templates" / "array_dispatch_template.txt"
 #: Prefix of the SLURM job name carried by every pipeline's array dispatcher.
 _DISPATCH_JOB_NAME_PREFIX = "dandicompute-dispatch"
@@ -30,7 +30,7 @@ _DISPATCH_DIRECTORY_RE = re.compile(rf"^(?P<job_name>{_DISPATCH_JOB_NAME_PREFIX}
 _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
 # Packaged pipeline configuration, committed directly to this repo. This is the canonical
 # source of truth for the queue's pipeline definitions. There is no local override for this
-# file; see ``_load_queue_config``.
+# file; see ``_load_pipeline_config``.
 _PACKAGED_PIPELINE_CONFIGS_PATH = pathlib.Path(__file__).parent / "pipeline_configs.json"
 _DURATION_PART_RE = re.compile(r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|m|h|d)\b")
 #: Release tags of the form ``v1.2.3``, optionally with a pre-release or build suffix.
