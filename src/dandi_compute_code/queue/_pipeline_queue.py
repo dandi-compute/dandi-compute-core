@@ -38,11 +38,11 @@ from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
 from ._job_capsule import (
-    _PATH_FIELDS_BY_KIND,
     _PATHS_TSV_FIELD_NAMES,
     _STATE_TSV_FIELD_NAMES,
     JobCapsule,
     JobStatus,
+    _path_field_name,
 )
 from ._queue_utils import (
     _CapsuleProvenanceCache,
@@ -1068,7 +1068,8 @@ class PipelineQueue:
         :meth:`JobCapsule.from_tsv_row`.
 
         The asset paths are read from the ``paths.tsv`` beside it, and attached to each
-        entry by ``job_id``. Entries are left without paths when that table is absent.
+        entry by ``job_id``. Which mapping a path belongs in is read from where it sits
+        beneath the capsule directory. Entries are left without paths when that table is absent.
 
         Parameters
         ----------
@@ -1093,7 +1094,7 @@ class PipelineQueue:
             with paths_file_path.open(newline="") as file_stream:
                 for row in csv.DictReader(file_stream, delimiter="\t"):
                     entry = job_id_to_entry.get(row["job_id"])
-                    field_name = _PATH_FIELDS_BY_KIND.get(row["kind"])
+                    field_name = _path_field_name(job_id=row["job_id"], path=row["path"])
                     if entry is None or field_name is None:
                         _log.debug("Skipping unmatched row in %s: %s", paths_file_path, row)
                         continue

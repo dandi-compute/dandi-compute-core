@@ -1,19 +1,19 @@
-job_id	kind	path	content_id
-job-240101aa0001	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-pending/pipeline-test/job-240101aa0001/dataset_description.json	dataset-description-aa0001
-job-240101aa0002	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/dataset_description.json	dataset-description-aa0002
-job-240101aa0002	output	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/derivatives/output.nwb	output-aa0002
-job-240101aa0002	log	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/logs/stdout.txt	log-aa0002
-job-240101aa0003	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-one/pipeline-test/job-240101aa0003/dataset_description.json	dataset-description-aa0003
-job-240101aa0003	log	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-one/pipeline-test/job-240101aa0003/logs/stdout.txt	log-aa0003
-job-240101aa0004	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-two/pipeline-test/job-240101aa0004/dataset_description.json	dataset-description-aa0004
-job-240101aa0004	log	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-two/pipeline-test/job-240101aa0004/logs/stdout.txt	log-aa0004
-job-240101aa0005	dataset_description	derivatives/dandisets-000/dandiset-000002/sub-fresh/pipeline-test/job-240101aa0005/dataset_description.json	dataset-description-aa0005
-job-240101aa000c	dataset_description	derivatives/dandisets-001/dandiset-001371/sub-sole/ses-capsule/pipeline-aind+ephys/job-240101aa000c/dataset_description.json	dataset-description-aa000c
-job-240101aa0006	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0006/dataset_description.json	dataset-description-aa0006
-job-240101aa0007	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/dataset_description.json	dataset-description-aa0007
-job-240101aa0007	output	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/derivatives/output.nwb	output-aa0007
-job-240101aa0007	log	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/logs/stdout.txt	log-aa0007
-job-240101aa0008	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-already/ses-submitted/pipeline-test/job-240101aa0008/dataset_description.json	dataset-description-aa0008
-job-240101aa0009	dataset_description	derivatives/dandisets-001/dandiset-001849/sourcedata/sub-test+bids/pipeline-aind+ephys/job-240101aa0009/dataset_description.json	dataset-description-aa0009
-job-240101aa000a	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-stalled/ses-one/pipeline-test/job-240101aa000a/dataset_description.json	dataset-description-aa000a
-job-240101aa000b	dataset_description	derivatives/dandisets-000/dandiset-000001/sub-stalled/ses-two/pipeline-test/job-240101aa000b/dataset_description.json	dataset-description-aa000b
+job_id	path	content_id
+job-240101aa0001	derivatives/dandisets-000/dandiset-000001/sub-pending/pipeline-test/job-240101aa0001/dataset_description.json	dataset-description-aa0001
+job-240101aa0002	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/dataset_description.json	dataset-description-aa0002
+job-240101aa0002	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/derivatives/output.nwb	output-aa0002
+job-240101aa0002	derivatives/dandisets-000/dandiset-000001/sub-successful/pipeline-test/job-240101aa0002/logs/stdout.txt	log-aa0002
+job-240101aa0003	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-one/pipeline-test/job-240101aa0003/dataset_description.json	dataset-description-aa0003
+job-240101aa0003	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-one/pipeline-test/job-240101aa0003/logs/stdout.txt	log-aa0003
+job-240101aa0004	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-two/pipeline-test/job-240101aa0004/dataset_description.json	dataset-description-aa0004
+job-240101aa0004	derivatives/dandisets-000/dandiset-000001/sub-failed/ses-two/pipeline-test/job-240101aa0004/logs/stdout.txt	log-aa0004
+job-240101aa0005	derivatives/dandisets-000/dandiset-000002/sub-fresh/pipeline-test/job-240101aa0005/dataset_description.json	dataset-description-aa0005
+job-240101aa000c	derivatives/dandisets-001/dandiset-001371/sub-sole/ses-capsule/pipeline-aind+ephys/job-240101aa000c/dataset_description.json	dataset-description-aa000c
+job-240101aa0006	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0006/dataset_description.json	dataset-description-aa0006
+job-240101aa0007	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/dataset_description.json	dataset-description-aa0007
+job-240101aa0007	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/derivatives/output.nwb	output-aa0007
+job-240101aa0007	derivatives/dandisets-000/dandiset-000001/sub-two/ses-capsules/pipeline-test/job-240101aa0007/logs/stdout.txt	log-aa0007
+job-240101aa0008	derivatives/dandisets-000/dandiset-000001/sub-already/ses-submitted/pipeline-test/job-240101aa0008/dataset_description.json	dataset-description-aa0008
+job-240101aa0009	derivatives/dandisets-001/dandiset-001849/sourcedata/sub-test+bids/pipeline-aind+ephys/job-240101aa0009/dataset_description.json	dataset-description-aa0009
+job-240101aa000a	derivatives/dandisets-000/dandiset-000001/sub-stalled/ses-one/pipeline-test/job-240101aa000a/dataset_description.json	dataset-description-aa000a
+job-240101aa000b	derivatives/dandisets-000/dandiset-000001/sub-stalled/ses-two/pipeline-test/job-240101aa000b/dataset_description.json	dataset-description-aa000b

@@ -41,20 +41,6 @@ enums:
           Nothing that would place the capsule in the lifecycle was observed. Also the
           fallback for a status cell that is empty or unrecognised.
 
-  PathKind:
-    description: >-
-      Which of a job capsule's path mappings a row of `paths.tsv` belongs to. Each kind
-      names the `JobCapsule` mapping its rows are read back into.
-    permissible_values:
-      dataset_description:
-        description: The capsule's dataset description, read back into `dataset_description_path`.
-
-      output:
-        description: An output asset under the capsule's derivatives directory, read back into `output_paths`.
-
-      log:
-        description: A log asset under the capsule's logs directory, read back into `log_paths`.
-
 classes:
   JobInfo:
     description: >-
@@ -235,13 +221,12 @@ classes:
         required: true
         pattern: "^job-\\d{6}[0-9a-f]{6}(?:-(?:[2-9]|\\d{2,}))?$"
 
-      kind:
-        description: Which of the capsule's path mappings this path belongs to.
-        range: PathKind
-        required: true
-
       path:
-        description: The asset's path, relative to the root of the Dandiset holding the capsule.
+        description: >-
+          The asset's path, relative to the root of the Dandiset holding the capsule. Where
+          it sits beneath the capsule directory says which mapping it belongs to. The
+          dataset description is `dataset_description.json`, outputs are under
+          `derivatives/` and logs are under `logs/`.
         range: string
         required: true
 

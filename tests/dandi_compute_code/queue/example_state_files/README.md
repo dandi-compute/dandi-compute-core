@@ -6,6 +6,9 @@ It is the shared ground truth for the queue test suite.
 Each row is one job capsule, matching the format produced by `PipelineQueue.to_tsv` and consumed by `PipelineQueue.from_tsv`.
 `paths.tsv` beside it holds the asset paths of those capsules, one per row, keyed by `job_id`.
 Every capsule has a dataset description. The failed and successful ones also have a log, and the successful ones an output.
+Which mapping a path belongs to is read from where it sits beneath the capsule directory.
+
+The failed and successful capsules carry mock submission and completion times, so their `queue_wait_seconds` and `run_duration_seconds` are filled in. The stalled ones have a submission time only.
 Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `dandi_path`, which is named to describe the scenario it covers.
 Rows that share a `dandi_path` are told apart by their `config`.
 

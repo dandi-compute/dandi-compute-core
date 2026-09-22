@@ -59,7 +59,7 @@ def test_write_dandiset_state_table_builds_state_and_uploads() -> None:
     assert source_path in state_kwargs["content"]
     assert paths_kwargs["dandiset_id"] == _JOB_CAPSULES_DANDISET_ID
     assert paths_kwargs["relative_path"] == "derivatives/paths.tsv"
-    assert paths_kwargs["content"].splitlines()[0] == "job_id\tkind\tpath\tcontent_id"
+    assert paths_kwargs["content"].splitlines()[0] == "job_id\tpath\tcontent_id"
 
 
 @pytest.mark.ai_generated

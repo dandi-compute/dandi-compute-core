@@ -48,16 +48,32 @@ _STATE_TSV_FIELD_NAMES = [
     "run_duration_seconds",
 ]
 
-#: The ``JobCapsule`` mapping fields that ``paths.tsv`` holds, keyed by the ``kind`` recorded
-#: for each of their entries.
-_PATH_FIELDS_BY_KIND = {
-    "dataset_description": "dataset_description_path",
-    "output": "output_paths",
-    "log": "log_paths",
-}
+#: The ``JobCapsule`` mapping fields that ``paths.tsv`` holds, in the order their rows are written.
+_PATH_FIELD_NAMES = ("dataset_description_path", "output_paths", "log_paths")
 
 #: Column order for the ``paths.tsv`` table. One row is one asset path of one job capsule.
-_PATHS_TSV_FIELD_NAMES = ["job_id", "kind", "path", "content_id"]
+_PATHS_TSV_FIELD_NAMES = ["job_id", "path", "content_id"]
+
+
+def _path_field_name(*, job_id: str, path: str) -> str | None:
+    """
+    The ``JobCapsule`` mapping field an asset path of the capsule *job_id* belongs in.
+
+    Read from where the path sits beneath the capsule directory, on the same terms the
+    mappings are built from DANDI metadata. ``None`` when *path* is not beneath a
+    ``job_id`` directory or matches none of the mappings.
+    """
+    parts = pathlib.PurePosixPath(path).parts
+    if job_id not in parts:
+        return None
+    subpath_parts = parts[parts.index(job_id) + 1 :]
+    if subpath_parts == ("dataset_description.json",):
+        return "dataset_description_path"
+    if subpath_parts[:1] == ("derivatives",):
+        return "output_paths"
+    if subpath_parts[:1] == ("logs",) and len(subpath_parts) > 1:
+        return "log_paths"
+    return None
 
 
 def _coerce_status(value: object, /) -> JobStatus:
@@ -385,12 +401,12 @@ class JobCapsule:
         """
         Flatten this entry's path mappings to ``paths.tsv`` rows, one per asset path.
 
-        Each row carries the ``job_id`` linking it back to this entry's ``state.tsv`` row, and
-        the ``kind`` of mapping it came from (see :data:`_PATH_FIELDS_BY_KIND`).
+        Each row carries the ``job_id`` linking it back to this entry's ``state.tsv`` row. The
+        mapping a path came from is not recorded, since the path itself tells them apart.
         """
         rows = [
-            {"job_id": self.job.job_id, "kind": kind, "path": path, "content_id": content_id}
-            for kind, field_name in _PATH_FIELDS_BY_KIND.items()
+            {"job_id": self.job.job_id, "path": path, "content_id": content_id}
+            for field_name in _PATH_FIELD_NAMES
             for path, content_id in sorted(getattr(self, field_name).items())
         ]
         return rows

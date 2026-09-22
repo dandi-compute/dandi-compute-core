@@ -7,6 +7,10 @@ import pytest
 
 from dandi_compute_code.queue import JobCapsule, JobInfo, PipelineQueue
 
+_CAPSULE_PATH = (
+    "derivatives/dandisets-001/dandiset-001849/sub-mouse01/sub-mouse01_ecephys/pipeline-aind+ephys/job-250101abc123"
+)
+
 
 def _make_entry(**overrides: object) -> JobCapsule:
     job_kwargs = {
@@ -26,9 +30,9 @@ def _make_entry(**overrides: object) -> JobCapsule:
         "created_at": "2025-01-01T00:00:00+00:00",
         "job_submission_time": "2025-01-01T00:15:00+00:00",
         "job_completion_time": "2025-01-01T01:00:00+00:00",
-        "dataset_description_path": {"a/dataset_description.json": "dd-id"},
-        "output_paths": {"a/output.nwb": "out-id"},
-        "log_paths": {"a/logs/stdout.txt": "log-id"},
+        "dataset_description_path": {f"{_CAPSULE_PATH}/dataset_description.json": "dd-id"},
+        "output_paths": {f"{_CAPSULE_PATH}/derivatives/output.nwb": "out-id"},
+        "log_paths": {f"{_CAPSULE_PATH}/logs/stdout.txt": "log-id"},
     }
     for key, value in overrides.items():
         if key in job_kwargs:
@@ -54,14 +58,9 @@ def test_job_capsule_to_paths_tsv_rows_lists_one_row_per_path() -> None:
     """JobCapsule.to_paths_tsv_rows writes one paths.tsv row per asset path, keyed by job_id."""
     rows = _make_entry().to_paths_tsv_rows()
     assert rows == [
-        {
-            "job_id": "job-250101abc123",
-            "kind": "dataset_description",
-            "path": "a/dataset_description.json",
-            "content_id": "dd-id",
-        },
-        {"job_id": "job-250101abc123", "kind": "output", "path": "a/output.nwb", "content_id": "out-id"},
-        {"job_id": "job-250101abc123", "kind": "log", "path": "a/logs/stdout.txt", "content_id": "log-id"},
+        {"job_id": "job-250101abc123", "path": f"{_CAPSULE_PATH}/dataset_description.json", "content_id": "dd-id"},
+        {"job_id": "job-250101abc123", "path": f"{_CAPSULE_PATH}/derivatives/output.nwb", "content_id": "out-id"},
+        {"job_id": "job-250101abc123", "path": f"{_CAPSULE_PATH}/logs/stdout.txt", "content_id": "log-id"},
     ]
 
 
@@ -125,11 +124,7 @@ def test_pipeline_queue_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
 def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.from_tsv preserves dataset_description_path entries."""
     state_file = tmp_path / "state.tsv"
-    dataset_description_path = {
-        "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/"
-        "pipeline-aind+ephys/version-v1.0_codebase-v0.3.0_params-abc1234_config-def5678/"
-        "dataset_description.json": "dataset-description-id"
-    }
+    dataset_description_path = {f"{_CAPSULE_PATH}/dataset_description.json": "dataset-description-id"}
     entry = _make_entry(dataset_description_path=dataset_description_path)
     PipelineQueue(entries=[entry]).to_tsv(state_file)
 
@@ -142,7 +137,12 @@ def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pa
 @pytest.mark.ai_generated
 def test_pipeline_queue_to_tsv_writes_paths_table_beside_state(tmp_path: pathlib.Path) -> None:
     """PipelineQueue.to_tsv writes paths.tsv next to state.tsv, and from_tsv reads every mapping back."""
-    entry = _make_entry(output_paths={"a/output.nwb": "out-id", "a/other.nwb": "other-id"})
+    entry = _make_entry(
+        output_paths={
+            f"{_CAPSULE_PATH}/derivatives/output.nwb": "out-id",
+            f"{_CAPSULE_PATH}/derivatives/other.nwb": "other-id",
+        }
+    )
     state_file = tmp_path / "state.tsv"
     PipelineQueue(entries=[entry]).to_tsv(state_file)
 
@@ -150,7 +150,7 @@ def test_pipeline_queue_to_tsv_writes_paths_table_beside_state(tmp_path: pathlib
     pipeline_queue = PipelineQueue.from_tsv(state_file)
 
     assert paths_file.read_text() == PipelineQueue(entries=[entry]).to_paths_tsv_string()
-    assert paths_file.read_text().splitlines()[0].split("\t") == ["job_id", "kind", "path", "content_id"]
+    assert paths_file.read_text().splitlines()[0].split("\t") == ["job_id", "path", "content_id"]
     assert pipeline_queue.entries[0].dataset_description_path == entry.dataset_description_path
     assert pipeline_queue.entries[0].output_paths == entry.output_paths
     assert pipeline_queue.entries[0].log_paths == entry.log_paths
@@ -286,3 +286,23 @@ def test_example_queue_reads_paths_from_sibling_table(example_pipeline_queue: Pi
     assert entry.output_paths == {f"{capsule_path}/derivatives/output.nwb": "output-aa0002"}
     assert entry.log_paths == {f"{capsule_path}/logs/stdout.txt": "log-aa0002"}
     assert all(capsule.dataset_description_path != {} for capsule in example_pipeline_queue)
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    "path",
+    [f"{_CAPSULE_PATH}/code/submit.sh", "elsewhere/logs/stdout.txt"],
+    ids=["unmapped_subpath", "outside_capsule"],
+)
+def test_pipeline_queue_from_tsv_skips_paths_it_cannot_place(tmp_path: pathlib.Path, path: str) -> None:
+    """A paths.tsv row that falls under none of the mappings is left out rather than guessed at."""
+    entry = _make_entry(dataset_description_path={}, output_paths={}, log_paths={})
+    state_file = tmp_path / "state.tsv"
+    PipelineQueue(entries=[entry]).to_tsv(state_file)
+    (tmp_path / "paths.tsv").write_text(f"job_id\tpath\tcontent_id\njob-250101abc123\t{path}\tsome-id\n")
+
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert pipeline_queue.entries[0].dataset_description_path == {}
+    assert pipeline_queue.entries[0].output_paths == {}
+    assert pipeline_queue.entries[0].log_paths == {}
