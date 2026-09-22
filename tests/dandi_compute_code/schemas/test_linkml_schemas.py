@@ -216,6 +216,25 @@ def test_job_capsule_matches_the_serialised_capsule() -> None:
 
 
 @pytest.mark.ai_generated
+def test_path_entry_matches_the_serialised_paths_rows() -> None:
+    """The PathEntry class and PathKind enumeration match the rows written to paths.tsv."""
+    capsule = JobCapsule(
+        job=_EXAMPLE_JOB_INFO,
+        content_id=None,
+        asset_size_bytes=None,
+        dataset_description_path={"derivatives/dataset_description.json": "abc"},
+        output_paths={"derivatives/out.nwb": "def"},
+        log_paths={"logs/stdout.txt": "ghi"},
+    )
+    rows = capsule.to_paths_tsv_rows()
+    schema_view = _schema_view("job_capsule")
+    permissible = set(schema_view.get_enum("PathKind").permissible_values)
+
+    assert {name for row in rows for name in row} == _slot_names("job_capsule", "PathEntry")
+    assert {row["kind"] for row in rows} == permissible
+
+
+@pytest.mark.ai_generated
 def test_job_status_enum_matches_the_statuses_the_queue_uses() -> None:
     """The schema's JobStatus enumeration lists exactly the statuses the queue selects on."""
     schema_view = _schema_view("job_capsule")

@@ -41,6 +41,20 @@ enums:
           Nothing that would place the capsule in the lifecycle was observed. Also the
           fallback for a status cell that is empty or unrecognised.
 
+  PathKind:
+    description: >-
+      Which of a job capsule's path mappings a row of `paths.tsv` belongs to. Each kind
+      names the `JobCapsule` mapping its rows are read back into.
+    permissible_values:
+      dataset_description:
+        description: The capsule's dataset description, read back into `dataset_description_path`.
+
+      output:
+        description: An output asset under the capsule's derivatives directory, read back into `output_paths`.
+
+      log:
+        description: A log asset under the capsule's logs directory, read back into `log_paths`.
+
 classes:
   JobInfo:
     description: >-
@@ -202,12 +216,49 @@ classes:
     description: >-
       A whole `state.tsv` table, as the list of job capsule records it holds. The table is
       strictly tabular on disk. The mapping-valued fields are not columns of it. They are
-      written to the sibling `paths.tsv` table instead, one row per asset path, carrying
-      the `job_id`, the kind of mapping, the path and its content identifier.
+      written to the sibling `paths.tsv` table instead (see `PathsTable`).
     attributes:
       capsules:
         description: One entry per job capsule, in the table's sort order.
         range: JobCapsule
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
+
+  PathEntry:
+    description: >-
+      One asset path of one job capsule. One of these is one row of `paths.tsv`.
+    attributes:
+      job_id:
+        description: The `job_id` of the `state.tsv` row this path belongs to.
+        range: string
+        required: true
+        pattern: "^job-\\d{6}[0-9a-f]{6}(?:-(?:[2-9]|\\d{2,}))?$"
+
+      kind:
+        description: Which of the capsule's path mappings this path belongs to.
+        range: PathKind
+        required: true
+
+      path:
+        description: The asset's path, relative to the root of the Dandiset holding the capsule.
+        range: string
+        required: true
+
+      content_id:
+        description: The DANDI content identifier of the asset at `path`.
+        range: string
+        required: true
+
+  PathsTable:
+    description: >-
+      A whole `paths.tsv` table, which sits beside a `state.tsv` table and holds the path
+      mappings of its job capsules. Keeping them here lets `state.tsv` stay narrow enough
+      to render as a table.
+    attributes:
+      paths:
+        description: One entry per asset path, grouped by job capsule in the order of `state.tsv`.
+        range: PathEntry
         multivalued: true
         inlined: true
         inlined_as_list: true
