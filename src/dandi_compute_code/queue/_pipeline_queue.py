@@ -38,8 +38,8 @@ from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
 from ._job_capsule import (
-    _PATHS_TSV_FIELD_NAMES,
     _JOBS_TSV_FIELD_NAMES,
+    _PATHS_TSV_FIELD_NAMES,
     JobCapsule,
     JobStatus,
     _path_field_name,
