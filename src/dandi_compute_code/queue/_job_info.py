@@ -1,7 +1,7 @@
 """
 ``JobInfo`` — the immutable identity of one job capsule.
 
-Kept in its own module so both :mod:`._queue_state` and its private helpers
+Kept in its own module so both :mod:`._pipeline_queue` and its private helpers
 (:mod:`._queue_utils`) can depend on it without coupling to each other.
 """
 

@@ -3,15 +3,15 @@ from unittest import mock
 import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
-# QueueState.from_dandi derives queue state from DANDI assets.jsonld metadata fetched over
+# PipelineQueue.from_dandi derives queue state from DANDI assets.jsonld metadata fetched over
 # the network. The conftest _no_real_dandi_fetch guard defaults that loader to empty; tests
 # that need specific metadata override it with their own mock.patch. The assets metadata built
 # in each test is the ground-truth input under test.
 
 
-def _entries(state: QueueState) -> list[dict]:
+def _entries(state: PipelineQueue) -> list[dict]:
     return [entry.to_dict() for entry in state]
 
 
@@ -20,10 +20,10 @@ def test_from_dandi_returns_empty_for_missing_metadata() -> None:
     """from_dandi returns an empty state when there is no assets metadata."""
     content_id_to_asset: dict[str, dict[str, object]] = {}
     with mock.patch(
-        "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+        "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
         return_value=AssetsJsonldMetadata(content_id_to_asset=content_id_to_asset, path_to_asset_metadata={}),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
     assert len(state) == 0
 
 
@@ -54,7 +54,7 @@ def test_from_dandi_returns_all_ordered_pending_entries() -> None:
     }
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata=capsule_metadata_by_path),
         ),
         mock.patch(
@@ -62,7 +62,7 @@ def test_from_dandi_returns_all_ordered_pending_entries() -> None:
             return_value=AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata=source_metadata_by_path),
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 5
@@ -81,7 +81,7 @@ def test_from_dandi_includes_entries_with_submitted_markers() -> None:
     )
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(
                 content_id_to_asset={},
                 path_to_asset_metadata={
@@ -109,7 +109,7 @@ def test_from_dandi_includes_entries_with_submitted_markers() -> None:
             ),
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
     state_entries = _entries(state)
     assert len(state_entries) == 1
 
@@ -148,13 +148,13 @@ def test_from_dandi_submitted_marker_sets_has_been_submitted() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
     state_entries = _entries(state)
     assert len(state_entries) == 1
     assert state_entries[0]["has_code"] is True
@@ -232,13 +232,13 @@ def test_from_dandi_parses_capsule_location_and_presence_flags_from_assets_paths
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -270,7 +270,7 @@ def test_from_dandi_resolves_dandi_path_for_nested_asset() -> None:
 
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(
                 content_id_to_asset={},
                 path_to_asset_metadata={
@@ -298,7 +298,7 @@ def test_from_dandi_resolves_dandi_path_for_nested_asset() -> None:
             ),
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -319,7 +319,7 @@ def test_from_dandi_resolves_dandi_path_for_root_level_asset() -> None:
 
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(
                 content_id_to_asset={},
                 path_to_asset_metadata={
@@ -347,7 +347,7 @@ def test_from_dandi_resolves_dandi_path_for_root_level_asset() -> None:
             ),
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -361,11 +361,11 @@ def test_from_dandi_does_not_require_dandi_api_key() -> None:
     with (
         mock.patch.dict("os.environ", {}, clear=True),
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata={}),
         ),
     ):
-        QueueState.from_dandi()
+        PipelineQueue.from_dandi()
 
 
 @pytest.mark.ai_generated
@@ -414,13 +414,13 @@ def test_from_dandi_includes_all_entries_derived_from_metadata() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 2
@@ -439,7 +439,7 @@ def test_from_dandi_is_independent_of_local_submitted_marker_files() -> None:
     )
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(
                 content_id_to_asset={},
                 path_to_asset_metadata={
@@ -467,7 +467,7 @@ def test_from_dandi_is_independent_of_local_submitted_marker_files() -> None:
             ),
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -502,13 +502,13 @@ def test_from_dandi_output_paths_empty_when_no_output() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -545,13 +545,13 @@ def test_from_dandi_log_paths_empty_when_no_logs() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -599,13 +599,13 @@ def test_from_dandi_output_paths_maps_asset_paths_to_blob_ids() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
@@ -668,13 +668,13 @@ def test_from_dandi_log_paths_map_asset_paths_to_blob_ids() -> None:
         },
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
 
     state_entries = _entries(state)
     assert len(state_entries) == 1

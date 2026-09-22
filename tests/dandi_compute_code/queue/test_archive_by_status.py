@@ -6,7 +6,7 @@ import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
 from dandi_compute_code.dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 #: For each archivable status, two distinct example entries (by dandi_path)
 #: that qualify for that status in the committed example queue.
@@ -40,14 +40,14 @@ def test_archive_by_status_raises_without_dandi_api_key(status: str) -> None:
     """archive_by_status raises RuntimeError when DANDI_API_KEY is not set."""
     with mock.patch.dict(os.environ, {}, clear=True):
         with pytest.raises(RuntimeError, match="DANDI_API_KEY"):
-            QueueState(entries=[]).archive_by_status(status=status)
+            PipelineQueue(entries=[]).archive_by_status(status=status)
 
 
 @pytest.mark.ai_generated
 def test_archive_by_status_raises_on_unknown_status(dandi_api_key: None) -> None:
     """archive_by_status raises ValueError for a status other than 'failed'/'pending'/'stalled'."""
     with pytest.raises(ValueError, match="Unknown status"):
-        QueueState(entries=[]).archive_by_status(status="successful")
+        PipelineQueue(entries=[]).archive_by_status(status="successful")
 
 
 @pytest.mark.ai_generated
@@ -55,10 +55,10 @@ def test_archive_by_status_raises_on_unknown_status(dandi_api_key: None) -> None
 def test_archive_by_status_returns_empty_list_when_nothing_matches(status: str, dandi_api_key: None) -> None:
     """archive_by_status returns an empty list, without even fetching remote metadata, when nothing matches."""
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.move_job_capsule") as mock_move,
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata") as mock_load_metadata,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata") as mock_load_metadata,
     ):
-        archived = QueueState(entries=[]).archive_by_status(status=status)
+        archived = PipelineQueue(entries=[]).archive_by_status(status=status)
 
     assert archived == []
     mock_move.assert_not_called()
@@ -68,18 +68,18 @@ def test_archive_by_status_returns_empty_list_when_nothing_matches(status: str, 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
 def test_archive_by_status_moves_every_matching_entry(
-    status: str, example_queue_state: QueueState, dandi_api_key: None
+    status: str, example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """archive_by_status calls move_job_capsule once per matching entry, with its resolved capsule path."""
     selectors = _STATUS_EXAMPLE_SELECTORS[status]
-    entries = [example_queue_state.entry_for(**selector) for selector in selectors]
-    matching_state = QueueState(entries=entries)
+    entries = [example_pipeline_queue.entry_for(**selector) for selector in selectors]
+    matching_state = PipelineQueue(entries=entries)
     expected_paths = [entry.capsule_path() for entry in entries]
     metadata = _metadata_with_capsules_at(*expected_paths)
 
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.move_job_capsule") as mock_move,
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
     ):
         archived = matching_state.archive_by_status(status=status)
 
@@ -98,15 +98,15 @@ def test_archive_by_status_moves_every_matching_entry(
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
 def test_archive_by_status_ignores_non_matching_entries(
-    status: str, example_queue_state: QueueState, dandi_api_key: None
+    status: str, example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """archive_by_status does not move capsules that don't have the requested status."""
-    non_matching_state = QueueState(
-        entries=[entry for entry in example_queue_state if entry not in getattr(example_queue_state, status)]
+    non_matching_state = PipelineQueue(
+        entries=[entry for entry in example_pipeline_queue if entry not in getattr(example_pipeline_queue, status)]
     )
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.move_job_capsule") as mock_move,
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata") as mock_load_metadata,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata") as mock_load_metadata,
     ):
         archived = non_matching_state.archive_by_status(status=status)
 
@@ -118,18 +118,18 @@ def test_archive_by_status_ignores_non_matching_entries(
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
 def test_archive_by_status_forwards_processing_directory_and_test_flag(
-    status: str, example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    status: str, example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """archive_by_status forwards processing_directory and test through to move_job_capsule."""
     processing_dir = tmp_path / "processing"
-    single_entry = example_queue_state.entry_for(**_STATUS_EXAMPLE_SELECTORS[status][0])
-    single_matching_state = QueueState(entries=[single_entry])
+    single_entry = example_pipeline_queue.entry_for(**_STATUS_EXAMPLE_SELECTORS[status][0])
+    single_matching_state = PipelineQueue(entries=[single_entry])
     expected_path = single_entry.capsule_path()
     metadata = _metadata_with_capsules_at(expected_path)
 
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.move_job_capsule") as mock_move,
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
     ):
         single_matching_state.archive_by_status(status=status, processing_directory=processing_dir, test=True)
 
@@ -143,17 +143,17 @@ def test_archive_by_status_forwards_processing_directory_and_test_flag(
 
 
 @pytest.mark.ai_generated
-def test_archive_by_status_forwards_dandiset_ids(example_queue_state: QueueState, dandi_api_key: None) -> None:
+def test_archive_by_status_forwards_dandiset_ids(example_pipeline_queue: PipelineQueue, dandi_api_key: None) -> None:
     """archive_by_status forwards custom dandiset IDs to load_assets_jsonld_metadata and move_job_capsule."""
-    single_entry = example_queue_state.entry_for(**_STATUS_EXAMPLE_SELECTORS["failed"][0])
-    single_matching_state = QueueState(entries=[single_entry])
+    single_entry = example_pipeline_queue.entry_for(**_STATUS_EXAMPLE_SELECTORS["failed"][0])
+    single_matching_state = PipelineQueue(entries=[single_entry])
     expected_path = single_entry.capsule_path()
     metadata = _metadata_with_capsules_at(expected_path)
 
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=metadata
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata
         ) as mock_load_metadata,
     ):
         single_matching_state.archive_by_status(status="failed", dandiset_id="000123", archive_dandiset_id="000456")

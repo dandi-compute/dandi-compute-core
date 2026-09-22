@@ -4,9 +4,9 @@ import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
 from dandi_compute_code.dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
-# QueueState.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID) derives the archive
+# PipelineQueue.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID) derives the archive
 # counterpart of the queue state, from the failed runs archive Dandiset's assets.jsonld,
 # fetched over the network. That loader is the one external boundary mocked here.
 
@@ -33,7 +33,7 @@ def test_from_dandi_reads_from_archive_dandiset_when_requested() -> None:
     )
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             load_metadata,
         ),
         mock.patch(
@@ -51,7 +51,7 @@ def test_from_dandi_reads_from_archive_dandiset_when_requested() -> None:
             ),
         ),
     ):
-        state = QueueState.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
+        state = PipelineQueue.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
 
     # The archive metadata is read from the failed runs archive Dandiset, not the job capsules one.
     load_metadata.assert_called_once_with(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
@@ -67,9 +67,9 @@ def test_from_dandi_reads_from_archive_dandiset_when_requested() -> None:
 def test_from_dandi_returns_empty_when_no_capsules_in_archive() -> None:
     """from_dandi(dandiset_id=archive) returns an empty state when no job capsules are present."""
     with mock.patch(
-        "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+        "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
         return_value=AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata={}),
     ):
-        state = QueueState.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
+        state = PipelineQueue.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
 
     assert len(state) == 0

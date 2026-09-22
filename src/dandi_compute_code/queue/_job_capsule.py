@@ -2,7 +2,7 @@
 ``JobCapsule`` — one row of ``state.tsv``: a job's identity plus its status.
 
 Kept in its own module so the typed row model stays separable from
-:mod:`._queue_state`, which only containerises and round-trips these rows.
+:mod:`._pipeline_queue`, which only containerises and round-trips these rows.
 """
 
 from __future__ import annotations

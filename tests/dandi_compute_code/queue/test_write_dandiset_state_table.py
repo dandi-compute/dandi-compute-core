@@ -3,7 +3,7 @@ from unittest import mock
 import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 _JOB_CAPSULES_DANDISET_ID = "001697"
 _FAILED_RUNS_ARCHIVE_DANDISET_ID = "001873"
@@ -41,16 +41,16 @@ def test_write_dandiset_state_table_builds_state_and_uploads() -> None:
     )
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=metadata,
         ),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=upstream_metadata,
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file,
     ):
-        QueueState.write_dandiset_state_table(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
+        PipelineQueue.write_dandiset_state_table(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
 
     mock_write_file.assert_called_once()
     call_kwargs = mock_write_file.call_args.kwargs
@@ -65,12 +65,12 @@ def test_write_dandiset_state_table_empty_state_writes_header_only() -> None:
     """write_dandiset_state_table uploads a header-only table when there are no entries."""
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata={}),
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file,
     ):
-        QueueState.write_dandiset_state_table(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
+        PipelineQueue.write_dandiset_state_table(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
 
     call_kwargs = mock_write_file.call_args.kwargs
     assert call_kwargs["dandiset_id"] == _FAILED_RUNS_ARCHIVE_DANDISET_ID

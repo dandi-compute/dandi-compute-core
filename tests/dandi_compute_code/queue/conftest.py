@@ -1,8 +1,8 @@
 """
-Shared fixtures for the ``QueueState`` model test suite.
+Shared fixtures for the ``PipelineQueue`` model test suite.
 
 The network guard targets the binding used by the model
-(:mod:`dandi_compute_code.queue._queue_state`).
+(:mod:`dandi_compute_code.queue._pipeline_queue`).
 """
 
 import os
@@ -13,7 +13,7 @@ from unittest import mock
 import pytest
 
 from dandi_compute_code.dandiset import AssetsJsonldMetadata
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 #: The committed example queue used as ground truth across the model tests.
 EXAMPLE_STATE_FILE = pathlib.Path(__file__).parent / "example_state_files" / "state.tsv"
@@ -24,13 +24,13 @@ def mock_dandi_assets_metadata() -> Iterator[None]:
     """
     Default the DANDI ``assets.jsonld`` loaders to empty so no test hits the network.
 
-    ``QueueState.from_dandi`` / ``pending_code_dirs`` fetch assets metadata from the DANDI
-    archive via the ``_queue_state`` binding. This guard makes that return empty by default.
+    ``PipelineQueue.from_dandi`` / ``pending_code_dirs`` fetch assets metadata from the DANDI
+    archive via the ``_pipeline_queue`` binding. This guard makes that return empty by default.
     Tests that need specific metadata override these with their own ``mock.patch``.
     """
     empty_metadata = AssetsJsonldMetadata(content_id_to_asset={}, path_to_asset_metadata={})
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata", return_value=empty_metadata),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=empty_metadata),
         mock.patch(
             "dandi_compute_code.queue._capsule_resources.load_assets_jsonld_metadata",
             return_value=empty_metadata,
@@ -44,9 +44,9 @@ def mock_dandi_assets_metadata() -> Iterator[None]:
 
 
 @pytest.fixture
-def example_queue_state() -> QueueState:
+def example_pipeline_queue() -> PipelineQueue:
     """The committed example queue (``example_state_files/state.tsv``) loaded into a fresh model."""
-    return QueueState.from_tsv(EXAMPLE_STATE_FILE)
+    return PipelineQueue.from_tsv(EXAMPLE_STATE_FILE)
 
 
 @pytest.fixture

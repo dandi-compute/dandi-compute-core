@@ -5,7 +5,7 @@ import pathlib
 
 import pytest
 
-from dandi_compute_code.queue import JobCapsule, JobInfo, QueueState
+from dandi_compute_code.queue import JobCapsule, JobInfo, PipelineQueue
 
 
 def _make_entry(**overrides: object) -> JobCapsule:
@@ -73,9 +73,9 @@ def test_job_capsule_to_tsv_row_none_becomes_empty_cell() -> None:
 
 
 @pytest.mark.ai_generated
-def test_queue_state_to_tsv_string_is_tab_delimited_with_header() -> None:
-    """QueueState.to_tsv_string writes a tab-delimited table with a header row."""
-    state = QueueState(entries=[_make_entry(), _make_entry(dandi_path="sub-mouse02/sub-mouse02_ecephys.nwb")])
+def test_pipeline_queue_to_tsv_string_is_tab_delimited_with_header() -> None:
+    """PipelineQueue.to_tsv_string writes a tab-delimited table with a header row."""
+    state = PipelineQueue(entries=[_make_entry(), _make_entry(dandi_path="sub-mouse02/sub-mouse02_ecephys.nwb")])
     tsv_text = state.to_tsv_string()
 
     reader = csv.DictReader(io.StringIO(tsv_text), delimiter="\t")
@@ -91,9 +91,9 @@ def test_queue_state_to_tsv_string_is_tab_delimited_with_header() -> None:
 
 
 @pytest.mark.ai_generated
-def test_queue_state_to_tsv_string_empty_state_has_only_header() -> None:
-    """QueueState.to_tsv_string writes only the header row when there are no entries."""
-    state = QueueState(entries=[])
+def test_pipeline_queue_to_tsv_string_empty_state_has_only_header() -> None:
+    """PipelineQueue.to_tsv_string writes only the header row when there are no entries."""
+    state = PipelineQueue(entries=[])
     tsv_text = state.to_tsv_string()
     lines = tsv_text.splitlines()
     assert len(lines) == 1
@@ -101,9 +101,9 @@ def test_queue_state_to_tsv_string_empty_state_has_only_header() -> None:
 
 
 @pytest.mark.ai_generated
-def test_queue_state_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
-    """QueueState.to_tsv writes the TSV table to the given file path."""
-    state = QueueState(entries=[_make_entry()])
+def test_pipeline_queue_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.to_tsv writes the TSV table to the given file path."""
+    state = PipelineQueue(entries=[_make_entry()])
     output_file = tmp_path / "state.tsv"
     state.to_tsv(output_file)
     assert output_file.exists()
@@ -111,8 +111,8 @@ def test_queue_state_to_tsv_writes_file(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
-def test_queue_state_from_tsv_preserves_dataset_description_path(tmp_path: pathlib.Path) -> None:
-    """QueueState.from_tsv preserves dataset_description_path entries."""
+def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.from_tsv preserves dataset_description_path entries."""
     state_file = tmp_path / "state.tsv"
     dataset_description_path = {
         "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/"
@@ -120,22 +120,22 @@ def test_queue_state_from_tsv_preserves_dataset_description_path(tmp_path: pathl
         "dataset_description.json": "dataset-description-id"
     }
     entry = _make_entry(dataset_description_path=dataset_description_path)
-    QueueState(entries=[entry]).to_tsv(state_file)
+    PipelineQueue(entries=[entry]).to_tsv(state_file)
 
-    queue_state = QueueState.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
 
-    assert len(queue_state) == 1
-    assert queue_state.entries[0].dataset_description_path == dataset_description_path
+    assert len(pipeline_queue) == 1
+    assert pipeline_queue.entries[0].dataset_description_path == dataset_description_path
 
 
 @pytest.mark.ai_generated
-def test_queue_state_empty_dataset_description_path_cell(tmp_path: pathlib.Path) -> None:
-    """QueueState.from_tsv converts an empty dataset_description_path cell to an empty dict."""
+def test_pipeline_queue_empty_dataset_description_path_cell(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.from_tsv converts an empty dataset_description_path cell to an empty dict."""
     state_file = tmp_path / "state.tsv"
     entry = _make_entry(dataset_description_path={})
-    QueueState(entries=[entry]).to_tsv(state_file)
+    PipelineQueue(entries=[entry]).to_tsv(state_file)
 
-    queue_state = QueueState.from_tsv(state_file)
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
 
-    assert len(queue_state) == 1
-    assert queue_state.entries[0].dataset_description_path == {}
+    assert len(pipeline_queue) == 1
+    assert pipeline_queue.entries[0].dataset_description_path == {}

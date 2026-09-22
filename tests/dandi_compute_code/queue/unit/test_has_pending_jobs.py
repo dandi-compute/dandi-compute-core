@@ -3,7 +3,7 @@ from unittest import mock
 import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 
 def _build_metadata(paths: list[str]) -> AssetsJsonldMetadata:
@@ -66,9 +66,9 @@ def test_has_pending_jobs(paths: list[str], expected: bool) -> None:
     """has_pending_jobs reflects whether any submit.sh lacks a submitted marker."""
     metadata = _build_metadata(paths)
     with mock.patch(
-        "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+        "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
         return_value=metadata,
     ):
-        result = QueueState.has_pending_jobs()
+        result = PipelineQueue.has_pending_jobs()
 
     assert result is expected

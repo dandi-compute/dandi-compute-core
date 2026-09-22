@@ -4,7 +4,7 @@ import re
 import pytest
 
 import dandi_compute_code
-from dandi_compute_code.queue import DispatchConfig, QueueState
+from dandi_compute_code.queue import DispatchConfig, PipelineQueue
 
 _PIPELINE_CONFIG = {
     "pipelines": {
@@ -123,7 +123,7 @@ def test_non_positive_counts_are_rejected(field_name: str, expected_message: str
 def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipeline: str) -> None:
     """Every pipeline shipped in this repo carries its own dispatcher limits."""
     dispatch_config = DispatchConfig.from_pipeline_config(
-        pipeline=pipeline, pipeline_config=QueueState.load_pipeline_config()
+        pipeline=pipeline, pipeline_config=PipelineQueue.load_pipeline_config()
     )
 
     assert dispatch_config.max_concurrent >= 1
@@ -132,7 +132,7 @@ def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipe
 @pytest.mark.ai_generated
 def test_packaged_configuration_declares_no_resource_settings() -> None:
     """Resources come from each pipeline's submission template, so the config must not carry them."""
-    pipelines = QueueState.load_pipeline_config()["pipelines"]
+    pipelines = PipelineQueue.load_pipeline_config()["pipelines"]
 
     for pipeline_data in pipelines.values():
         assert set(pipeline_data.get("dispatch", {})) <= {"max_concurrent", "max_array_tasks"}
@@ -156,7 +156,7 @@ def test_resources_are_read_back_from_the_pipelines_submission_template(pipeline
     directives = dict(re.findall(r"^#SBATCH\s+--([A-Za-z-]+)(?:=|\s+)(\S+)\s*$", template, flags=re.MULTILINE))
 
     dispatch_config = DispatchConfig.from_pipeline_config(
-        pipeline=pipeline, pipeline_config=QueueState.load_pipeline_config()
+        pipeline=pipeline, pipeline_config=PipelineQueue.load_pipeline_config()
     )
 
     assert dispatch_config.memory == directives["mem"]

@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 # These exercise process_queue through the real array dispatcher, with only the two cluster
 # calls mocked: `squeue` (is a pipeline's dispatcher still working through its array?) and
@@ -38,12 +38,12 @@ def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: p
     """Each pipeline's pending capsules go out as that pipeline's own single array job."""
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
             return_value=[*_AIND_CODE_DIR_PATHS, *_LFP_CODE_DIR_PATHS],
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
     assert results["aind+ephys"].status == "dispatched"
     assert results["aind+ephys"].task_count == 2
@@ -58,7 +58,7 @@ def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
     """A pipeline whose dispatcher is still active is skipped, while the others still dispatch."""
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
             return_value=[*_AIND_CODE_DIR_PATHS, *_LFP_CODE_DIR_PATHS],
         ),
         mock.patch(
@@ -66,7 +66,7 @@ def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
             side_effect=_cluster_calls(active_dispatcher_job_names={"dandicompute-dispatch-aind-ephys"}),
         ),
     ):
-        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
     assert results["aind+ephys"].status == "dispatcher-active"
     assert results["lfp"].status == "dispatched"
@@ -79,12 +79,12 @@ def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
     """A pipeline with nothing waiting gets no array of its own."""
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
             return_value=_LFP_CODE_DIR_PATHS,
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
     assert results["aind+ephys"].status == "no-pending"
     assert results["lfp"].status == "dispatched"
@@ -95,16 +95,16 @@ def test_process_queue_throttles_each_array_to_the_configured_limit(
     processing_directory: pathlib.Path,
 ) -> None:
     """The configured per-pipeline limit reaches SLURM as the array's concurrency throttle."""
-    configured_limit = QueueState.load_pipeline_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
+    configured_limit = PipelineQueue.load_pipeline_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
 
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
             return_value=_AIND_CODE_DIR_PATHS,
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
     script = (results["aind+ephys"].dispatch_directory / "dispatch-1.sh").read_text()
     assert f"#SBATCH --array=1-2%{configured_limit}" in script
