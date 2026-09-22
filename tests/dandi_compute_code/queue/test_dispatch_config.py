@@ -113,9 +113,7 @@ def test_non_positive_counts_are_rejected(field_name: str, expected_message: str
 @pytest.mark.parametrize("pipeline", ["aind+ephys", "lfp"])
 def test_packaged_configuration_declares_dispatch_settings_for_every_pipeline(pipeline: str) -> None:
     """Every pipeline shipped in this repo carries its own dispatcher settings."""
-    dispatch_config = DispatchConfig.from_queue_config(
-        pipeline=pipeline, queue_config=QueueState.load_queue_config()
-    )
+    dispatch_config = DispatchConfig.from_queue_config(pipeline=pipeline, queue_config=QueueState.load_queue_config())
 
     assert dispatch_config.max_concurrent >= 1
     assert dispatch_config.partition != ""
