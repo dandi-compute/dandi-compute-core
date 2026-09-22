@@ -1,0 +1,65 @@
+#!/bin/bash
+#SBATCH --job-name={{ job_name }}
+#SBATCH --output={{ dispatch_directory }}/dispatch-%A_%a.log
+#SBATCH --mem={{ memory }}
+#SBATCH --cpus-per-task={{ cpus_per_task }}
+#SBATCH --partition={{ partition }}
+#SBATCH --time={{ time_limit }}
+#SBATCH --array={{ array_specification }}
+
+set -euo pipefail
+
+DANDISET_ID="{{ dandiset_id }}"
+MANIFEST_FILE_PATH="{{ manifest_file_path }}"
+TASK_DIRECTORY="{{ dispatch_directory }}/task-${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_TASK_ID}"
+
+CODE_DIR_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$MANIFEST_FILE_PATH")
+if [ -z "$CODE_DIR_PATH" ]; then
+    echo "No manifest entry for array task ${SLURM_ARRAY_TASK_ID}."
+    exit 0
+fi
+
+mkdir -p "$TASK_DIRECTORY"
+cd "$TASK_DIRECTORY"
+dandi download --preserve-tree "dandi://dandi/${DANDISET_ID}/${CODE_DIR_PATH}/"
+
+CAPSULE_CODE_DIRECTORY="${TASK_DIRECTORY}/${DANDISET_ID}/${CODE_DIR_PATH}"
+
+# The capsule is claimed before it runs so that a dispatch overlapping this array sees it as
+# submitted and does not place it in a second one.
+if compgen -G "${CAPSULE_CODE_DIRECTORY}/submitted*" > /dev/null; then
+    echo "Capsule ${CODE_DIR_PATH} is already claimed; leaving it to the run that claimed it."
+    exit 0
+fi
+
+MARKER_FILE_PATH="${CAPSULE_CODE_DIRECTORY}/submitted_date-$(date '+%Y+%m+%d_time-%H+%M+%S')"
+echo 1 > "$MARKER_FILE_PATH"
+echo "Claimed ${CODE_DIR_PATH} with marker $(basename "$MARKER_FILE_PATH")."
+(cd "${TASK_DIRECTORY}/${DANDISET_ID}" && dandi upload --allow-any-path)
+
+# The capsule runs inside this array task rather than as a job of its own, so this task
+# finishing is the work finishing and the array's throttle limits concurrent pipeline runs
+# directly. The requests above are read from this pipeline's submission template, so the
+# allocation matches what the capsule's own (here inert) `#SBATCH` header asks for.
+#
+# Its `--output` still has to be reproduced by hand: that path points into the capsule's own
+# logs directory, which is where the capsule uploads its SLURM log from and where
+# `dandicompute issues dump` reads it back.
+CAPSULE_LOG_FILE_PATH=$(sed -n 's/^#SBATCH[[:space:]]\+--output=//p' "${CAPSULE_CODE_DIRECTORY}/submit.sh" | head -n 1)
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%A/${SLURM_ARRAY_JOB_ID}}"
+CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%a/${SLURM_ARRAY_TASK_ID}}"
+
+if [ -n "$CAPSULE_LOG_FILE_PATH" ]; then
+    mkdir -p "$(dirname "$CAPSULE_LOG_FILE_PATH")"
+    echo "Writing the capsule's SLURM log to ${CAPSULE_LOG_FILE_PATH}."
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"
+else
+    echo "Capsule ${CODE_DIR_PATH} declares no SLURM output path; its log stays with this array task."
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"
+fi
+{% if keep_task_directory %}
+echo "Leaving task directory in place: ${TASK_DIRECTORY}"
+{% else %}
+rm -rf "$TASK_DIRECTORY"
+{% endif %}

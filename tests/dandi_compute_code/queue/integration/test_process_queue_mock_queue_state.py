@@ -5,115 +5,106 @@ import pytest
 
 from dandi_compute_code.queue import QueueState
 
+# These exercise process_queue through the real array dispatcher, with only the two cluster
+# calls mocked: `squeue` (is a pipeline's dispatcher still working through its array?) and
+# `sbatch` (submit the array). The pending capsules stand in for a metadata read.
 
-@pytest.mark.ai_generated
-def test_process_queue_skips_refresh_when_jobs_running(processing_directory: pathlib.Path) -> None:
-    """process_queue runs without warning when jobs are pending."""
-    with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
-        mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=2
-        ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next") as mock_submit,
-    ):
-        QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
-
-    mock_submit.assert_not_called()
+_AIND_CODE_DIR_PATHS = [
+    "derivatives/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-240101abc123/code",
+    "derivatives/dandiset-000409/sub-mouse02/pipeline-aind+ephys/job-240101abc124/code",
+]
+_LFP_CODE_DIR_PATHS = ["derivatives/dandiset-000409/sub-mouse01/pipeline-lfp/job-240101abc125/code"]
 
 
-@pytest.mark.ai_generated
-def test_process_queue_submits_when_no_jobs_running(processing_directory: pathlib.Path) -> None:
-    """process_queue requests two submissions when no AIND jobs are running."""
-    with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
-        mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=0
-        ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next", return_value=True) as mock_submit,
-    ):
-        QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+def _cluster_calls(*, active_dispatcher_job_names: set[str] = frozenset()):
+    """A subprocess.run replacement reporting the named dispatchers as still active."""
 
-    mock_submit.assert_called_once_with(processing_directory=processing_directory, max_submissions=2, test=False)
+    def run(command: list[str], **_: object) -> mock.MagicMock:
+        result = mock.MagicMock()
+        result.returncode = 0
+        result.stderr = ""
+        if command[0] == "squeue":
+            job_name = command[command.index("--name") + 1]
+            result.stdout = "9001\n" if job_name in active_dispatcher_job_names else ""
+        else:
+            result.stdout = "Submitted batch job 4242\n"
+        return result
+
+    return run
 
 
 @pytest.mark.ai_generated
-def test_process_queue_respects_explicit_max_concurrent_jobs(processing_directory: pathlib.Path) -> None:
-    """process_queue uses the explicit AIND concurrency limit to compute submissions."""
+def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: pathlib.Path) -> None:
+    """Each pipeline's pending capsules go out as that pipeline's own single array job."""
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=1
+            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            return_value=[*_AIND_CODE_DIR_PATHS, *_LFP_CODE_DIR_PATHS],
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next", return_value=True) as mock_submit,
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        QueueState.process_queue(
-            processing_directory=processing_directory,
-            max_concurrent_aind_jobs=3,
-            jitter_seconds=0,
-        )
+        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
-    mock_submit.assert_called_once_with(processing_directory=processing_directory, max_submissions=2, test=False)
+    assert results["aind+ephys"].status == "dispatched"
+    assert results["aind+ephys"].task_count == 2
+    assert results["lfp"].status == "dispatched"
+    assert results["lfp"].task_count == 1
 
 
 @pytest.mark.ai_generated
-def test_process_queue_does_not_submit_when_jobs_running(processing_directory: pathlib.Path) -> None:
-    """process_queue does not submit when two AIND-Ephys-Pipeline jobs already run."""
+def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
+    processing_directory: pathlib.Path,
+) -> None:
+    """A pipeline whose dispatcher is still active is skipped, while the others still dispatch."""
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=2
+            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            return_value=[*_AIND_CODE_DIR_PATHS, *_LFP_CODE_DIR_PATHS],
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next") as mock_submit,
+        mock.patch(
+            "dandi_compute_code.queue._dispatch.subprocess.run",
+            side_effect=_cluster_calls(active_dispatcher_job_names={"dandicompute-dispatch-aind-ephys"}),
+        ),
     ):
-        QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
-    mock_submit.assert_not_called()
+    assert results["aind+ephys"].status == "dispatcher-active"
+    assert results["lfp"].status == "dispatched"
 
 
 @pytest.mark.ai_generated
-def test_process_queue_submits_one_when_one_job_running(processing_directory: pathlib.Path) -> None:
-    """process_queue requests one submission when exactly one AIND-Ephys-Pipeline job is running."""
+def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
+    processing_directory: pathlib.Path,
+) -> None:
+    """A pipeline with nothing waiting gets no array of its own."""
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=1
+            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            return_value=_LFP_CODE_DIR_PATHS,
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next", return_value=True) as mock_submit,
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
-    mock_submit.assert_called_once_with(processing_directory=processing_directory, max_submissions=1, test=False)
+    assert results["aind+ephys"].status == "no-pending"
+    assert results["lfp"].status == "dispatched"
 
 
 @pytest.mark.ai_generated
-def test_process_queue_passes_processing_directory_to_submit_next(processing_directory: pathlib.Path) -> None:
-    """process_queue forwards processing_directory to _submit_next when idle."""
+def test_process_queue_throttles_each_array_to_the_configured_limit(
+    processing_directory: pathlib.Path,
+) -> None:
+    """The configured per-pipeline limit reaches SLURM as the array's concurrency throttle."""
+    configured_limit = QueueState.load_queue_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
+
     with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
         mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=0
+            "dandi_compute_code.queue._queue_state.QueueState.pending_code_dirs",
+            return_value=_AIND_CODE_DIR_PATHS,
         ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next", return_value=True) as mock_submit,
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = QueueState.process_queue(processing_directory=processing_directory, jitter_seconds=0)
 
-    mock_submit.assert_called_once_with(processing_directory=processing_directory, max_submissions=2, test=False)
-
-
-@pytest.mark.ai_generated
-def test_process_queue_forwards_test_flag(processing_directory: pathlib.Path) -> None:
-    """process_queue forwards test=True to _submit_next."""
-    with (
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.has_pending_jobs", return_value=True),
-        mock.patch(
-            "dandi_compute_code.queue._queue_state.QueueState.count_running_aind_ephys_pipeline_jobs", return_value=0
-        ),
-        mock.patch("dandi_compute_code.queue._queue_state.QueueState.submit_next", return_value=True) as mock_submit,
-    ):
-        QueueState.process_queue(
-            processing_directory=processing_directory,
-            test=True,
-            jitter_seconds=0,
-        )
-
-    mock_submit.assert_called_once_with(processing_directory=processing_directory, max_submissions=2, test=True)
+    script = (results["aind+ephys"].dispatch_directory / "dispatch-1.sh").read_text()
+    assert f"#SBATCH --array=1-2%{configured_limit}" in script
