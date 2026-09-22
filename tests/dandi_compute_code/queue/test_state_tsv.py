@@ -283,8 +283,8 @@ def test_example_queue_reads_paths_from_sibling_table(example_pipeline_queue: Pi
     entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
     capsule_path = entry.capsule_path()
 
-    assert entry.output_paths == {f"{capsule_path}/derivatives/output.nwb": "output-aa0002"}
-    assert entry.log_paths == {f"{capsule_path}/logs/stdout.txt": "log-aa0002"}
+    assert entry.output_paths == {f"{capsule_path}/derivatives/output.nwb": "95557b8d-acb3-59bb-bf23-d9fc29ff0eed"}
+    assert entry.log_paths == {f"{capsule_path}/logs/stdout.txt": "a366e135-9bbf-53c4-88ae-a4f7d938e313"}
     assert all(capsule.dataset_description_path != {} for capsule in example_pipeline_queue)
 
 
