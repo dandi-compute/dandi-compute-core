@@ -4,6 +4,7 @@ import pathlib
 
 from ._job_id import _JOB_ID_RE, _PROVENANCE_KEY
 from ._parse_content_id_from_submission_script import _parse_content_id_from_submission_script
+from ..queue._job_capsule import _derive_job_status
 
 
 def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
@@ -20,7 +21,7 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
 
     :param capsule_dir: The job capsule directory.
     :type capsule_dir: pathlib.Path
-    :returns: A flat dict with all entities and state flags, or ``None`` if the path
+    :returns: A flat dict with all entities and the lifecycle status, or ``None`` if the path
         does not match the expected structure.
     :rtype: dict or None
     """
@@ -46,10 +47,18 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
 
     provenance = _read_capsule_provenance(capsule_dir)
 
-    has_code = (capsule_dir / "code").is_dir()
+    code_dir = capsule_dir / "code"
+    has_code = code_dir.is_dir()
+    has_been_submitted = has_code and ((code_dir / "submitted").exists() or any(code_dir.glob("submitted_date-*")))
     has_output = (capsule_dir / "derivatives").is_dir()
     logs_dir = capsule_dir / "logs"
     has_logs = logs_dir.is_dir() and any(f for f in logs_dir.iterdir() if f.name != "dataset_description.json")
+    status = _derive_job_status(
+        has_code=has_code,
+        has_been_submitted=has_been_submitted,
+        has_logs=has_logs,
+        has_output=has_output,
+    )
     created_at = datetime.datetime.fromtimestamp(capsule_dir.stat().st_ctime, tz=datetime.timezone.utc).isoformat()
     content_id = _parse_content_id_from_submission_script(capsule_dir)
 
@@ -63,9 +72,7 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
         "codebase": provenance.get("codebase", ""),
         "params": provenance.get("params", ""),
         "config": provenance.get("config", ""),
-        "has_code": has_code,
-        "has_output": has_output,
-        "has_logs": has_logs,
+        "status": status,
         "created_at": created_at,
     }
     return record

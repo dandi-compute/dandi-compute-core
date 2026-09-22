@@ -66,10 +66,7 @@ def test_from_dandi_returns_all_ordered_pending_entries() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 5
-    assert all(
-        entry["has_code"] and not entry["has_been_submitted"] and not entry["has_output"] and not entry["has_logs"]
-        for entry in state_entries
-    )
+    assert all(entry["status"] == "pending" for entry in state_entries)
 
 
 @pytest.mark.ai_generated
@@ -115,8 +112,8 @@ def test_from_dandi_includes_entries_with_submitted_markers() -> None:
 
 
 @pytest.mark.ai_generated
-def test_from_dandi_submitted_marker_sets_has_been_submitted() -> None:
-    """from_dandi sets has_been_submitted when code/submitted_date-* exists."""
+def test_from_dandi_submitted_marker_sets_stalled_status() -> None:
+    """from_dandi records a stalled status when code/submitted_date-* exists with no logs or output."""
     source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
     capsule_prefix = "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/job-240101def567"
     metadata = AssetsJsonldMetadata(
@@ -157,10 +154,7 @@ def test_from_dandi_submitted_marker_sets_has_been_submitted() -> None:
         state = PipelineQueue.from_dandi()
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["has_code"] is True
-    assert state_entries[0]["has_been_submitted"] is True
-    assert state_entries[0]["has_output"] is False
-    assert state_entries[0]["has_logs"] is False
+    assert state_entries[0]["status"] == "stalled"
 
 
 @pytest.mark.ai_generated
@@ -300,10 +294,7 @@ def test_from_dandi_parses_capsule_location_and_presence_flags_from_assets_paths
     assert state_entries[0]["job_id"] == "job-2401010d4bf3"
     assert state_entries[0]["content_id"] == "source-content-id"
     assert state_entries[0]["asset_size_bytes"] == 1234
-    assert state_entries[0]["has_code"] is True
-    assert state_entries[0]["has_been_submitted"] is False
-    assert state_entries[0]["has_output"] is True
-    assert state_entries[0]["has_logs"] is True
+    assert state_entries[0]["status"] == "successful"
     assert state_entries[0]["job_completion_time"] == "2026-05-24T10:30:00+00:00"
     assert state_entries[0]["output_paths"] == {f"{capsule_prefix}/derivatives/output.nwb": "output-content-id"}
     assert state_entries[0]["log_paths"] == {f"{capsule_prefix}/logs/stdout.txt": "log-content-id"}
@@ -528,7 +519,7 @@ def test_from_dandi_is_independent_of_local_submitted_marker_files() -> None:
 
 @pytest.mark.ai_generated
 def test_from_dandi_output_paths_empty_when_no_output() -> None:
-    """from_dandi returns output_paths as an empty dict when has_output is False."""
+    """from_dandi returns output_paths as an empty dict when there is no output."""
     source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
     capsule_prefix = "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/job-240101def567"
     metadata = AssetsJsonldMetadata(
@@ -564,14 +555,14 @@ def test_from_dandi_output_paths_empty_when_no_output() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["has_output"] is False
+    assert state_entries[0]["status"] == "pending"
     assert state_entries[0]["dataset_description_path"] == {}
     assert state_entries[0]["output_paths"] == {}
 
 
 @pytest.mark.ai_generated
 def test_from_dandi_log_paths_empty_when_no_logs() -> None:
-    """from_dandi returns log_paths as an empty dict when has_logs is False."""
+    """from_dandi returns log_paths as an empty dict when there are no logs."""
     source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
     capsule_prefix = "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/job-240101def567"
     metadata = AssetsJsonldMetadata(
@@ -607,7 +598,7 @@ def test_from_dandi_log_paths_empty_when_no_logs() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["has_logs"] is False
+    assert state_entries[0]["status"] == "pending"
     assert state_entries[0]["log_paths"] == {}
 
 
@@ -661,7 +652,7 @@ def test_from_dandi_output_paths_maps_asset_paths_to_blob_ids() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["has_output"] is True
+    assert state_entries[0]["status"] == "successful"
     assert state_entries[0]["output_paths"] == {
         f"{capsule_prefix}/derivatives/output.nwb": "output-blob-id-1",
         f"{capsule_prefix}/derivatives/extra.json": "output-blob-id-2",
@@ -730,7 +721,7 @@ def test_from_dandi_log_paths_map_asset_paths_to_blob_ids() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["has_logs"] is True
+    assert state_entries[0]["status"] == "failed"
     assert state_entries[0]["dataset_description_path"] == {
         f"{capsule_prefix}/dataset_description.json": "dataset-description-id"
     }
@@ -738,3 +729,44 @@ def test_from_dandi_log_paths_map_asset_paths_to_blob_ids() -> None:
         f"{capsule_prefix}/logs/stdout.txt": "log-blob-id-1",
         f"{capsule_prefix}/logs/stderr.txt": "log-blob-id-2",
     }
+
+
+@pytest.mark.ai_generated
+def test_from_dandi_capsule_without_any_content_is_unknown() -> None:
+    """A capsule holding only its dataset description has reached no point in the lifecycle."""
+    source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
+    capsule_prefix = "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/job-240101def567"
+    metadata = AssetsJsonldMetadata(
+        content_id_to_asset={},
+        path_to_asset_metadata={
+            f"{capsule_prefix}/dataset_description.json": AssetMetadata(
+                path=f"{capsule_prefix}/dataset_description.json",
+                date_modified="2024-01-01T00:00:00+00:00",
+                content_size=1,
+                content_id="dataset-description-id",
+            ),
+        },
+    )
+    upstream_metadata = AssetsJsonldMetadata(
+        content_id_to_asset={},
+        path_to_asset_metadata={
+            source_path: AssetMetadata(
+                path=source_path,
+                date_modified="2024-01-01T00:00:00+00:00",
+                content_size=1234,
+                content_id="source-id",
+            )
+        },
+    )
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
+        mock.patch(
+            "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
+            return_value=upstream_metadata,
+        ),
+    ):
+        state = PipelineQueue.from_dandi()
+
+    state_entries = _entries(state)
+    assert len(state_entries) == 1
+    assert state_entries[0]["status"] == "unknown"

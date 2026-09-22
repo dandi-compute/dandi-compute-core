@@ -102,7 +102,7 @@ def test_from_dandi_reads_identity_from_capsule_provenance() -> None:
     assert entry.job.config == "def5678"
     assert entry.content_id == "source-asset"
     assert entry.asset_size_bytes == 512
-    assert entry.is_pending is True
+    assert entry.status == "pending"
 
 
 @pytest.mark.ai_generated

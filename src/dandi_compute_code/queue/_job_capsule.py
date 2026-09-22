@@ -12,9 +12,18 @@ import json
 import pathlib
 from collections.abc import Collection
 from dataclasses import dataclass, field
+from typing import Literal
 
 from ._job_info import JobInfo
 from ..dandiset._globals import _dandiset_derivatives_relative_dir
+
+#: Where a job capsule has reached in its lifecycle. The one status field replaces the
+#: presence flags (``has_code``, ``has_been_submitted``, ``has_logs``, ``has_output``)
+#: the table used to carry, and names the same subsets the queue selects on.
+JobStatus = Literal["pending", "stalled", "failed", "successful", "unknown"]
+
+#: Every value :data:`JobStatus` allows, for validating a status read back from a table.
+JOB_STATUSES: tuple[JobStatus, ...] = ("pending", "stalled", "failed", "successful", "unknown")
 
 #: Column order for the ``state.tsv`` table -- matches :meth:`JobCapsule.to_dict` field order.
 _STATE_TSV_FIELD_NAMES = [
@@ -28,10 +37,7 @@ _STATE_TSV_FIELD_NAMES = [
     "codebase",
     "content_id",
     "asset_size_bytes",
-    "has_code",
-    "has_been_submitted",
-    "has_output",
-    "has_logs",
+    "status",
     "dataset_description_path",
     "output_paths",
     "log_paths",
@@ -41,6 +47,41 @@ _STATE_TSV_FIELD_NAMES = [
     "queue_wait_seconds",
     "run_duration_seconds",
 ]
+
+
+def _coerce_status(value: object, /) -> JobStatus:
+    """Accept a status read back from a table or dict, falling back to ``"unknown"``."""
+    for status in JOB_STATUSES:
+        if value == status:
+            return status
+    return "unknown"
+
+
+def _derive_job_status(*, has_code: bool, has_been_submitted: bool, has_logs: bool, has_output: bool) -> JobStatus:
+    """
+    Collapse the observed presence of a capsule's directories into a single status.
+
+    The checks are ordered from the furthest point in the lifecycle backwards, so every
+    capsule lands on exactly one status.
+
+    ``"failed"`` covers what used to be reported as both running and failed. Logs without
+    output can mean either, and nothing recorded about a capsule tells the two apart, so
+    they are one status rather than two overlapping ones.
+
+    :param has_code: A ``code`` directory is present.
+    :param has_been_submitted: A ``code/submitted*`` marker is present.
+    :param has_logs: A ``logs`` directory holds something other than its dataset description.
+    :param has_output: A ``derivatives`` directory is present.
+    """
+    if has_output:
+        return "successful"
+    if has_logs:
+        return "failed"
+    if has_been_submitted:
+        return "stalled"
+    if has_code:
+        return "pending"
+    return "unknown"
 
 
 def _parse_timestamp(value: str | None, /) -> datetime.datetime | None:
@@ -68,48 +109,20 @@ def _elapsed_seconds(*, start: str | None, end: str | None) -> int | None:
 @dataclass
 class JobCapsule:
     """
-    A :class:`JobInfo` (identity) plus the status fields written by
-    ``write_queue_state`` and consumed across the queue module.
+    A :class:`JobInfo` (identity) plus the lifecycle status (see :data:`JobStatus`) and
+    the timestamps and asset mappings consumed across the queue module.
     """
 
     job: JobInfo
     content_id: str | None
     asset_size_bytes: int | None
-    has_code: bool = False
-    has_been_submitted: bool = False
-    has_output: bool = False
-    has_logs: bool = False
+    status: JobStatus = "unknown"
     created_at: str | None = None
     job_submission_time: str | None = None
     job_completion_time: str | None = None
     dataset_description_path: dict[str, str] = field(default_factory=dict)
     output_paths: dict[str, str] = field(default_factory=dict)
     log_paths: dict[str, str] = field(default_factory=dict)
-
-    @property
-    def is_pending(self) -> bool:
-        """Code prepared but never submitted (no logs, no output yet)."""
-        return self.has_code and not self.has_been_submitted and not self.has_logs and not self.has_output
-
-    @property
-    def is_stalled(self) -> bool:
-        """Submitted to the scheduler but no logs or output have appeared yet — likely stuck or lost."""
-        return self.has_been_submitted and not self.has_logs and not self.has_output
-
-    @property
-    def is_running(self) -> bool:
-        """Logs present but no output yet — likely still executing."""
-        return self.has_logs and not self.has_output
-
-    @property
-    def is_successful(self) -> bool:
-        """Output directory present — job completed successfully."""
-        return self.has_output
-
-    @property
-    def is_failed(self) -> bool:
-        """Has code and logs but no output — the job ran but did not succeed."""
-        return self.has_code and self.has_logs and not self.has_output
 
     @property
     def queue_wait_seconds(self) -> int | None:
@@ -263,11 +276,11 @@ class JobCapsule:
         """
         Resolve the job capsule directory only if this entry is queued but unsubmitted.
 
-        Returns ``None`` when the entry is not pending (see :attr:`is_pending`) or
+        Returns ``None`` when the entry's status is not ``"pending"``, or
         when a submitted marker (``code/submitted`` or ``code/submitted_date-*``)
         is present on disk.
         """
-        if not self.is_pending:
+        if self.status != "pending":
             return None
 
         capsule_dir = self.resolve_capsule_dir(base_dir)
@@ -293,10 +306,7 @@ class JobCapsule:
             job=job,
             content_id=data.get("content_id"),
             asset_size_bytes=data.get("asset_size_bytes"),
-            has_code=bool(data.get("has_code", False)),
-            has_been_submitted=bool(data.get("has_been_submitted", False)),
-            has_output=bool(data.get("has_output", False)),
-            has_logs=bool(data.get("has_logs", False)),
+            status=_coerce_status(data.get("status")),
             created_at=data.get("created_at"),
             job_submission_time=data.get("job_submission_time"),
             job_completion_time=data.get("job_completion_time"),
@@ -316,10 +326,7 @@ class JobCapsule:
             **self.job.to_dict(),
             "content_id": self.content_id,
             "asset_size_bytes": self.asset_size_bytes,
-            "has_code": self.has_code,
-            "has_been_submitted": self.has_been_submitted,
-            "has_output": self.has_output,
-            "has_logs": self.has_logs,
+            "status": self.status,
             "dataset_description_path": self.dataset_description_path,
             "output_paths": self.output_paths,
             "log_paths": self.log_paths,
@@ -357,13 +364,13 @@ class JobCapsule:
         Construct from a single ``state.tsv`` row (the inverse of :meth:`to_tsv_row`).
 
         Reverses the coercions applied by :meth:`to_tsv_row`: empty cells become
-        ``None`` (or ``{}`` for the JSON-encoded mapping fields), ``asset_size_bytes``
-        is parsed back to ``int``, and the boolean fields (stored as the literal
-        strings ``"True"``/``"False"``) are parsed back to ``bool``.
+        ``None`` (or ``{}`` for the JSON-encoded mapping fields) and ``asset_size_bytes``
+        is parsed back to ``int``.
 
         The derived duration columns are not read back -- they are recomputed from the
         timestamps. ``job_submission_time`` is read leniently so that tables written
-        before that column existed still parse.
+        before that column existed still parse, and a ``status`` cell that is empty or
+        holds an unrecognised value falls back to ``"unknown"``.
         """
         job = JobInfo(
             job_id=row["job_id"],
@@ -375,9 +382,6 @@ class JobCapsule:
             config=row["config"],
             codebase=row["codebase"],
         )
-
-        def _parse_bool(value: str) -> bool:
-            return value == "True"
 
         def _parse_optional_str(value: str) -> str | None:
             return value if value != "" else None
@@ -393,10 +397,7 @@ class JobCapsule:
             job=job,
             content_id=content_id,
             asset_size_bytes=asset_size_bytes,
-            has_code=_parse_bool(row["has_code"]),
-            has_been_submitted=_parse_bool(row["has_been_submitted"]),
-            has_output=_parse_bool(row["has_output"]),
-            has_logs=_parse_bool(row["has_logs"]),
+            status=_coerce_status(row.get("status")),
             created_at=_parse_optional_str(row["created_at"]),
             job_submission_time=_parse_optional_str(row.get("job_submission_time", "")),
             job_completion_time=_parse_optional_str(row["job_completion_time"]),
