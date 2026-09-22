@@ -1,0 +1,95 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/dandi-compute/code/main/src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json",
+    "title": "DANDI Compute LFP Extraction Parameters",
+    "description": "One complete set of LFP extraction parameters, as stored in a file under the pipeline's `params/` directory. Every field is required, so a parameters file always states the whole configuration rather than leaning on defaults applied somewhere else.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "filter_family",
+        "filter_band",
+        "filter_order",
+        "filter_direction",
+        "reference_scheme",
+        "resample_target_fs",
+        "spatial_factor",
+        "bad_channel_method"
+    ],
+    "properties": {
+        "filter_family": {
+            "description": "Filter design family, forwarded to SpikeInterface `bandpass_filter` as `ftype`.",
+            "enum": [
+                "butter",
+                "bessel",
+                "fir"
+            ]
+        },
+        "filter_band": {
+            "description": "The (freq_min, freq_max) bandpass edges in Hz, forwarded to SpikeInterface `bandpass_filter`. Corresponds to the AIND `lfp.filter.{freq_min, freq_max}` fields, but restricted here to a fixed set of bands, each written low edge first.",
+            "enum": [
+                [
+                    0.1,
+                    300
+                ],
+                [
+                    0.5,
+                    250
+                ],
+                [
+                    0.5,
+                    500
+                ],
+                [
+                    1,
+                    400
+                ]
+            ]
+        },
+        "filter_order": {
+            "description": "Filter order, forwarded to SpikeInterface `bandpass_filter` as `filter_order`. Corresponds to the AIND highpass filter order, restricted here to a fixed set.",
+            "enum": [
+                2,
+                4,
+                8
+            ]
+        },
+        "filter_direction": {
+            "description": "Whether the bandpass filter runs as a single causal pass or a zero-phase forward-backward pass.",
+            "enum": [
+                "causal",
+                "zero-phase"
+            ]
+        },
+        "reference_scheme": {
+            "description": "The re-referencing applied before resampling.",
+            "enum": [
+                "none",
+                "CMR",
+                "per-shank median"
+            ]
+        },
+        "resample_target_fs": {
+            "description": "Target LFP sampling frequency in Hz, forwarded to SpikeInterface `resample`. Corresponds to the AIND `lfp.sampling_rate` field, restricted here to a fixed set.",
+            "enum": [
+                1000,
+                1250,
+                2500
+            ]
+        },
+        "spatial_factor": {
+            "description": "Spatial decimation factor. 1 keeps every channel, 4 keeps every fourth channel ordered by depth. Corresponds to the AIND `lfp_spatial_factor` field.",
+            "enum": [
+                1,
+                4
+            ]
+        },
+        "bad_channel_method": {
+            "description": "The bad channel detection method applied before filtering.",
+            "enum": [
+                "none",
+                "coherence+psd",
+                "neighborhood_r2"
+            ]
+        }
+    }
+}

@@ -128,6 +128,32 @@ def permissible_values(*, schema: str, enum_name: str) -> tuple[str, ...]:
     return values
 
 
+@functools.lru_cache(maxsize=None)
+def numeric_enum_slots(*, schema: str, class_name: str) -> tuple[tuple[str, str], ...]:
+    """
+    The slots of a class whose allowed values are a fixed numeric set.
+
+    A LinkML enumeration's values are text, so a numeric set is declared as an enumeration
+    and pointed at from the slot it governs by a ``numeric_enum`` annotation. Reading that
+    annotation back is what lets a loader and the JSON Schema generator work from one
+    declaration rather than each repeating the set.
+
+    :param schema: A key of :data:`SCHEMA_PATHS`.
+    :type schema: str
+    :param class_name: The class whose slots to inspect.
+    :type class_name: str
+    :return: Pairs of slot name and the enumeration naming its allowed values.
+    :rtype: tuple[tuple[str, str], ...]
+    """
+    schema_view = linkml_runtime.utils.schemaview.SchemaView(str(resolve_schema_path(schema)))
+    annotated = tuple(
+        (slot.name, str(slot.annotations["numeric_enum"].value))
+        for slot in schema_view.class_induced_slots(class_name)
+        if "numeric_enum" in slot.annotations
+    )
+    return annotated
+
+
 def validate_registry(registry: dict, /, *, description: str = "registry") -> dict:
     """
     Validate a loaded registry file against the packaged registry schema.

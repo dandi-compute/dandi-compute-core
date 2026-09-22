@@ -102,22 +102,24 @@ classes:
       filter_band:
         description: >-
           The (freq_min, freq_max) bandpass edges in Hz, forwarded to SpikeInterface
-          `bandpass_filter`. Corresponds to the AIND `lfp.filter.{freq_min, freq_max}` fields.
-          Written low edge first, and restricted to the pairs the `FilterBand` enum lists.
-          That restriction is on the pair rather than on either edge, so it is carried by
-          that enum instead of by bounds on this slot.
+          `bandpass_filter`. Corresponds to the AIND `lfp.filter.{freq_min, freq_max}` fields,
+          but restricted here to a fixed set of bands, each written low edge first.
         range: float
         multivalued: true
         exact_cardinality: 2
+        annotations:
+          numeric_enum: FilterBand
         minimum_value: 0
         maximum_value: 30000
         required: true
       filter_order:
         description: >-
           Filter order, forwarded to SpikeInterface `bandpass_filter` as `filter_order`.
-          Corresponds to the AIND highpass filter order, restricted to the `FilterOrder` set.
+          Corresponds to the AIND highpass filter order, restricted here to a fixed set.
         range: integer
         minimum_value: 1
+        annotations:
+          numeric_enum: FilterOrder
         required: true
       filter_direction:
         description: >-
@@ -132,18 +134,20 @@ classes:
       resample_target_fs:
         description: >-
           Target LFP sampling frequency in Hz, forwarded to SpikeInterface `resample`.
-          Corresponds to the AIND `lfp.sampling_rate` field, restricted to the
-          `ResampleTargetFs` set.
+          Corresponds to the AIND `lfp.sampling_rate` field, restricted here to a fixed set.
         range: integer
         minimum_value: 1
+        annotations:
+          numeric_enum: ResampleTargetFs
         required: true
       spatial_factor:
         description: >-
           Spatial decimation factor. 1 keeps every channel, 4 keeps every fourth channel
-          ordered by depth. Corresponds to the AIND `lfp_spatial_factor` field, restricted
-          to the `SpatialFactor` set.
+          ordered by depth. Corresponds to the AIND `lfp_spatial_factor` field.
         range: integer
         minimum_value: 1
+        annotations:
+          numeric_enum: SpatialFactor
         required: true
       bad_channel_method:
         description: The bad channel detection method applied before filtering.

@@ -2,19 +2,11 @@ import hashlib
 import json
 
 from ._globals import _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
-from ..schemas import permissible_values, validate_against_schema, validate_registry
+from ..schemas import numeric_enum_slots, permissible_values, validate_against_schema, validate_registry
 
-#: Numeric parameters whose allowed values are a fixed set rather than a range. LinkML states
-#: a set like this as an enumeration, and an enumeration's values are text, so the schema
-#: carries one enumeration per field and the value read from a file is formatted to match.
-#: ``filter_band`` is here too, since what is restricted is the pair of edges rather than
-#: either edge on its own.
-_ENUMERATED_NUMERIC_FIELDS = {
-    "filter_band": "FilterBand",
-    "filter_order": "FilterOrder",
-    "resample_target_fs": "ResampleTargetFs",
-    "spatial_factor": "SpatialFactor",
-}
+#: The schema describing these parameters, and the class in it they take.
+_SCHEMA = "lfp_parameters"
+_SCHEMA_CLASS = "LfpParameters"
 
 
 def _format_number(value, /) -> str:
@@ -44,10 +36,13 @@ def validate_lfp_parameters(parameters, /) -> dict:
         If the parameters do not conform to ``schemas/lfp_parameters.linkml.yaml``, or if a
         numeric parameter is outside the fixed set that schema enumerates for it.
     """
-    validate_against_schema(parameters, schema="lfp_parameters", description="LFP parameters")
+    validate_against_schema(parameters, schema=_SCHEMA, description="LFP parameters")
 
-    for field, enum_name in _ENUMERATED_NUMERIC_FIELDS.items():
-        allowed = permissible_values(schema="lfp_parameters", enum_name=enum_name)
+    # A fixed set of numbers is stated in the schema as an enumeration, since an enumeration's
+    # values are text, and the slot it governs points at it. Both are read back here rather
+    # than repeated, so the allowed values are written in exactly one place.
+    for field, enum_name in numeric_enum_slots(schema=_SCHEMA, class_name=_SCHEMA_CLASS):
+        allowed = permissible_values(schema=_SCHEMA, enum_name=enum_name)
         value = parameters[field]
         try:
             formatted_value = _format_numeric_value(value)

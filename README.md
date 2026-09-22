@@ -87,6 +87,18 @@ In CI, the `Validate LinkML schemas` workflow installs the full `linkml` distrib
 
 The same test module also asserts that each schema class carries exactly the fields of the dataclass it describes, so a schema cannot drift once its model changes.
 
+### Published JSON Schemas
+
+A pipeline's parameter schema is also published as JSON Schema, because that is the form the documentation website renders. Those files are generated from their LinkML source rather than maintained alongside it, so the two cannot disagree:
+
+```bash
+python -m dandi_compute_code.schemas
+```
+
+This writes `src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json`. Do not edit that file by hand. CI regenerates it and fails if the committed copy differs, and also checks that the published schema rejects exactly what the runtime LinkML path rejects.
+
+The generated output is flat and self-contained, with every enumeration inlined rather than referenced through `$defs`, so a renderer can show a field's allowed values without resolving anything. A numeric set of allowed values is declared in the LinkML schema as an enumeration (its values being text) and pointed at from the slot it governs by a `numeric_enum` annotation. The generator and the loader both read that one declaration.
+
 To add a schema, put it in `src/dandi_compute_code/schemas/` named `[name].linkml.yaml` and add it to `SCHEMA_PATHS` and `SCHEMA_TREE_ROOTS` in `schemas/_globals.py`. Both validation layers enumerate those, so it is covered by CI from then on.
 
 ## Contributing Non-Code Files
@@ -118,7 +130,8 @@ Non-code files for the AIND ephys pipeline are organized under the following sub
 
 Non-code files for the LFP pipeline are organized under the following subdirectories of `src/dandi_compute_code/lfp_pipeline/`:
 
-- **`params/`** — JSON parameter files (e.g., `name-default.json`). What they may contain is defined by `src/dandi_compute_code/schemas/lfp_parameters.linkml.yaml`.
+- **`params/`** — JSON parameter files (e.g., `name-default.json`) plus `parameter_schema.json`, the JSON Schema that defines and constrains the exposed LFP parameters and is what the website renders.
+  `parameter_schema.json` is generated from `src/dandi_compute_code/schemas/lfp_parameters.linkml.yaml`, which is the source of truth. Do not edit it by hand. After changing the LinkML schema, regenerate it with `python -m dandi_compute_code.schemas`. CI fails if the committed file is out of date.
   To add a new parameters file:
   1. Add the `name-[id].json` file to this directory.
   2. Register it in `registries/registered_params.json` by adding an entry with the short name as the key, and its relative `path` and full MD5 `md5` as values.
