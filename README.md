@@ -21,6 +21,8 @@ Everything the name used to spell out is recorded in two places instead:
 - the `DandiCompute` provenance block in the capsule's `dataset_description.json`
 - the `derivatives/state.tsv` summary table, which reads that provenance back
 
+The asset paths of each capsule are kept out of `state.tsv` so it stays readable as a table. They are listed one per row in the sibling `derivatives/paths.tsv` table, keyed by job ID.
+
 Two capsules can still land on one job ID when they are the same logical job prepared on the same day: re-attempts, or runs differing only in codebase version, which the hash ignores. Those carry a `-2`, `-3` counter, and the queue reads through it, so every spelling of a name reads back as the same job. Preparation never produces one, since it does not form a capsule for a job that already has one, but capsules migrated onto this layout do.
 
 The job ID is the only capsule layout this package understands. Capsules prepared before it existed carry older names and are invisible to the queue until they are migrated.

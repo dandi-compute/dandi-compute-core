@@ -4,7 +4,8 @@ title: DANDI Compute Job Capsule
 description: >-
   A LinkML schema describing a job capsule, which is one unit of pipeline work over one
   DANDI asset. The flat record described here is what `JobCapsule.to_dict` produces and
-  `JobCapsule.from_dict` consumes, and it is also one row of the `state.tsv` state table.
+  `JobCapsule.from_dict` consumes. Apart from its path mappings, which are kept as rows of
+  the sibling `paths.tsv` table, it is also one row of the `state.tsv` state table.
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -106,7 +107,7 @@ classes:
     description: >-
       One job capsule as it is serialised. This is a `JobInfo` flattened together with the
       capsule's lifecycle status, its source asset, its timestamps and its output mappings.
-      One of these is one row of `state.tsv`.
+      One of these is one row of `state.tsv`, with its path mappings kept in `paths.tsv`.
     tree_root: true
     is_a: JobInfo
     attributes:
@@ -200,11 +201,49 @@ classes:
   StateTable:
     description: >-
       A whole `state.tsv` table, as the list of job capsule records it holds. The table is
-      strictly tabular on disk. Every mapping-valued column is written there as compact JSON.
+      strictly tabular on disk. The mapping-valued fields are not columns of it. They are
+      written to the sibling `paths.tsv` table instead (see `PathsTable`).
     attributes:
       capsules:
         description: One entry per job capsule, in the table's sort order.
         range: JobCapsule
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
+
+  PathEntry:
+    description: >-
+      One asset path of one job capsule. One of these is one row of `paths.tsv`.
+    attributes:
+      job_id:
+        description: The `job_id` of the `state.tsv` row this path belongs to.
+        range: string
+        required: true
+        pattern: "^job-\\d{6}[0-9a-f]{6}(?:-(?:[2-9]|\\d{2,}))?$"
+
+      path:
+        description: >-
+          The asset's path, relative to the root of the Dandiset holding the capsule. Where
+          it sits beneath the capsule directory says which mapping it belongs to. The
+          dataset description is `dataset_description.json`, outputs are under
+          `derivatives/` and logs are under `logs/`.
+        range: string
+        required: true
+
+      content_id:
+        description: The DANDI content identifier of the asset at `path`.
+        range: string
+        required: true
+
+  PathsTable:
+    description: >-
+      A whole `paths.tsv` table, which sits beside a `state.tsv` table and holds the path
+      mappings of its job capsules. Keeping them here lets `state.tsv` stay narrow enough
+      to render as a table.
+    attributes:
+      paths:
+        description: One entry per asset path, grouped by job capsule in the order of `state.tsv`.
+        range: PathEntry
         multivalued: true
         inlined: true
         inlined_as_list: true

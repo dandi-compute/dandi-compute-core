@@ -1,13 +1,13 @@
-job_id	dandiset_id	dandi_path	pipeline	version	params	config	codebase	content_id	asset_size_bytes	status	dataset_description_path	output_paths	log_paths	created_at	job_submission_time	job_completion_time	queue_wait_seconds	run_duration_seconds
-job-240101aa0001	000001	sub-pending	test	v1.0	default	cfgpend	v0.3.0	asset-pending	1024	pending				2024-01-01T00:00:00+00:00
-job-240101aa0002	000001	sub-successful	test	v1.0	default	cfgsucc	v0.3.0	asset-successful	120	successful				2024-01-01T00:00:00+00:00
-job-240101aa0003	000001	sub-failed/ses-one	test	v1.0	default	cfgfail	v0.3.0	asset-aaa		failed				2024-01-01T00:00:00+00:00
-job-240101aa0004	000001	sub-failed/ses-two	test	v1.0	default	cfgfail	v0.3.0	asset-aaa		failed				2024-01-01T00:00:00+00:00
-job-240101aa0005	000002	sub-fresh	test	v1.0	default	cfgfrsh	v0.3.0	asset-bbb		pending				2024-01-01T00:00:00+00:00
-job-240101aa000c	001371	sub-sole/ses-capsule	aind+ephys	v1.1.1+b268fd2	abc1234	cfgsole	v0.3.0			pending				2024-01-01T00:00:00+00:00
-job-240101aa0006	000001	sub-two/ses-capsules	test	v1.0	default	cfgtwoa	v0.3.0			pending				2024-01-01T00:00:00+00:00
-job-240101aa0007	000001	sub-two/ses-capsules	test	v1.0	default	cfgtwob	v0.3.0			successful				2024-01-01T00:00:00+00:00
-job-240101aa0008	000001	sub-already/ses-submitted	test	v1.0	default	cfgsubm	v0.3.0			pending				2024-01-01T00:00:00+00:00
-job-240101aa0009	001849	sourcedata/sub-test+bids	aind+ephys	v1.1.1+b268fd2+a66c8df	4af6a25	0d4bf36	v0.3.0			pending				2024-01-01T00:00:00+00:00
-job-240101aa000a	000001	sub-stalled/ses-one	test	v1.0	default	cfgstal	v0.3.0	asset-ccc		stalled				2024-01-01T00:00:00+00:00	2024-01-01T00:30:00+00:00		1800
-job-240101aa000b	000001	sub-stalled/ses-two	test	v1.0	default	cfgstal	v0.3.0	asset-ccc		stalled				2024-01-01T00:00:00+00:00	2024-01-01T00:30:00+00:00		1800
+job_id	dandiset_id	dandi_path	pipeline	version	params	config	codebase	content_id	asset_size_bytes	status	created_at	job_submission_time	job_completion_time	queue_wait_seconds	run_duration_seconds
+job-240101aa0001	000001	sub-pending	test	v1.0	default	cfgpend	v0.3.0	asset-pending	1024	pending	2024-01-01T00:00:00+00:00				
+job-240101aa0002	000001	sub-successful	test	v1.0	default	cfgsucc	v0.3.0	asset-successful	120	successful	2024-01-01T00:00:00+00:00	2024-01-01T00:20:00+00:00	2024-01-01T03:05:00+00:00	1200	9900
+job-240101aa0003	000001	sub-failed/ses-one	test	v1.0	default	cfgfail	v0.3.0	asset-aaa		failed	2024-01-01T00:00:00+00:00	2024-01-01T00:45:00+00:00	2024-01-01T01:12:30+00:00	2700	1650
+job-240101aa0004	000001	sub-failed/ses-two	test	v1.0	default	cfgfail	v0.3.0	asset-aaa		failed	2024-01-01T00:00:00+00:00	2024-01-01T01:10:00+00:00	2024-01-01T01:18:45+00:00	4200	525
+job-240101aa0005	000002	sub-fresh	test	v1.0	default	cfgfrsh	v0.3.0	asset-bbb		pending	2024-01-01T00:00:00+00:00				
+job-240101aa000c	001371	sub-sole/ses-capsule	aind+ephys	v1.1.1+b268fd2	abc1234	cfgsole	v0.3.0			pending	2024-01-01T00:00:00+00:00				
+job-240101aa0006	000001	sub-two/ses-capsules	test	v1.0	default	cfgtwoa	v0.3.0			pending	2024-01-01T00:00:00+00:00				
+job-240101aa0007	000001	sub-two/ses-capsules	test	v1.0	default	cfgtwob	v0.3.0			successful	2024-01-01T00:00:00+00:00	2024-01-01T02:00:00+00:00	2024-01-01T06:40:00+00:00	7200	16800
+job-240101aa0008	000001	sub-already/ses-submitted	test	v1.0	default	cfgsubm	v0.3.0			pending	2024-01-01T00:00:00+00:00				
+job-240101aa0009	001849	sourcedata/sub-test+bids	aind+ephys	v1.1.1+b268fd2+a66c8df	4af6a25	0d4bf36	v0.3.0			pending	2024-01-01T00:00:00+00:00				
+job-240101aa000a	000001	sub-stalled/ses-one	test	v1.0	default	cfgstal	v0.3.0	asset-ccc		stalled	2024-01-01T00:00:00+00:00	2024-01-01T00:30:00+00:00		1800	
+job-240101aa000b	000001	sub-stalled/ses-two	test	v1.0	default	cfgstal	v0.3.0	asset-ccc		stalled	2024-01-01T00:00:00+00:00	2024-01-01T00:30:00+00:00		1800	

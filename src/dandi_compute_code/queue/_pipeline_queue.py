@@ -2,7 +2,9 @@
 PipelineQueue — typed container for ``state.tsv``.
 
 ``state.tsv`` is a tab-separated table where each row is one job
-capsule. :class:`PipelineQueue` is the container over it, a list of
+capsule. The asset paths of each capsule are kept apart in a sibling ``paths.tsv`` table,
+one row per path, so that ``state.tsv`` stays narrow enough to render as a table.
+:class:`PipelineQueue` is the container over both, a list of
 :class:`~._job_capsule.JobCapsule` objects (the typed row model, defined in
 :mod:`._job_capsule`) with convenience helpers for filtering and round-trip I/O.
 
@@ -35,7 +37,13 @@ from ._dispatch import DispatchResult, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
-from ._job_capsule import _STATE_TSV_FIELD_NAMES, JobCapsule, JobStatus
+from ._job_capsule import (
+    _PATHS_TSV_FIELD_NAMES,
+    _STATE_TSV_FIELD_NAMES,
+    JobCapsule,
+    JobStatus,
+    _path_field_name,
+)
 from ._queue_utils import (
     _CapsuleProvenanceCache,
     _collect_job_capsules,
@@ -71,6 +79,9 @@ _DANDISET_ID = _JOB_CAPSULES_DANDISET_ID
 
 #: Default subpath (relative to a Dandiset root) that ``state.tsv`` is written to.
 _STATE_TSV_RELATIVE_PATH = "derivatives/state.tsv"
+
+#: File name of the ``paths.tsv`` table, which always sits beside its ``state.tsv``.
+_PATHS_TSV_FILE_NAME = "paths.tsv"
 
 
 @dataclass
@@ -367,16 +378,29 @@ class PipelineQueue:
             writer.writerow(entry.to_tsv_row())
         return buffer.getvalue()
 
+    def to_paths_tsv_string(self) -> str:
+        """Serialise the asset paths of all entries to a tab-separated ``paths.tsv`` table (including header)."""
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=_PATHS_TSV_FIELD_NAMES, delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        for entry in self.entries:
+            writer.writerows(entry.to_paths_tsv_rows())
+        return buffer.getvalue()
+
     def to_tsv(self, file_path: pathlib.Path, /) -> None:
         """
         Write all entries to *file_path* as a tab-separated ``state.tsv`` table.
 
+        The asset paths of the entries are written to a ``paths.tsv`` table beside it.
+
         Parameters
         ----------
         file_path : pathlib.Path
-            Destination path. The file is overwritten if it already exists.
+            Destination path. The file, and the ``paths.tsv`` beside it, are
+            overwritten if they already exist.
         """
         file_path.write_text(self.to_tsv_string())
+        file_path.with_name(_PATHS_TSV_FILE_NAME).write_text(self.to_paths_tsv_string())
 
     @classmethod
     def write_dandiset_state_table(
@@ -393,7 +417,8 @@ class PipelineQueue:
         Builds the state from *dandiset_id*'s remote ``assets.jsonld`` metadata (see
         :meth:`from_dandi`) and uploads it as a tab-separated table to *relative_path* within
         *dandiset_id* (default ``derivatives/state.tsv``) via
-        :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
+        :func:`~dandi_compute_code.dandiset.write_dandiset_file`. The asset paths of the
+        entries are uploaded the same way to a ``paths.tsv`` beside it.
 
         Intended to be called once for the job capsules ("source") Dandiset and once for the
         failed runs archive ("archived") Dandiset. There is no local queue directory or local
@@ -406,7 +431,8 @@ class PipelineQueue:
             The Dandiset whose ``assets.jsonld`` portrays the state, and which
             the table is written into. Defaults to the job capsules Dandiset.
         relative_path : str, optional
-            Path (relative to the Dandiset root) the table is written to.
+            Path (relative to the Dandiset root) the ``state.tsv`` table is
+            written to. The ``paths.tsv`` table is written beside it.
         processing_directory : pathlib.Path, optional
             Directory for the temporary working tree used to upload the table.
             Defaults to the system temporary location.
@@ -420,13 +446,18 @@ class PipelineQueue:
             If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
         """
         state = cls.from_dandi(dandiset_id=dandiset_id)
-        write_dandiset_file(
-            dandiset_id=dandiset_id,
-            relative_path=relative_path,
-            content=state.to_tsv_string(),
-            processing_directory=processing_directory,
-            test=test,
-        )
+        paths_relative_path = str(pathlib.PurePosixPath(relative_path).with_name(_PATHS_TSV_FILE_NAME))
+        for table_relative_path, content in (
+            (relative_path, state.to_tsv_string()),
+            (paths_relative_path, state.to_paths_tsv_string()),
+        ):
+            write_dandiset_file(
+                dandiset_id=dandiset_id,
+                relative_path=table_relative_path,
+                content=content,
+                processing_directory=processing_directory,
+                test=test,
+            )
 
     def aggregate_statistics(
         self,
@@ -1036,6 +1067,10 @@ class PipelineQueue:
         the expected column order) back into :class:`JobCapsule` objects via
         :meth:`JobCapsule.from_tsv_row`.
 
+        The asset paths are read from the ``paths.tsv`` beside it, and attached to each
+        entry by ``job_id``. Which mapping a path belongs in is read from where it sits
+        beneath the capsule directory. Entries are left without paths when that table is absent.
+
         Parameters
         ----------
         file_path : pathlib.Path
@@ -1052,6 +1087,18 @@ class PipelineQueue:
         with file_path.open(newline="") as file_stream:
             reader = csv.DictReader(file_stream, delimiter="\t")
             entries = [JobCapsule.from_tsv_row(row) for row in reader]
+
+        paths_file_path = file_path.with_name(_PATHS_TSV_FILE_NAME)
+        if paths_file_path.exists():
+            job_id_to_entry = {entry.job.job_id: entry for entry in entries}
+            with paths_file_path.open(newline="") as file_stream:
+                for row in csv.DictReader(file_stream, delimiter="\t"):
+                    entry = job_id_to_entry.get(row["job_id"])
+                    field_name = _path_field_name(job_id=row["job_id"], path=row["path"])
+                    if entry is None or field_name is None:
+                        _log.debug("Skipping unmatched row in %s: %s", paths_file_path, row)
+                        continue
+                    getattr(entry, field_name)[row["path"]] = row["content_id"]
         return cls(entries=entries)
 
     @classmethod
