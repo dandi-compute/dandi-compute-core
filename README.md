@@ -79,15 +79,15 @@ Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeli
 ```json
 "dispatch": {
     "max_concurrent": 2,
-    "max_array_tasks": 500,
-    "partition": "mit_normal",
-    "memory": "1GB",
-    "cpus_per_task": 1,
-    "time_limit": "12:00:00"
+    "max_array_tasks": 500
 }
 ```
 
-`max_concurrent` is the per-pipeline concurrency limit and `max_array_tasks` caps how many capsules one array may hold, keeping it inside the cluster's `MaxArraySize`. The remaining keys are the allocation each capsule run receives. A capsule script is executed by an array task rather than submitted as a job of its own, so the `#SBATCH` directives written into the capsule have no effect and these take their place. They need to cover what the pipeline actually asks for in its submission template.
+`max_concurrent` is the per-pipeline concurrency limit. `max_array_tasks` caps how many capsules one array may hold, and capsules beyond it stay pending for the next dispatch. Set `max_array_tasks` to `null` for no upper bound, which places every pending capsule in one array and relies on the cluster's own `MaxArraySize` being large enough. An omitted key is not the same as `null`: it takes the default of 500.
+
+Those two limits are the whole of what is configurable. What an array task requests from SLURM is pinned in the dispatch template (`mit_normal`, 100MB, 1 CPU, 12 hours), since a task does nothing but run the capsule's own `submit.sh`.
+
+The capsule script is run with `bash` rather than submitted as a job of its own, so the `#SBATCH` resource directives written into it have no effect. Its `#SBATCH --output` is the exception: the array task reads that path back out of the script and tees the run into it, keeping the per-capsule SLURM log in the capsule's `logs/` directory where the capsule uploads it from and where `issues dump` reads it back.
 
 The dispatch directory created under `--processing` holds the manifest, the generated array script, and the array's logs. It has to stay readable from the compute nodes for as long as the array lives, so it is not cleaned up at submission time.
 

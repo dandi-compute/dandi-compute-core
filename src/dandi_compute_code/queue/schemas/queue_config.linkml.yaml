@@ -60,11 +60,10 @@ classes:
         required: false
   Dispatch:
     description: >-
-      Settings for one pipeline's array dispatcher. One array job per pipeline owns
-      every run of that pipeline on the cluster. Its throttle caps how many capsules
-      run at once, and its resource requests are the allocation each capsule run gets,
-      since the capsule scripts are executed as array tasks rather than submitted as
-      jobs of their own.
+      Queue limits for one pipeline's array dispatcher. One array job per pipeline owns
+      every run of that pipeline on the cluster. Only these limits are configurable.
+      What each array task requests from SLURM is pinned in the dispatch template, since
+      a task does nothing but run the capsule's own submission script.
     attributes:
       max_concurrent:
         description: >-
@@ -75,28 +74,12 @@ classes:
         required: false
       max_array_tasks:
         description: >-
-          Upper bound on the number of capsules placed in one array. Keeps the array
-          within the cluster's `MaxArraySize` limit. Capsules beyond it stay pending and
-          are picked up by the next dispatch.
+          Upper bound on the number of capsules placed in one array. Capsules beyond it
+          stay pending and are picked up by the next dispatch. Set it to null for no upper
+          bound, which places every pending capsule in one array and so relies on the
+          cluster's own `MaxArraySize` being large enough.
         range: integer
         minimum_value: 1
-        required: false
-      partition:
-        description: The SLURM partition the array job is submitted to.
-        range: string
-        required: false
-      memory:
-        description: Memory requested per array task, in SLURM `--mem` syntax (e.g. "16GB").
-        range: string
-        required: false
-      cpus_per_task:
-        description: CPUs requested per array task.
-        range: integer
-        minimum_value: 1
-        required: false
-      time_limit:
-        description: Wall time requested per array task, in SLURM `--time` syntax (e.g. "48:00:00").
-        range: string
         required: false
   AssetOverride:
     description: >-

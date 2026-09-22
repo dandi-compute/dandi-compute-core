@@ -88,32 +88,52 @@ def test_dispatch_ignores_capsules_belonging_to_another_pipeline(processing_dire
 
 
 @pytest.mark.ai_generated
-def test_dispatch_script_carries_the_configured_resources_and_throttle(
+def test_dispatch_script_carries_the_job_name_and_configured_throttle(
     processing_directory: pathlib.Path,
 ) -> None:
-    """The generated array script requests what the pipeline's dispatch settings declare."""
-    dispatch_config = DispatchConfig(
-        pipeline="aind+ephys",
-        max_concurrent=2,
-        partition="mit_normal",
-        memory="8GB",
-        cpus_per_task=4,
-        time_limit="06:00:00",
-    )
-
+    """The name and the throttle are what the dispatch settings put into the array script."""
     result = _dispatch(
         processing_directory=processing_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
-        dispatch_config=dispatch_config,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=2),
     )
 
     script = (result.dispatch_directory / "dispatch.sh").read_text()
     assert "#SBATCH --job-name=dandicompute-dispatch-aind-ephys" in script
     assert "#SBATCH --array=1-3%2" in script
-    assert "#SBATCH --mem=8GB" in script
-    assert "#SBATCH --cpus-per-task=4" in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_pins_its_resource_requests(processing_directory: pathlib.Path) -> None:
+    """
+    An array task only runs the capsule's own submission script, so its requests are pinned.
+
+    They are deliberately not configurable per pipeline, which is why these are asserted as
+    fixed values rather than read back from the dispatch settings.
+    """
+    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    assert "#SBATCH --mem=100MB" in script
+    assert "#SBATCH --cpus-per-task=1" in script
     assert "#SBATCH --partition=mit_normal" in script
-    assert "#SBATCH --time=06:00:00" in script
+    assert "#SBATCH --time=12:00:00" in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_places_every_capsule_in_one_array_when_uncapped(
+    processing_directory: pathlib.Path,
+) -> None:
+    """A null max_array_tasks holds nothing back for the next dispatch."""
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", max_array_tasks=None),
+    )
+
+    assert result.task_count == len(_AIND_CODE_DIR_PATHS)
+    manifest_lines = (result.dispatch_directory / "manifest.txt").read_text().splitlines()
+    assert manifest_lines == _AIND_CODE_DIR_PATHS
 
 
 @pytest.mark.ai_generated

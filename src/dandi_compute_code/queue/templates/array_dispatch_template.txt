@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name={{ job_name }}
 #SBATCH --output={{ dispatch_directory }}/dispatch-%A_%a.log
-#SBATCH --mem={{ memory }}
-#SBATCH --cpus-per-task={{ cpus_per_task }}
-#SBATCH --partition={{ partition }}
-#SBATCH --time={{ time_limit }}
+#SBATCH --mem=100MB
+#SBATCH --cpus-per-task=1
+#SBATCH --partition=mit_normal
+#SBATCH --time=12:00:00
 #SBATCH --array={{ array_specification }}
 
 set -euo pipefail

@@ -4,6 +4,10 @@ Per-pipeline settings for the SLURM array dispatcher.
 Every pipeline is run on the cluster by exactly one array job. This module reads that
 array job's settings out of the packaged pipeline configuration, filling in defaults for
 a pipeline that declares no ``dispatch`` block of its own.
+
+Only the two queue limits are configurable. The array task's own resource requests are
+pinned in the dispatch template, since the task does nothing but run the capsule's
+``submit.sh``.
 """
 
 from __future__ import annotations
@@ -16,10 +20,6 @@ from ._globals import _DISPATCH_JOB_NAME_PREFIX, _DISPATCH_JOB_NAME_SANITIZE_RE
 _DEFAULT_MAX_CONCURRENT = 2
 #: How many capsules one array may hold, kept well inside the usual SLURM ``MaxArraySize``.
 _DEFAULT_MAX_ARRAY_TASKS = 500
-_DEFAULT_PARTITION = "mit_normal"
-_DEFAULT_MEMORY = "16GB"
-_DEFAULT_CPUS_PER_TASK = 1
-_DEFAULT_TIME_LIMIT = "12:00:00"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -27,28 +27,20 @@ class DispatchConfig:
     """
     The settings of one pipeline's array dispatcher.
 
-    The resource fields are the allocation each capsule run receives. A capsule script is
-    executed by an array task rather than submitted as a job of its own, so the ``#SBATCH``
-    directives written into the capsule itself have no effect and these take their place.
+    Both fields are queue limits rather than resource requests. What each array task asks
+    SLURM for is pinned in the dispatch template and is not configurable per pipeline.
     """
 
     pipeline: str
     max_concurrent: int = _DEFAULT_MAX_CONCURRENT
-    max_array_tasks: int = _DEFAULT_MAX_ARRAY_TASKS
-    partition: str = _DEFAULT_PARTITION
-    memory: str = _DEFAULT_MEMORY
-    cpus_per_task: int = _DEFAULT_CPUS_PER_TASK
-    time_limit: str = _DEFAULT_TIME_LIMIT
+    max_array_tasks: int | None = _DEFAULT_MAX_ARRAY_TASKS
 
     def __post_init__(self) -> None:
         if self.max_concurrent < 1:
             message = f"max_concurrent must be at least 1 for pipeline '{self.pipeline}', got {self.max_concurrent}."
             raise ValueError(message)
-        if self.max_array_tasks < 1:
+        if self.max_array_tasks is not None and self.max_array_tasks < 1:
             message = f"max_array_tasks must be at least 1 for pipeline '{self.pipeline}', got {self.max_array_tasks}."
-            raise ValueError(message)
-        if self.cpus_per_task < 1:
-            message = f"cpus_per_task must be at least 1 for pipeline '{self.pipeline}', got {self.cpus_per_task}."
             raise ValueError(message)
 
     @classmethod
@@ -82,11 +74,9 @@ class DispatchConfig:
         dispatch_config = cls(
             pipeline=pipeline,
             max_concurrent=configured_max_concurrent or _DEFAULT_MAX_CONCURRENT,
-            max_array_tasks=dispatch.get("max_array_tasks") or _DEFAULT_MAX_ARRAY_TASKS,
-            partition=dispatch.get("partition") or _DEFAULT_PARTITION,
-            memory=dispatch.get("memory") or _DEFAULT_MEMORY,
-            cpus_per_task=dispatch.get("cpus_per_task") or _DEFAULT_CPUS_PER_TASK,
-            time_limit=dispatch.get("time_limit") or _DEFAULT_TIME_LIMIT,
+            # An explicit null means no upper bound, which is why this reads the key rather
+            # than falling back on a falsy value the way max_concurrent does.
+            max_array_tasks=dispatch.get("max_array_tasks", _DEFAULT_MAX_ARRAY_TASKS),
         )
         return dispatch_config
 

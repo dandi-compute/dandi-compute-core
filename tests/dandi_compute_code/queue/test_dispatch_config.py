@@ -6,15 +6,9 @@ _QUEUE_CONFIG = {
     "pipelines": {
         "aind+ephys": {
             "params": ["default"],
-            "dispatch": {
-                "max_concurrent": 3,
-                "max_array_tasks": 40,
-                "partition": "mit_normal",
-                "memory": "8GB",
-                "cpus_per_task": 4,
-                "time_limit": "06:00:00",
-            },
+            "dispatch": {"max_concurrent": 3, "max_array_tasks": 40},
         },
+        "unbounded": {"params": ["default"], "dispatch": {"max_array_tasks": None}},
         "bare": {"params": ["default"]},
     }
 }
@@ -27,10 +21,6 @@ def test_from_queue_config_reads_every_declared_setting() -> None:
 
     assert dispatch_config.max_concurrent == 3
     assert dispatch_config.max_array_tasks == 40
-    assert dispatch_config.partition == "mit_normal"
-    assert dispatch_config.memory == "8GB"
-    assert dispatch_config.cpus_per_task == 4
-    assert dispatch_config.time_limit == "06:00:00"
 
 
 @pytest.mark.ai_generated
@@ -39,6 +29,22 @@ def test_from_queue_config_falls_back_to_defaults_without_a_dispatch_block() -> 
     dispatch_config = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
 
     assert dispatch_config == DispatchConfig(pipeline="bare")
+
+
+@pytest.mark.ai_generated
+def test_from_queue_config_reads_a_null_max_array_tasks_as_no_upper_bound() -> None:
+    """An explicit null means no cap, as opposed to an omitted key which takes the default."""
+    unbounded = DispatchConfig.from_queue_config(pipeline="unbounded", queue_config=_QUEUE_CONFIG)
+    omitted = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
+
+    assert unbounded.max_array_tasks is None
+    assert omitted.max_array_tasks == 500
+
+
+@pytest.mark.ai_generated
+def test_max_array_tasks_accepts_none() -> None:
+    """None is a valid value for the cap rather than a validation error."""
+    assert DispatchConfig(pipeline="lfp", max_array_tasks=None).max_array_tasks is None
 
 
 @pytest.mark.ai_generated
@@ -100,7 +106,6 @@ def test_array_specification_rejects_an_empty_array() -> None:
     [
         ("max_concurrent", "max_concurrent must be at least 1"),
         ("max_array_tasks", "max_array_tasks must be at least 1"),
-        ("cpus_per_task", "cpus_per_task must be at least 1"),
     ],
 )
 def test_non_positive_counts_are_rejected(field_name: str, expected_message: str) -> None:
@@ -111,9 +116,17 @@ def test_non_positive_counts_are_rejected(field_name: str, expected_message: str
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("pipeline", ["aind+ephys", "lfp"])
-def test_packaged_configuration_declares_dispatch_settings_for_every_pipeline(pipeline: str) -> None:
-    """Every pipeline shipped in this repo carries its own dispatcher settings."""
+def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipeline: str) -> None:
+    """Every pipeline shipped in this repo carries its own dispatcher limits."""
     dispatch_config = DispatchConfig.from_queue_config(pipeline=pipeline, queue_config=QueueState.load_queue_config())
 
     assert dispatch_config.max_concurrent >= 1
-    assert dispatch_config.partition != ""
+
+
+@pytest.mark.ai_generated
+def test_packaged_configuration_declares_no_resource_settings() -> None:
+    """Resources are pinned in the dispatch template, so the config must not carry them."""
+    pipelines = QueueState.load_queue_config()["pipelines"]
+
+    for pipeline_data in pipelines.values():
+        assert set(pipeline_data.get("dispatch", {})) <= {"max_concurrent", "max_array_tasks"}
