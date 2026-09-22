@@ -21,6 +21,9 @@ _DISPATCH_JOB_NAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _ACTIVE_SLURM_JOB_STATES = "PENDING,RUNNING,SUSPENDED,COMPLETING,CONFIGURING,RESIZING,REQUEUED"
 #: Job ID line written by ``sbatch`` on a successful submission.
 _SBATCH_JOB_ID_RE = re.compile(r"Submitted batch job (?P<job_id>\d+)")
+#: One ``#SBATCH`` directive in a submission template. The separator is ``=`` or whitespace,
+#: since the packaged templates use both.
+_SBATCH_DIRECTIVE_RE = re.compile(r"^#SBATCH\s+--(?P<name>[A-Za-z-]+)(?:=|\s+)(?P<value>\S+)\s*$", re.MULTILINE)
 # Packaged pipeline configuration, committed directly to this repo. This is the canonical
 # source of truth for the queue's pipeline definitions. There is no local override for this
 # file; see ``_load_queue_config``.

@@ -1,5 +1,9 @@
+import pathlib
+import re
+
 import pytest
 
+import dandi_compute_code
 from dandi_compute_code.queue import DispatchConfig, QueueState
 
 _QUEUE_CONFIG = {
@@ -125,8 +129,47 @@ def test_packaged_configuration_declares_dispatch_limits_for_every_pipeline(pipe
 
 @pytest.mark.ai_generated
 def test_packaged_configuration_declares_no_resource_settings() -> None:
-    """Resources are pinned in the dispatch template, so the config must not carry them."""
+    """Resources come from each pipeline's submission template, so the config must not carry them."""
     pipelines = QueueState.load_queue_config()["pipelines"]
 
     for pipeline_data in pipelines.values():
         assert set(pipeline_data.get("dispatch", {})) <= {"max_concurrent", "max_array_tasks"}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("pipeline", "template_module"),
+    [("aind+ephys", "aind_ephys_pipeline"), ("lfp", "lfp_pipeline")],
+)
+def test_resources_are_read_back_from_the_pipelines_submission_template(pipeline: str, template_module: str) -> None:
+    """
+    An array task runs its capsule, so its allocation has to match the capsule's own request.
+
+    Reading the values back out of the template is what keeps the two from drifting apart, so
+    this asserts against the template text rather than against hardcoded numbers.
+    """
+    template = (
+        pathlib.Path(dandi_compute_code.__file__).parent / template_module / "templates" / "submission_template.txt"
+    ).read_text()
+    directives = dict(re.findall(r"^#SBATCH\s+--([A-Za-z-]+)(?:=|\s+)(\S+)\s*$", template, flags=re.MULTILINE))
+
+    dispatch_config = DispatchConfig.from_queue_config(pipeline=pipeline, queue_config=QueueState.load_queue_config())
+
+    assert dispatch_config.memory == directives["mem"]
+    assert dispatch_config.partition == directives["partition"]
+    assert dispatch_config.time_limit == directives["time"]
+    assert dispatch_config.cpus_per_task == int(directives["cpus-per-task"])
+
+
+@pytest.mark.ai_generated
+def test_resources_fall_back_when_a_pipeline_has_no_packaged_template() -> None:
+    """
+    A pipeline with no template still dispatches, on requests generous enough not to truncate.
+
+    Under-provisioning an array task means the capsule inside it is killed mid-run, so the
+    fallback deliberately errs high rather than low.
+    """
+    dispatch_config = DispatchConfig.from_queue_config(pipeline="bare", queue_config=_QUEUE_CONFIG)
+
+    assert dispatch_config.memory == "16GB"
+    assert dispatch_config.time_limit == "48:00:00"

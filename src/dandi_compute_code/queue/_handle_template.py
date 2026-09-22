@@ -11,6 +11,10 @@ def generate_array_dispatch_script(
     script_file_path: pathlib.Path,
     job_name: str,
     dispatch_directory: str,
+    memory: str,
+    cpus_per_task: int,
+    partition: str,
+    time_limit: str,
     array_specification: str,
     dandiset_id: str,
     manifest_file_path: str,
@@ -28,6 +32,15 @@ def generate_array_dispatch_script(
     :param dispatch_directory: Directory holding the manifest, the array logs, and each
         task's working tree.
     :type dispatch_directory: str
+    :param memory: Memory requested per array task, taken from the pipeline's submission
+        template so that it matches what the capsule asks for.
+    :type memory: str
+    :param cpus_per_task: CPUs requested per array task.
+    :type cpus_per_task: int
+    :param partition: The SLURM partition the array is submitted to.
+    :type partition: str
+    :param time_limit: Wall time requested per array task.
+    :type time_limit: str
     :param array_specification: The ``--array`` specification, including the concurrency
         throttle.
     :type array_specification: str
@@ -45,6 +58,10 @@ def generate_array_dispatch_script(
     script = template.render(
         job_name=job_name,
         dispatch_directory=dispatch_directory,
+        memory=memory,
+        cpus_per_task=cpus_per_task,
+        partition=partition,
+        time_limit=time_limit,
         array_specification=array_specification,
         dandiset_id=dandiset_id,
         manifest_file_path=manifest_file_path,
