@@ -7,6 +7,7 @@ Kept in its own module so the typed row model stays separable from
 
 from __future__ import annotations
 
+import datetime
 import json
 import pathlib
 from collections.abc import Collection
@@ -35,8 +36,33 @@ _STATE_TSV_FIELD_NAMES = [
     "output_paths",
     "log_paths",
     "created_at",
+    "job_submission_time",
     "job_completion_time",
+    "queue_wait_seconds",
+    "run_duration_seconds",
 ]
+
+
+def _parse_timestamp(value: str | None, /) -> datetime.datetime | None:
+    """Parse an ISO 8601 timestamp cell, treating a naive timestamp as UTC."""
+    if not value:
+        return None
+    try:
+        timestamp = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        return timestamp.replace(tzinfo=datetime.timezone.utc)
+    return timestamp
+
+
+def _elapsed_seconds(*, start: str | None, end: str | None) -> int | None:
+    """Whole seconds between two ISO 8601 timestamps, or ``None`` if either is missing or malformed."""
+    start_timestamp = _parse_timestamp(start)
+    end_timestamp = _parse_timestamp(end)
+    if start_timestamp is None or end_timestamp is None:
+        return None
+    return round((end_timestamp - start_timestamp).total_seconds())
 
 
 @dataclass
@@ -54,6 +80,7 @@ class JobCapsule:
     has_output: bool = False
     has_logs: bool = False
     created_at: str | None = None
+    job_submission_time: str | None = None
     job_completion_time: str | None = None
     dataset_description_path: dict[str, str] = field(default_factory=dict)
     output_paths: dict[str, str] = field(default_factory=dict)
@@ -83,6 +110,28 @@ class JobCapsule:
     def is_failed(self) -> bool:
         """Has code and logs but no output — the job ran but did not succeed."""
         return self.has_code and self.has_logs and not self.has_output
+
+    @property
+    def queue_wait_seconds(self) -> int | None:
+        """
+        Seconds this job waited between being queued and being submitted
+        (``created_at`` to ``job_submission_time``).
+
+        ``None`` when either timestamp is missing -- a job that was never submitted has
+        no waiting time yet.
+        """
+        return _elapsed_seconds(start=self.created_at, end=self.job_submission_time)
+
+    @property
+    def run_duration_seconds(self) -> int | None:
+        """
+        Seconds between this job's submission and its completion
+        (``job_submission_time`` to ``job_completion_time``).
+
+        ``None`` when either timestamp is missing -- a job that has not completed (or
+        whose submission time is unknown) has no duration yet.
+        """
+        return _elapsed_seconds(start=self.job_submission_time, end=self.job_completion_time)
 
     @property
     def identity(self) -> tuple:
@@ -249,6 +298,7 @@ class JobCapsule:
             has_output=bool(data.get("has_output", False)),
             has_logs=bool(data.get("has_logs", False)),
             created_at=data.get("created_at"),
+            job_submission_time=data.get("job_submission_time"),
             job_completion_time=data.get("job_completion_time"),
             dataset_description_path=dict(data.get("dataset_description_path") or {}),
             output_paths=dict(data.get("output_paths") or {}),
@@ -256,7 +306,12 @@ class JobCapsule:
         )
 
     def to_dict(self) -> dict:
-        """Serialise back to the flat dict format underlying :meth:`to_tsv_row`."""
+        """
+        Serialise back to the flat dict format underlying :meth:`to_tsv_row`.
+
+        The two duration fields (``queue_wait_seconds`` and ``run_duration_seconds``) are
+        derived from the timestamps rather than stored, so :meth:`from_dict` ignores them.
+        """
         return {
             **self.job.to_dict(),
             "content_id": self.content_id,
@@ -269,7 +324,10 @@ class JobCapsule:
             "output_paths": self.output_paths,
             "log_paths": self.log_paths,
             "created_at": self.created_at,
+            "job_submission_time": self.job_submission_time,
             "job_completion_time": self.job_completion_time,
+            "queue_wait_seconds": self.queue_wait_seconds,
+            "run_duration_seconds": self.run_duration_seconds,
         }
 
     def to_tsv_row(self) -> dict[str, str]:
@@ -302,6 +360,10 @@ class JobCapsule:
         ``None`` (or ``{}`` for the JSON-encoded mapping fields), ``asset_size_bytes``
         is parsed back to ``int``, and the boolean fields (stored as the literal
         strings ``"True"``/``"False"``) are parsed back to ``bool``.
+
+        The derived duration columns are not read back -- they are recomputed from the
+        timestamps. ``job_submission_time`` is read leniently so that tables written
+        before that column existed still parse.
         """
         job = JobInfo(
             job_id=row["job_id"],
@@ -336,6 +398,7 @@ class JobCapsule:
             has_output=_parse_bool(row["has_output"]),
             has_logs=_parse_bool(row["has_logs"]),
             created_at=_parse_optional_str(row["created_at"]),
+            job_submission_time=_parse_optional_str(row.get("job_submission_time", "")),
             job_completion_time=_parse_optional_str(row["job_completion_time"]),
             dataset_description_path=_parse_json_dict(row["dataset_description_path"]),
             output_paths=_parse_json_dict(row["output_paths"]),

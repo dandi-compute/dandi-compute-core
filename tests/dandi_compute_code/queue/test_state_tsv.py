@@ -27,6 +27,7 @@ def _make_entry(**overrides: object) -> JobCapsule:
         "has_output": True,
         "has_logs": True,
         "created_at": "2025-01-01T00:00:00+00:00",
+        "job_submission_time": "2025-01-01T00:15:00+00:00",
         "job_completion_time": "2025-01-01T01:00:00+00:00",
         "dataset_description_path": {"a/dataset_description.json": "dd-id"},
         "output_paths": {"a/output.nwb": "out-id"},
@@ -139,3 +140,76 @@ def test_pipeline_queue_empty_dataset_description_path_cell(tmp_path: pathlib.Pa
 
     assert len(pipeline_queue) == 1
     assert pipeline_queue.entries[0].dataset_description_path == {}
+
+
+@pytest.mark.ai_generated
+def test_job_capsule_durations_are_computed_from_timestamps() -> None:
+    """JobCapsule derives the waiting and running durations from its three timestamps."""
+    entry = _make_entry()
+    assert entry.queue_wait_seconds == 900
+    assert entry.run_duration_seconds == 2700
+
+
+@pytest.mark.ai_generated
+def test_job_capsule_to_tsv_row_writes_durations_in_seconds() -> None:
+    """JobCapsule.to_tsv_row writes the two derived durations as whole seconds."""
+    row = _make_entry().to_tsv_row()
+    assert row["job_submission_time"] == "2025-01-01T00:15:00+00:00"
+    assert row["queue_wait_seconds"] == "900"
+    assert row["run_duration_seconds"] == "2700"
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("overrides", "expected_wait_seconds", "expected_run_duration_seconds"),
+    [
+        ({"created_at": None}, None, 2700),
+        ({"job_submission_time": None}, None, None),
+        ({"job_completion_time": None}, 900, None),
+        ({"created_at": "not-a-timestamp"}, None, 2700),
+    ],
+    ids=["no_created_at", "no_submission_time", "no_completion_time", "malformed_created_at"],
+)
+def test_job_capsule_durations_empty_when_a_timestamp_is_unusable(
+    overrides: dict, expected_wait_seconds: int | None, expected_run_duration_seconds: int | None
+) -> None:
+    """A missing or malformed timestamp leaves the duration it feeds empty."""
+    entry = _make_entry(**overrides)
+    row = entry.to_tsv_row()
+    assert entry.queue_wait_seconds == expected_wait_seconds
+    assert entry.run_duration_seconds == expected_run_duration_seconds
+    assert row["queue_wait_seconds"] == ("" if expected_wait_seconds is None else str(expected_wait_seconds))
+    assert row["run_duration_seconds"] == (
+        "" if expected_run_duration_seconds is None else str(expected_run_duration_seconds)
+    )
+
+
+@pytest.mark.ai_generated
+def test_pipeline_queue_from_tsv_round_trips_submission_time(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.from_tsv reads job_submission_time back and recomputes the durations."""
+    state_file = tmp_path / "state.tsv"
+    PipelineQueue(entries=[_make_entry()]).to_tsv(state_file)
+
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert pipeline_queue.entries[0].job_submission_time == "2025-01-01T00:15:00+00:00"
+    assert pipeline_queue.entries[0].queue_wait_seconds == 900
+    assert pipeline_queue.entries[0].run_duration_seconds == 2700
+
+
+@pytest.mark.ai_generated
+def test_pipeline_queue_from_tsv_reads_table_without_submission_column(tmp_path: pathlib.Path) -> None:
+    """A table written before job_submission_time existed still parses, without durations."""
+    state_file = tmp_path / "state.tsv"
+    tsv_text = PipelineQueue(entries=[_make_entry()]).to_tsv_string()
+    header, row = (line.split("\t") for line in tsv_text.splitlines())
+    dropped_columns = {"job_submission_time", "queue_wait_seconds", "run_duration_seconds"}
+    keep = [index for index, name in enumerate(header) if name not in dropped_columns]
+    legacy_lines = ["\t".join([line[index] for index in keep]) for line in (header, row)]
+    state_file.write_text("\n".join(legacy_lines) + "\n")
+
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert pipeline_queue.entries[0].job_submission_time is None
+    assert pipeline_queue.entries[0].queue_wait_seconds is None
+    assert pipeline_queue.entries[0].run_duration_seconds is None

@@ -261,17 +261,20 @@ class _JobCapsuleCollection:
     locations_by_capsule: dict[str, _CapsuleLocation]
     log_timestamps_by_capsule: dict[str, list[str]]
     submit_sh_timestamps_by_capsule: dict[str, str]
+    submitted_marker_timestamps_by_capsule: dict[str, list[str]]
 
 
 def _collect_job_capsules(local_metadata: AssetsJsonldMetadata, /) -> _JobCapsuleCollection:
     """
     Walk every asset path, group by job capsule directory, record presence flags, and
-    capture the ``code/submit.sh`` timestamp per capsule (used for ``created_at``).
+    capture the ``code/submit.sh`` timestamp per capsule (used for ``created_at``) along
+    with the ``code/submitted*`` marker timestamps (used for ``job_submission_time``).
     """
     records_by_capsule: dict[str, dict[str, object]] = {}
     locations_by_capsule: dict[str, _CapsuleLocation] = {}
     log_timestamps_by_capsule: dict[str, list[str]] = {}
     submit_sh_timestamps_by_capsule: dict[str, str] = {}
+    submitted_marker_timestamps_by_capsule: dict[str, list[str]] = {}
 
     for asset_path, asset_metadata in local_metadata.path_to_asset_metadata.items():
         parsed = _parse_capsule_location(asset_path)
@@ -287,6 +290,7 @@ def _collect_job_capsules(local_metadata: AssetsJsonldMetadata, /) -> _JobCapsul
             record["has_code"] = True
         if subpath.startswith("code/submitted"):
             record["has_been_submitted"] = True
+            submitted_marker_timestamps_by_capsule.setdefault(capsule_path, []).append(asset_metadata.date_modified)
         if subpath == "dataset_description.json":
             record["dataset_description_path"][asset_path] = asset_metadata.content_id
         elif _subpath_is_under(subpath, "derivatives"):
@@ -307,6 +311,7 @@ def _collect_job_capsules(local_metadata: AssetsJsonldMetadata, /) -> _JobCapsul
         locations_by_capsule=locations_by_capsule,
         log_timestamps_by_capsule=log_timestamps_by_capsule,
         submit_sh_timestamps_by_capsule=submit_sh_timestamps_by_capsule,
+        submitted_marker_timestamps_by_capsule=submitted_marker_timestamps_by_capsule,
     )
 
 
@@ -319,7 +324,7 @@ def _finalize_job_capsule_records(
     """
     Resolve each capsule's full identity, then attach source-asset fields (``content_id``,
     ``asset_size_bytes``) from the upstream dandiset's ``assets.jsonld``, and ``created_at`` /
-    ``job_completion_time`` from local timestamps.
+    ``job_submission_time`` / ``job_completion_time`` from local timestamps.
     """
     provenance_cache.prefetch(collection.locations_by_capsule)
 
@@ -346,11 +351,15 @@ def _finalize_job_capsule_records(
             asset_size_bytes = source_metadata.content_size
 
         completion_times = collection.log_timestamps_by_capsule.get(capsule_path, [])
+        # A capsule can carry several submitted markers (e.g. a resubmission); the earliest
+        # one is when the job actually left the queue.
+        submission_times = collection.submitted_marker_timestamps_by_capsule.get(capsule_path, [])
         record.update(
             {
                 "content_id": content_id,
                 "asset_size_bytes": asset_size_bytes,
                 "created_at": collection.submit_sh_timestamps_by_capsule.get(capsule_path),
+                "job_submission_time": min(submission_times) if submission_times else None,
                 "job_completion_time": max(completion_times) if completion_times else None,
             }
         )
