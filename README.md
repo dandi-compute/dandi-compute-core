@@ -103,11 +103,24 @@ The one directive that still has to be reproduced by hand is `#SBATCH --output`.
 
 The dispatch directory created under `--processing` holds the manifest, the generated array script, and the array's logs. It has to stay readable from the compute nodes for as long as the array lives, so it is not cleaned up at submission time.
 
+`queue process` reports what each pipeline dispatched, with one line per array naming that group's size, its requests and its share of the limit:
+
+```
+aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requested resources.
+  array 900: 12 capsules requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time
+  array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
+
+lfp: dispatched 1 capsule as array job 902.
+  array 902: 1 capsule requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 4 at a time
+```
+
 To dispatch a single pipeline, or to override its configured concurrency limit for one invocation:
 
 ```bash
 dandicompute queue process --processing ./processing/ --pipeline lfp --max 4
 ```
+
+`--max` overrides the configured limit for every pipeline it dispatches, so pair it with `--pipeline` to change just one.
 
 
 

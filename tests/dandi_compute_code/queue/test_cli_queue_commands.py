@@ -5,7 +5,7 @@ import pytest
 from click.testing import CliRunner
 
 from dandi_compute_code._cli import _dandicompute_group
-from dandi_compute_code.queue import TEST_QUEUE_CONTENT_ID, DispatchResult
+from dandi_compute_code.queue import TEST_QUEUE_CONTENT_ID, CapsuleResources, DispatchedArray, DispatchResult
 
 # These tests exercise CLI argument wiring. Each command delegates directly to
 # the ``QueueState`` model, so the model methods are mocked here to isolate the
@@ -345,7 +345,20 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(tmp_path: pat
     runner = CliRunner()
 
     results = {
-        "aind+ephys": DispatchResult(pipeline="aind+ephys", status="dispatched", task_count=3, array_job_ids=("4242",)),
+        "aind+ephys": DispatchResult(
+            pipeline="aind+ephys",
+            status="dispatched",
+            arrays=(
+                DispatchedArray(
+                    array_job_id="4242",
+                    task_count=3,
+                    resources=CapsuleResources(
+                        memory="1GB", cpus_per_task=1, partition="mit_normal", time_limit="12:00:00"
+                    ),
+                    max_concurrent=2,
+                ),
+            ),
+        ),
         "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
     }
 
@@ -368,7 +381,7 @@ def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(tmp_path: 
     processing_dir.mkdir()
     runner = CliRunner()
 
-    results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", array_job_ids=("9001",))}
+    results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", active_job_ids=("9001",))}
 
     with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
         result = runner.invoke(

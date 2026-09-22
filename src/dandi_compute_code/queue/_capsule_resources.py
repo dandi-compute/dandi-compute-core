@@ -43,6 +43,12 @@ class CapsuleResources:
     partition: str
     time_limit: str
 
+    def describe(self) -> str:
+        """These requests on one line, for logs and the dispatch summary."""
+        cpu_noun = "CPU" if self.cpus_per_task == 1 else "CPUs"
+        description = f"{self.memory} / {self.cpus_per_task} {cpu_noun} / {self.partition} / {self.time_limit}"
+        return description
+
     @classmethod
     def from_submission_script(cls, script: str, /) -> CapsuleResources | None:
         """

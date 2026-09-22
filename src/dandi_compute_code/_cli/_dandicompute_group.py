@@ -596,7 +596,7 @@ def _queue_process_command(
         return
     for result in results.values():
         color = "green" if result.status == "dispatched" else "yellow"
-        _styled_echo(text=f"\n{result.summary()}", color=color)
+        _styled_echo(text="\n" + "\n".join(result.summary_lines()), color=color)
 
 
 # dandicompute issues

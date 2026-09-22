@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import CapsuleResources, DispatchConfig, dispatch_pipeline_jobs
+from dandi_compute_code.queue import CapsuleResources, DispatchConfig, DispatchResult, dispatch_pipeline_jobs
 
 # dispatch_pipeline_jobs reaches the cluster through two subprocess calls that cannot run in
 # CI: `squeue` (is a dispatcher still working through its array?) and `sbatch` (submit the
@@ -75,7 +75,7 @@ def test_dispatch_places_every_pending_capsule_of_the_pipeline_in_one_array(
 
     assert result.status == "dispatched"
     assert result.task_count == 3
-    assert result.array_job_ids == ("4242",)
+    assert tuple(a.array_job_id for a in result.arrays) == ("4242",)
 
 
 @pytest.mark.ai_generated
@@ -257,7 +257,7 @@ def test_dispatch_does_not_resubmit_while_the_dispatcher_is_still_active(
         )
 
     assert result.status == "dispatcher-active"
-    assert result.array_job_ids == ("1234_[3-12%2]",)
+    assert result.active_job_ids == ("1234_[3-12%2]",)
     assert mock_run.call_count == 1
     assert list(processing_directory.iterdir()) == []
 
@@ -397,7 +397,7 @@ def test_dispatch_splits_capsules_that_ask_for_different_resources(
     )
 
     assert result.task_count == 3
-    assert len(result.array_job_ids) == 2
+    assert len(result.arrays) == 2
     assert _manifest(result, 1) == [_AIND_CODE_DIR_PATHS[0], _AIND_CODE_DIR_PATHS[2]]
     assert _manifest(result, 2) == [_AIND_CODE_DIR_PATHS[1]]
     assert "#SBATCH --mem=1GB" in _script(result, 1)
@@ -439,7 +439,7 @@ def test_dispatch_keeps_one_array_when_every_capsule_agrees(processing_directory
         capsule_resources=capsule_resources,
     )
 
-    assert len(result.array_job_ids) == 1
+    assert len(result.arrays) == 1
     assert result.task_count == 3
 
 
@@ -464,5 +464,39 @@ def test_dispatch_groups_an_unreadable_capsule_with_the_pipeline_template(
         capsule_resources=capsule_resources,
     )
 
-    assert len(result.array_job_ids) == 1
+    assert len(result.arrays) == 1
     assert _manifest(result) == _AIND_CODE_DIR_PATHS
+
+
+@pytest.mark.ai_generated
+def test_dispatch_summary_lines_name_each_arrays_group(processing_directory: pathlib.Path) -> None:
+    """
+    The summary shows one line per array with what that group asked for.
+
+    The grouping decides how the pipeline's limit is shared out, so it is worth reading off
+    the dispatch output rather than out of the generated scripts.
+    """
+    capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=4),
+        capsule_resources=capsule_resources,
+    )
+
+    lines = result.summary_lines()
+    assert lines[0] == "aind+ephys: dispatched 2 capsules as 2 array jobs, one per distinct set of requested resources."
+    assert lines[1] == "  array 4242: 1 capsule requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time"
+    assert lines[2] == (
+        "  array 4242: 1 capsule requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time"
+    )
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("status", ["no-pending", "dispatcher-active"])
+def test_dispatch_summary_lines_are_a_single_line_when_nothing_was_dispatched(status: str) -> None:
+    """With no arrays submitted there are no group lines to show."""
+    result = DispatchResult(pipeline="lfp", status=status)
+
+    assert len(result.summary_lines()) == 1

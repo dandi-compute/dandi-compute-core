@@ -36,14 +36,38 @@ DispatchStatus = Literal["dispatched", "no-pending", "dispatcher-active"]
 
 
 @dataclasses.dataclass(frozen=True)
+class DispatchedArray:
+    """One array job, covering the capsules of a pipeline that request the same resources."""
+
+    array_job_id: str
+    task_count: int
+    resources: CapsuleResources
+    max_concurrent: int
+
+    def summary(self) -> str:
+        """This array's size, throttle and requests on one line."""
+        noun = "capsule" if self.task_count == 1 else "capsules"
+        line = (
+            f"array {self.array_job_id}: {self.task_count} {noun} requesting {self.resources.describe()}"
+            f", at most {self.max_concurrent} at a time"
+        )
+        return line
+
+
+@dataclasses.dataclass(frozen=True)
 class DispatchResult:
     """The outcome of one pipeline's dispatch attempt."""
 
     pipeline: str
     status: DispatchStatus
-    task_count: int = 0
-    array_job_ids: tuple[str, ...] = ()
+    arrays: tuple[DispatchedArray, ...] = ()
+    active_job_ids: tuple[str, ...] = ()
     dispatch_directory: pathlib.Path | None = None
+
+    @property
+    def task_count(self) -> int:
+        """How many capsules this dispatch placed in arrays, across every resource group."""
+        return sum(array.task_count for array in self.arrays)
 
     def summary(self) -> str:
         """A single human-readable line describing this outcome."""
@@ -52,13 +76,24 @@ class DispatchResult:
         if self.status == "dispatcher-active":
             return f"{self.pipeline}: the dispatcher is already running; its array has not been exhausted yet."
         noun = "capsule" if self.task_count == 1 else "capsules"
-        if len(self.array_job_ids) == 1:
-            return f"{self.pipeline}: dispatched {self.task_count} {noun} as array job {self.array_job_ids[0]}."
-        job_ids = ", ".join(self.array_job_ids)
+        if len(self.arrays) == 1:
+            return f"{self.pipeline}: dispatched {self.task_count} {noun} as array job {self.arrays[0].array_job_id}."
         return (
-            f"{self.pipeline}: dispatched {self.task_count} {noun} as {len(self.array_job_ids)} array jobs "
-            f"grouped by requested resources ({job_ids})."
+            f"{self.pipeline}: dispatched {self.task_count} {noun} as {len(self.arrays)} array jobs, "
+            f"one per distinct set of requested resources."
         )
+
+    def summary_lines(self) -> list[str]:
+        """
+        The outcome plus one line per array, so a dispatch shows what each group asked for.
+
+        Capsules are grouped by the resources their submission scripts request, and the
+        grouping is what decides how the pipeline's concurrency limit is shared out, so both
+        are worth seeing rather than having to read back the generated scripts.
+        """
+        lines = [self.summary()]
+        lines.extend(f"  {array.summary()}" for array in self.arrays)
+        return lines
 
 
 def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str]) -> list[str]:
@@ -207,7 +242,7 @@ def dispatch_pipeline_jobs(
             job_name,
             ", ".join(active_job_ids),
         )
-        return DispatchResult(pipeline=pipeline, status="dispatcher-active", array_job_ids=tuple(active_job_ids))
+        return DispatchResult(pipeline=pipeline, status="dispatcher-active", active_job_ids=tuple(active_job_ids))
 
     groups = _group_by_requested_resources(
         code_dir_paths=pipeline_code_dir_paths,
@@ -230,8 +265,7 @@ def dispatch_pipeline_jobs(
     dispatch_directory = processing_directory / f"{job_name}-{timestamp}"
     dispatch_directory.mkdir(parents=True, exist_ok=True)
 
-    array_job_ids: list[str] = []
-    dispatched_count = 0
+    dispatched_arrays: list[DispatchedArray] = []
     for group_index, (resources, group_code_dir_paths) in enumerate(groups.items(), start=1):
         dispatched_code_dir_paths = group_code_dir_paths[: dispatch_config.max_array_tasks]
         if len(dispatched_code_dir_paths) < len(group_code_dir_paths):
@@ -274,14 +308,19 @@ def dispatch_pipeline_jobs(
             resources.time_limit,
             max_concurrent_per_group,
         )
-        array_job_ids.append(_submit_array_job(script_file_path))
-        dispatched_count += len(dispatched_code_dir_paths)
+        dispatched_arrays.append(
+            DispatchedArray(
+                array_job_id=_submit_array_job(script_file_path),
+                task_count=len(dispatched_code_dir_paths),
+                resources=resources,
+                max_concurrent=max_concurrent_per_group,
+            )
+        )
 
     result = DispatchResult(
         pipeline=pipeline,
         status="dispatched",
-        task_count=dispatched_count,
-        array_job_ids=tuple(array_job_ids),
+        arrays=tuple(dispatched_arrays),
         dispatch_directory=dispatch_directory,
     )
     return result
