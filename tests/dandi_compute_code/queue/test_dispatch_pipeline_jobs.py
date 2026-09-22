@@ -137,23 +137,34 @@ def test_dispatch_places_every_capsule_in_one_array_when_uncapped(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
-    processing_directory: pathlib.Path,
-) -> None:
+def test_dispatch_script_submits_each_capsule_as_its_own_job(processing_directory: pathlib.Path) -> None:
     """
-    The capsule's `#SBATCH --output` is the one directive still honoured.
+    The capsule is submitted, not executed, so its own `#SBATCH` header governs it.
 
-    Running the capsule inside an array task makes its `#SBATCH` header inert, but that path
-    points into the capsule's own logs directory, which is where the capsule uploads its SLURM
-    log from and where `issues dump` reads it back.
+    `#SBATCH` directives are read by the `sbatch` command at submission time and are inert
+    comments to `bash`. Running a capsule inside the array task would therefore hand it the
+    task's allocation instead of the one its own header asks for.
     """
     result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     script = (result.dispatch_directory / "dispatch.sh").read_text()
-    assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
-    assert 'CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"' in script
-    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"' in script
-    # pipefail is what keeps a failing capsule a failing array task through that pipe.
+    assert 'sbatch --wait "${CAPSULE_CODE_DIRECTORY}/submit.sh"' in script
+    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"' not in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_waits_on_each_capsule_job(processing_directory: pathlib.Path) -> None:
+    """
+    `--wait` is what makes the throttle a limit on concurrent runs rather than submissions.
+
+    Without it an array task would submit and exit immediately, so every capsule would reach
+    the cluster at once however low the concurrency limit was set.
+    """
+    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    assert "sbatch --wait " in script
+    # --wait exits with the capsule job's own code, and errexit turns that into a failed task.
     assert "set -euo pipefail" in script
 
 

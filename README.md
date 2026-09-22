@@ -68,7 +68,7 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 ## Array dispatch
 
-Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects the pipeline's pending job capsules, writes them to a manifest, and submits a single array covering them. Each array task reads its capsule out of the manifest by task index, downloads the capsule's `code/` tree, claims it with a submitted marker, and runs its `submit.sh`.
+Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects the pipeline's pending job capsules, writes them to a manifest, and submits a single array covering them. Each array task reads its capsule out of the manifest by task index, downloads the capsule's `code/` tree, claims it with a submitted marker, and submits its `submit.sh` with `sbatch --wait`.
 
 SLURM holds the queue and enforces the limit. The array's `%n` throttle is the pipeline's `dispatch.max_concurrent` setting, so the remaining tasks stay queued in SLURM rather than being resubmitted by a later invocation. Capsules are never submitted one `sbatch` at a time, and there is no polling of running job counts.
 
@@ -85,9 +85,11 @@ Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeli
 
 `max_concurrent` is the per-pipeline concurrency limit. `max_array_tasks` caps how many capsules one array may hold, and capsules beyond it stay pending for the next dispatch. Set `max_array_tasks` to `null` for no upper bound, which places every pending capsule in one array and relies on the cluster's own `MaxArraySize` being large enough. An omitted key is not the same as `null`: it takes the default of 500.
 
-Those two limits are the whole of what is configurable. What an array task requests from SLURM is pinned in the dispatch template (`mit_normal`, 100MB, 1 CPU, 12 hours), since a task does nothing but run the capsule's own `submit.sh`.
+Those two limits are the whole of what is configurable. What an array task requests from SLURM is pinned in the dispatch template (`mit_normal`, 100MB, 1 CPU, 12 hours), since a task does nothing but submit the capsule and wait for it.
 
-The capsule script is run with `bash` rather than submitted as a job of its own, so the `#SBATCH` resource directives written into it have no effect. Its `#SBATCH --output` is the exception: the array task reads that path back out of the script and tees the run into it, keeping the per-capsule SLURM log in the capsule's `logs/` directory where the capsule uploads it from and where `issues dump` reads it back.
+Each capsule is submitted as a job of its own, so its own `#SBATCH` header is what governs it. Its memory, CPU count, wall time, partition, job name and log path all apply exactly as they did before array dispatch, and nothing about the capsule scripts changed. `#SBATCH` directives are read by the `sbatch` command at submission time, so a capsule run with `bash` instead would silently inherit the array task's allocation rather than its own.
+
+`--wait` is what makes the throttle a limit on concurrent pipeline runs rather than on submissions. The array task holds its slot for as long as the capsule job runs, and exits with that job's own exit code. It follows that an array task has to outlive the capsule it waits on: a wrapper that hits its own wall time first is killed while its capsule job keeps running, which frees the slot early and lets the array admit more work than the limit allows.
 
 The dispatch directory created under `--processing` holds the manifest, the generated array script, and the array's logs. It has to stay readable from the compute nodes for as long as the array lives, so it is not cleaned up at submission time.
 
