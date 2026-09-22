@@ -66,14 +66,6 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 
 
-## Array dispatch
-
-Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. `dandicompute queue process` collects that pipeline's pending job capsules, groups them by the resources their submission scripts request, and submits an array per group. SLURM holds the queue, and each array's throttle holds the pipeline's share of the concurrency limit. A pipeline whose dispatcher is still on the cluster is skipped, so repeated invocations from a crontab add nothing while an array is working.
-
-See [docs/dispatch.md](docs/dispatch.md) for how it works, how it is configured, and how to operate and clean up after it.
-
-
-
 ## Contributing Non-Code Files
 
 Non-code files for the AIND ephys pipeline are organized under the following subdirectories of `src/dandi_compute_code/aind_ephys_pipeline/`:
