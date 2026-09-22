@@ -97,7 +97,7 @@ python -m dandi_compute_code.schemas
 
 This writes `src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json`. Do not edit that file by hand. CI regenerates it and fails if the committed copy differs, and also checks that the published schema rejects exactly what the runtime LinkML path rejects.
 
-The generated output is flat and self-contained, with every enumeration inlined rather than referenced through `$defs`, so a renderer can show a field's allowed values without resolving anything. A numeric set of allowed values is declared in the LinkML schema as an enumeration (its values being text) and pointed at from the slot it governs by a `numeric_enum` annotation. The generator and the loader both read that one declaration.
+The generated output is flat and self-contained, with every enumeration inlined rather than referenced through `$defs`, so a renderer can show a field's allowed values without resolving anything. A numeric set of allowed values is declared in the LinkML schema as an enumeration (its values being text) and pointed at from the slot it governs by a `numeric_enum` annotation. The generator and `validate_against_schema` both resolve that one declaration, so a schema carrying such an annotation is enforced wherever it is validated rather than only where a caller remembers to check.
 
 To add a schema, put it in `src/dandi_compute_code/schemas/` named `[name].linkml.yaml` and add it to `SCHEMA_PATHS` and `SCHEMA_TREE_ROOTS` in `schemas/_globals.py`. Both validation layers enumerate those, so it is covered by CI from then on.
 

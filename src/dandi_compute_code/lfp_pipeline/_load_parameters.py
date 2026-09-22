@@ -2,23 +2,10 @@ import hashlib
 import json
 
 from ._globals import _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
-from ..schemas import numeric_enum_slots, permissible_values, validate_against_schema, validate_registry
+from ..schemas import validate_against_schema, validate_registry
 
-#: The schema describing these parameters, and the class in it they take.
+#: The packaged schema describing these parameters.
 _SCHEMA = "lfp_parameters"
-_SCHEMA_CLASS = "LfpParameters"
-
-
-def _format_number(value, /) -> str:
-    """Write one number the way the schema's enumerations write it."""
-    return format(float(value), "g")
-
-
-def _format_numeric_value(value, /) -> str:
-    """Write a number, or a sequence of them, the way the schema's enumerations write it."""
-    if isinstance(value, (list, tuple)):
-        return "-".join(_format_number(element) for element in value)
-    return _format_number(value)
 
 
 def validate_lfp_parameters(parameters, /) -> dict:
@@ -36,26 +23,8 @@ def validate_lfp_parameters(parameters, /) -> dict:
         If the parameters do not conform to ``schemas/lfp_parameters.linkml.yaml``, or if a
         numeric parameter is outside the fixed set that schema enumerates for it.
     """
-    validate_against_schema(parameters, schema=_SCHEMA, description="LFP parameters")
-
-    # A fixed set of numbers is stated in the schema as an enumeration, since an enumeration's
-    # values are text, and the slot it governs points at it. Both are read back here rather
-    # than repeated, so the allowed values are written in exactly one place.
-    for field, enum_name in numeric_enum_slots(schema=_SCHEMA, class_name=_SCHEMA_CLASS):
-        allowed = permissible_values(schema=_SCHEMA, enum_name=enum_name)
-        value = parameters[field]
-        try:
-            formatted_value = _format_numeric_value(value)
-        except (TypeError, ValueError):
-            formatted_value = None
-        if formatted_value not in allowed:
-            message = (
-                f"Invalid LFP parameters: {field} {value!r} is not one of the supported values. "
-                f"Supported values, as the '{enum_name}' enumeration writes them, are: {list(allowed)}."
-            )
-            raise ValueError(message)
-
-    return parameters
+    validated_parameters = validate_against_schema(parameters, schema=_SCHEMA, description="LFP parameters")
+    return validated_parameters
 
 
 def load_lfp_parameters(parameters_key: str = "default", /) -> dict:

@@ -99,7 +99,56 @@ def validate_against_schema(
             f"{len(errors)} error(s). First error: {errors[0]!r}"
         )
         raise ValueError(message)
+
+    if isinstance(schema, str):
+        _validate_numeric_enums(
+            instance,
+            schema=schema,
+            class_name=resolved_target,
+            description=description,
+        )
     return instance
+
+
+def _format_number(value, /) -> str:
+    """Write one number the way a schema's enumerations write it."""
+    return format(float(value), "g")
+
+
+def _format_numeric_value(value, /) -> str:
+    """Write a number, or a sequence of them, the way a schema's enumerations write it."""
+    if isinstance(value, (list, tuple)):
+        return "-".join(_format_number(element) for element in value)
+    return _format_number(value)
+
+
+def _validate_numeric_enums(instance: dict, /, *, schema: str, class_name: str, description: str) -> None:
+    """
+    Check every slot whose allowed values are a fixed numeric set.
+
+    LinkML cannot attach such a set to the slot it governs, because an enumeration's values
+    are text. The schema therefore declares the set as an enumeration and points at it from
+    the slot with a ``numeric_enum`` annotation. This resolves that annotation, so a schema
+    carrying one is enforced wherever it is validated rather than only where a caller
+    remembers to check.
+
+    :raises ValueError: If a value is outside the set its slot's enumeration names.
+    """
+    for field, enum_name in _numeric_enum_slots(schema=schema, class_name=class_name):
+        if field not in instance:
+            continue
+        allowed = permissible_values(schema=schema, enum_name=enum_name)
+        value = instance[field]
+        try:
+            formatted_value = _format_numeric_value(value)
+        except (TypeError, ValueError):
+            formatted_value = None
+        if formatted_value not in allowed:
+            message = (
+                f"Invalid {description}: {field} {value!r} is not one of the supported values. "
+                f"Supported values, as the '{enum_name}' enumeration writes them, are: {list(allowed)}."
+            )
+            raise ValueError(message)
 
 
 @functools.lru_cache(maxsize=None)
@@ -129,7 +178,7 @@ def permissible_values(*, schema: str, enum_name: str) -> tuple[str, ...]:
 
 
 @functools.lru_cache(maxsize=None)
-def numeric_enum_slots(*, schema: str, class_name: str) -> tuple[tuple[str, str], ...]:
+def _numeric_enum_slots(*, schema: str, class_name: str) -> tuple[tuple[str, str], ...]:
     """
     The slots of a class whose allowed values are a fixed numeric set.
 
