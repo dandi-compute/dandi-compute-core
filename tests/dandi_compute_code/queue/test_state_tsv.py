@@ -22,10 +22,7 @@ def _make_entry(**overrides: object) -> JobCapsule:
     entry_kwargs = {
         "content_id": "content-id-1",
         "asset_size_bytes": 1234,
-        "has_code": True,
-        "has_been_submitted": True,
-        "has_output": True,
-        "has_logs": True,
+        "status": "successful",
         "created_at": "2025-01-01T00:00:00+00:00",
         "job_submission_time": "2025-01-01T00:15:00+00:00",
         "job_completion_time": "2025-01-01T01:00:00+00:00",
@@ -47,7 +44,7 @@ def test_job_capsule_to_tsv_row_flattens_nested_dicts_as_json() -> None:
     entry = _make_entry()
     row = entry.to_tsv_row()
     assert row["dandiset_id"] == "001849"
-    assert row["has_code"] == "True"
+    assert row["status"] == "successful"
     assert row["asset_size_bytes"] == "1234"
     assert json.loads(row["output_paths"]) == {"a/output.nwb": "out-id"}
     assert json.loads(row["log_paths"]) == {"a/logs/stdout.txt": "log-id"}
@@ -56,7 +53,7 @@ def test_job_capsule_to_tsv_row_flattens_nested_dicts_as_json() -> None:
 @pytest.mark.ai_generated
 def test_job_capsule_to_tsv_row_empty_dict_becomes_empty_cell() -> None:
     """JobCapsule.to_tsv_row writes an empty string for empty nested mappings."""
-    entry = _make_entry(has_output=False, output_paths={}, has_logs=False, log_paths={})
+    entry = _make_entry(status="pending", output_paths={}, log_paths={})
     row = entry.to_tsv_row()
     assert row["output_paths"] == ""
     assert row["log_paths"] == ""

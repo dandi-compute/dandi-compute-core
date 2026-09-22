@@ -35,7 +35,7 @@ from ._dispatch import DispatchResult, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
-from ._job_capsule import _STATE_TSV_FIELD_NAMES, JobCapsule
+from ._job_capsule import _STATE_TSV_FIELD_NAMES, JobCapsule, JobStatus
 from ._queue_utils import (
     _CapsuleProvenanceCache,
     _collect_job_capsules,
@@ -95,30 +95,29 @@ class PipelineQueue:
     def __len__(self) -> int:
         return len(self.entries)
 
+    def with_status(self, status: JobStatus, /) -> list[JobCapsule]:
+        """Entries whose recorded :attr:`~._job_capsule.JobCapsule.status` is *status*."""
+        return [entry for entry in self.entries if entry.status == status]
+
     @property
     def pending(self) -> list[JobCapsule]:
         """Entries with code prepared but not yet submitted."""
-        return [e for e in self.entries if e.is_pending]
+        return self.with_status("pending")
 
     @property
     def stalled(self) -> list[JobCapsule]:
         """Entries submitted to the scheduler with no logs or output yet."""
-        return [e for e in self.entries if e.is_stalled]
-
-    @property
-    def running(self) -> list[JobCapsule]:
-        """Entries with logs present but no output — likely still executing."""
-        return [e for e in self.entries if e.is_running]
+        return self.with_status("stalled")
 
     @property
     def successful(self) -> list[JobCapsule]:
         """Entries whose output directory is present."""
-        return [e for e in self.entries if e.is_successful]
+        return self.with_status("successful")
 
     @property
     def failed(self) -> list[JobCapsule]:
-        """Entries with code and logs but no output."""
-        return [e for e in self.entries if e.is_failed]
+        """Entries with logs but no output."""
+        return self.with_status("failed")
 
     @property
     def successful_asset_bytes_total(self) -> int:
@@ -126,7 +125,7 @@ class PipelineQueue:
         return sum(
             entry.asset_size_bytes
             for entry in self.entries
-            if entry.is_successful
+            if entry.status == "successful"
             and isinstance(entry.asset_size_bytes, int)
             and not isinstance(entry.asset_size_bytes, bool)
         )
@@ -531,11 +530,10 @@ class PipelineQueue:
         """
         Move every entry with the given *status* into the failed runs archive.
 
-        *status* names the :class:`PipelineQueue` property selecting the entries to
-        archive: ``"failed"`` (:attr:`failed` — code and logs present, no output),
-        ``"pending"`` (:attr:`pending` — code prepared but never submitted), or
-        ``"stalled"`` (:attr:`stalled` — submitted to the scheduler but no logs or
-        output ever appeared). For each matching entry, resolves its capsule path
+        *status* is the recorded :attr:`~._job_capsule.JobCapsule.status` selecting the
+        entries to archive: ``"failed"`` (logs present, no output), ``"pending"`` (code
+        prepared but never submitted), or ``"stalled"`` (submitted to the scheduler but
+        no logs or output ever appeared). For each matching entry, resolves its capsule path
         against *dandiset_id*'s remote ``assets.jsonld`` (see
         :meth:`JobCapsule.resolve_capsule_path`) and moves the
         corresponding capsule from *dandiset_id* to *archive_dandiset_id* via
@@ -574,7 +572,7 @@ class PipelineQueue:
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)
 
-        entries = getattr(self, status)
+        entries = self.with_status(status)
         archived: list[str] = []
         if not entries:
             return archived

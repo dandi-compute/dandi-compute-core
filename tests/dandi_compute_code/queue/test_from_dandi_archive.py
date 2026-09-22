@@ -60,7 +60,7 @@ def test_from_dandi_reads_from_archive_dandiset_when_requested() -> None:
     assert len(archive_entries) == 1
     assert archive_entries[0]["dandi_path"] == source_path
     assert archive_entries[0]["content_id"] == "source-id"
-    assert archive_entries[0]["has_code"] is True
+    assert archive_entries[0]["status"] == "pending"
 
 
 @pytest.mark.ai_generated

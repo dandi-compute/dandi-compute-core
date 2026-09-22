@@ -3,11 +3,12 @@ from ._capsule_resources import CapsuleResources, read_capsule_resources
 from ._dispatch import DispatchedArray, DispatchResult, clean_dispatch_directories, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
 from ._globals import TEST_QUEUE_CONTENT_ID
-from ._job_capsule import JobCapsule
+from ._job_capsule import JOB_STATUSES, JobCapsule, JobStatus
 from ._job_info import JobInfo
 from ._pipeline_queue import PipelineQueue
 
 __all__ = [
+    "JOB_STATUSES",
     "TEST_QUEUE_CONTENT_ID",
     "AindEphysPipelineQueue",
     "CapsuleResources",
@@ -16,6 +17,7 @@ __all__ = [
     "DispatchedArray",
     "JobCapsule",
     "JobInfo",
+    "JobStatus",
     "PipelineQueue",
     "clean_dispatch_directories",
     "dispatch_pipeline_jobs",

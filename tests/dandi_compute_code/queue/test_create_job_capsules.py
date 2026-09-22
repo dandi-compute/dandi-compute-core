@@ -53,7 +53,7 @@ def _pipeline_queue_with_capsule(*, content_id: str, params: str, config: str, v
         config=PipelineQueue.resolve_config_key_to_id(pipeline="aind+ephys", config_key=config),
         codebase="v0.1.0",
     )
-    entry = JobCapsule(job=job, content_id=content_id, asset_size_bytes=1024, has_code=True)
+    entry = JobCapsule(job=job, content_id=content_id, asset_size_bytes=1024, status="pending")
     return PipelineQueue(entries=[entry])
 
 

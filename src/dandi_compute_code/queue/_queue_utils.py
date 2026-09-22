@@ -30,6 +30,7 @@ from ._globals import (
     _PIPELINE_CONFIG_SCHEMA_PATH,
     _VERSION_TAG_RE,
 )
+from ._job_capsule import _derive_job_status
 from ._job_info import JobInfo
 from ..aind_ephys_pipeline._prepare_job import _parse_pipeline_version
 from ..dandiset._job_id import _JOB_ID_RE, _PROVENANCE_KEY
@@ -241,12 +242,14 @@ def _resolve_job_info(*, location: _CapsuleLocation, provenance_cache: _CapsuleP
     return job_info
 
 
+#: Presence markers accumulated while walking the assets, collapsed into ``status`` once
+#: the walk is done (see :func:`_finalize_job_capsule_records`).
+_PRESENCE_MARKERS = ("has_code", "has_been_submitted", "has_output", "has_logs")
+
+
 def _new_capsule_record() -> dict[str, object]:
     return {
-        "has_code": False,
-        "has_been_submitted": False,
-        "has_output": False,
-        "has_logs": False,
+        **{marker: False for marker in _PRESENCE_MARKERS},
         "dataset_description_path": {},
         "output_paths": {},
         "log_paths": {},
@@ -325,6 +328,9 @@ def _finalize_job_capsule_records(
     Resolve each capsule's full identity, then attach source-asset fields (``content_id``,
     ``asset_size_bytes``) from the upstream dandiset's ``assets.jsonld``, and ``created_at`` /
     ``job_submission_time`` / ``job_completion_time`` from local timestamps.
+
+    The presence markers gathered during the walk are collapsed into the single ``status``
+    field the table carries.
     """
     provenance_cache.prefetch(collection.locations_by_capsule)
 
@@ -354,8 +360,10 @@ def _finalize_job_capsule_records(
         # A capsule can carry several submitted markers (e.g. a resubmission); the earliest
         # one is when the job actually left the queue.
         submission_times = collection.submitted_marker_timestamps_by_capsule.get(capsule_path, [])
+        presence = {marker: bool(record.pop(marker)) for marker in _PRESENCE_MARKERS}
         record.update(
             {
+                "status": _derive_job_status(**presence),
                 "content_id": content_id,
                 "asset_size_bytes": asset_size_bytes,
                 "created_at": collection.submit_sh_timestamps_by_capsule.get(capsule_path),
