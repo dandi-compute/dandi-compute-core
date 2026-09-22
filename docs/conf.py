@@ -49,7 +49,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = "pydata_sphinx_theme"
-html_title = "DANDI Compute (Code)"
+html_title = "DANDI Compute (Core)"
 html_show_sourcelink = False
 
 html_theme_options = {
