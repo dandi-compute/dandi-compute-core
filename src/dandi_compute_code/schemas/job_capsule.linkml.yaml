@@ -4,7 +4,8 @@ title: DANDI Compute Job Capsule
 description: >-
   A LinkML schema describing a job capsule, which is one unit of pipeline work over one
   DANDI asset. The flat record described here is what `JobCapsule.to_dict` produces and
-  `JobCapsule.from_dict` consumes, and it is also one row of the `state.tsv` state table.
+  `JobCapsule.from_dict` consumes. Apart from its path mappings, which are kept as rows of
+  the sibling `paths.tsv` table, it is also one row of the `state.tsv` state table.
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -106,7 +107,7 @@ classes:
     description: >-
       One job capsule as it is serialised. This is a `JobInfo` flattened together with the
       capsule's lifecycle status, its source asset, its timestamps and its output mappings.
-      One of these is one row of `state.tsv`.
+      One of these is one row of `state.tsv`, with its path mappings kept in `paths.tsv`.
     tree_root: true
     is_a: JobInfo
     attributes:
@@ -200,7 +201,9 @@ classes:
   StateTable:
     description: >-
       A whole `state.tsv` table, as the list of job capsule records it holds. The table is
-      strictly tabular on disk. Every mapping-valued column is written there as compact JSON.
+      strictly tabular on disk. The mapping-valued fields are not columns of it. They are
+      written to the sibling `paths.tsv` table instead, one row per asset path, carrying
+      the `job_id`, the kind of mapping, the path and its content identifier.
     attributes:
       capsules:
         description: One entry per job capsule, in the table's sort order.

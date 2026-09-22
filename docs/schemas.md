@@ -6,7 +6,7 @@ The internal structures this package defines and passes around are described by 
 | --- | --- |
 | `pipeline_config.linkml.yaml` | `queue/pipeline_configs.json`: which parameter sets each pipeline forms capsules for, its per-asset overrides and its dispatcher limits. |
 | `registry.linkml.yaml` | Every `registries/*.json` file, which maps a short key onto a packaged file and the MD5 it must still have. |
-| `job_capsule.linkml.yaml` | A job capsule's identity and lifecycle status, which is one row of `state.tsv`. |
+| `job_capsule.linkml.yaml` | A job capsule's identity and lifecycle status, which is one row of `state.tsv` plus its rows of `paths.tsv`. |
 | `dispatch.linkml.yaml` | One pipeline's array dispatcher settings, and what one dispatch attempt produced. |
 | `assets_metadata.linkml.yaml` | The slice of a Dandiset's `assets.jsonld` this package indexes. |
 

@@ -39,24 +39,37 @@ def _make_entry(**overrides: object) -> JobCapsule:
 
 
 @pytest.mark.ai_generated
-def test_job_capsule_to_tsv_row_flattens_nested_dicts_as_json() -> None:
-    """JobCapsule.to_tsv_row serialises nested path/content-id mappings as JSON strings."""
+def test_job_capsule_to_tsv_row_leaves_out_path_mappings() -> None:
+    """JobCapsule.to_tsv_row keeps the path mappings out of the state.tsv row."""
     entry = _make_entry()
     row = entry.to_tsv_row()
     assert row["dandiset_id"] == "001849"
     assert row["status"] == "successful"
     assert row["asset_size_bytes"] == "1234"
-    assert json.loads(row["output_paths"]) == {"a/output.nwb": "out-id"}
-    assert json.loads(row["log_paths"]) == {"a/logs/stdout.txt": "log-id"}
+    assert {"dataset_description_path", "output_paths", "log_paths"} & row.keys() == set()
 
 
 @pytest.mark.ai_generated
-def test_job_capsule_to_tsv_row_empty_dict_becomes_empty_cell() -> None:
-    """JobCapsule.to_tsv_row writes an empty string for empty nested mappings."""
-    entry = _make_entry(status="pending", output_paths={}, log_paths={})
-    row = entry.to_tsv_row()
-    assert row["output_paths"] == ""
-    assert row["log_paths"] == ""
+def test_job_capsule_to_paths_tsv_rows_lists_one_row_per_path() -> None:
+    """JobCapsule.to_paths_tsv_rows writes one paths.tsv row per asset path, keyed by job_id."""
+    rows = _make_entry().to_paths_tsv_rows()
+    assert rows == [
+        {
+            "job_id": "job-250101abc123",
+            "kind": "dataset_description",
+            "path": "a/dataset_description.json",
+            "content_id": "dd-id",
+        },
+        {"job_id": "job-250101abc123", "kind": "output", "path": "a/output.nwb", "content_id": "out-id"},
+        {"job_id": "job-250101abc123", "kind": "log", "path": "a/logs/stdout.txt", "content_id": "log-id"},
+    ]
+
+
+@pytest.mark.ai_generated
+def test_job_capsule_to_paths_tsv_rows_empty_without_paths() -> None:
+    """JobCapsule.to_paths_tsv_rows writes nothing for an entry without any paths."""
+    entry = _make_entry(status="pending", dataset_description_path={}, output_paths={}, log_paths={})
+    assert entry.to_paths_tsv_rows() == []
 
 
 @pytest.mark.ai_generated
@@ -127,8 +140,60 @@ def test_pipeline_queue_from_tsv_preserves_dataset_description_path(tmp_path: pa
 
 
 @pytest.mark.ai_generated
+def test_pipeline_queue_to_tsv_writes_paths_table_beside_state(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.to_tsv writes paths.tsv next to state.tsv, and from_tsv reads every mapping back."""
+    entry = _make_entry(output_paths={"a/output.nwb": "out-id", "a/other.nwb": "other-id"})
+    state_file = tmp_path / "state.tsv"
+    PipelineQueue(entries=[entry]).to_tsv(state_file)
+
+    paths_file = tmp_path / "paths.tsv"
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert paths_file.read_text() == PipelineQueue(entries=[entry]).to_paths_tsv_string()
+    assert paths_file.read_text().splitlines()[0].split("\t") == ["job_id", "kind", "path", "content_id"]
+    assert pipeline_queue.entries[0].dataset_description_path == entry.dataset_description_path
+    assert pipeline_queue.entries[0].output_paths == entry.output_paths
+    assert pipeline_queue.entries[0].log_paths == entry.log_paths
+
+
+@pytest.mark.ai_generated
+def test_pipeline_queue_from_tsv_without_paths_table(tmp_path: pathlib.Path) -> None:
+    """PipelineQueue.from_tsv leaves the path mappings empty when there is no paths.tsv."""
+    state_file = tmp_path / "state.tsv"
+    state_file.write_text(PipelineQueue(entries=[_make_entry()]).to_tsv_string())
+
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert pipeline_queue.entries[0].output_paths == {}
+    assert pipeline_queue.entries[0].log_paths == {}
+
+
+@pytest.mark.ai_generated
+def test_pipeline_queue_from_tsv_reads_legacy_json_path_columns(tmp_path: pathlib.Path) -> None:
+    """A state.tsv written before the paths moved to paths.tsv still reads its JSON path columns."""
+    entry = _make_entry()
+    row = {
+        **entry.to_tsv_row(),
+        "dataset_description_path": json.dumps(entry.dataset_description_path),
+        "output_paths": json.dumps(entry.output_paths),
+        "log_paths": "",
+    }
+    state_file = tmp_path / "state.tsv"
+    with state_file.open("w", newline="") as file_stream:
+        writer = csv.DictWriter(file_stream, fieldnames=list(row), delimiter="\t", lineterminator="\n")
+        writer.writeheader()
+        writer.writerow(row)
+
+    pipeline_queue = PipelineQueue.from_tsv(state_file)
+
+    assert pipeline_queue.entries[0].dataset_description_path == entry.dataset_description_path
+    assert pipeline_queue.entries[0].output_paths == entry.output_paths
+    assert pipeline_queue.entries[0].log_paths == {}
+
+
+@pytest.mark.ai_generated
 def test_pipeline_queue_empty_dataset_description_path_cell(tmp_path: pathlib.Path) -> None:
-    """PipelineQueue.from_tsv converts an empty dataset_description_path cell to an empty dict."""
+    """PipelineQueue.from_tsv reads an entry without a dataset description path back as an empty dict."""
     state_file = tmp_path / "state.tsv"
     entry = _make_entry(dataset_description_path={})
     PipelineQueue(entries=[entry]).to_tsv(state_file)
