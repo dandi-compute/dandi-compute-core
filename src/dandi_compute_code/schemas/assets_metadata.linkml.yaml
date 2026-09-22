@@ -1,0 +1,99 @@
+id: https://github.com/dandi-compute/dandi-compute-core/schemas/assets_metadata
+name: dandi_compute_assets_metadata
+title: DANDI Compute Assets Metadata
+description: >-
+  A LinkML schema describing the slice of a Dandiset's `assets.jsonld` this package indexes.
+  Only the fields the queue resolves capsules against are modelled. The full DANDI asset
+  records are carried alongside unchanged.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
+default_prefix: dandi_compute
+default_range: string
+
+imports:
+  - linkml:types
+
+classes:
+  AssetMetadata:
+    description: >-
+      The indexed metadata for one asset path. Every field is required, because an asset
+      record missing any of them is rejected on load rather than indexed with a gap.
+    attributes:
+      path:
+        description: The asset's path within its Dandiset.
+        identifier: true
+        range: string
+        required: true
+
+      date_modified:
+        description: When the asset was last modified, as `dateModified` records it.
+        range: string
+        required: true
+
+      content_size:
+        description: The asset's size in bytes, read from `contentSize`.
+        range: integer
+        minimum_value: 0
+        required: true
+
+      content_id:
+        description: >-
+          The asset's content identifier, taken from the trailing segment of its blob or
+          zarr `contentUrl`.
+        range: string
+        required: true
+
+  AssetsJsonldMetadata:
+    description: >-
+      A Dandiset's `assets.jsonld` indexed two ways, since the queue looks assets up both
+      by where they live and by what they contain.
+    tree_root: true
+    attributes:
+      path_to_asset_metadata:
+        description: The indexed metadata for every asset, keyed by asset path.
+        range: AssetMetadata
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: true
+
+      content_id_to_asset:
+        description: >-
+          The full, unmodified asset record for every asset, keyed by content identifier.
+          Kept whole so that callers needing a field this schema does not model, such as
+          `contentUrl` when reading a submission script back, can still reach it.
+        range: AssetRecord
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: true
+
+  AssetRecord:
+    description: >-
+      One asset record exactly as `assets.jsonld` carries it. Left open, since this package
+      indexes a few fields and passes the rest through untouched.
+    attributes:
+      path:
+        description: The asset's path within its Dandiset.
+        range: string
+        required: false
+
+      contentSize:
+        description: >-
+          The asset's size in bytes. Accepted as a string and coerced to an integer on load,
+          which is why this is not constrained to an integer here.
+        range: string
+        required: false
+
+      dateModified:
+        description: When the asset was last modified.
+        range: string
+        required: false
+
+      contentUrl:
+        description: Every URL the asset can be fetched from, including its blob or zarr URL.
+        range: string
+        multivalued: true
+        required: false

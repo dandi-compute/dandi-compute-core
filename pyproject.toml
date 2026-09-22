@@ -9,7 +9,7 @@ packages = ["src/dandi_compute_code"]
 
 [project]
 name = "dandi-compute-code"
-version = "0.7.6"
+version = "0.7.7"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -30,6 +30,11 @@ dandicompute = "dandi_compute_code._cli:_dandicompute_group"
 
 [dependency-groups]
 dev = ["ipython", "pre-commit", "pytest"]
+# The full LinkML distribution, used only to validate the packaged schemas and the files
+# shipped against them. It compiles a schema to JSON Schema and validates against that, which
+# rejects the mismatched scalars the `linkml-runtime` validator normalizes instead. It is too
+# heavy to carry at runtime, so the CI schema validation job installs it separately.
+schemas = ["linkml>=1.8"]
 docs = [
     "sphinx>=7.0",
     "pydata-sphinx-theme>=0.15",
@@ -38,6 +43,7 @@ docs = [
 all = [
     {include-group = "dev"},
     {include-group = "docs"},
+    {include-group = "schemas"},
 ]
 
 

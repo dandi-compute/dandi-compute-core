@@ -41,5 +41,35 @@ jobs:
       - name: Test import
         run: python -c "import dandi_compute_code"
 
+      # Two modules exercise the LFP processing code itself, which needs the pipeline
+      # container's scientific stack. They are covered by the `lfp` job below, which
+      # installs it. Everything else runs on the base install across the whole matrix.
       - name: Run unit tests
+        run: |
+          pytest tests/ -v \
+            --ignore=tests/dandi_compute_code/lfp_pipeline/test_extract_lfp.py \
+            --ignore=tests/dandi_compute_code/lfp_pipeline/test_write_nwb.py
+
+  lfp:
+    name: LFP pipeline environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up environment
+        uses: actions/checkout@v7
+
+      # Pinned rather than taken from the matrix: this installs the pipeline container's
+      # scientific stack, which does not publish wheels for every version the rest of the
+      # suite is tested against.
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install the package and the LFP runtime environment
+        run: |
+          python -m pip install --upgrade pip wheel
+          pip install -e . ./src/dandi_compute_code/lfp_pipeline/envs pytest
+
+      - name: Run the whole suite with the LFP stack available
         run: pytest tests/ -v

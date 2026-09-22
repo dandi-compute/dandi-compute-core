@@ -4,6 +4,7 @@ import json
 import jsonschema
 
 from ._globals import _PARAMETER_SCHEMA_FILE_PATH, _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
+from ..schemas import validate_registry
 
 
 def validate_lfp_parameters(parameters, /) -> dict:
@@ -29,10 +30,11 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     """
     Resolve a registered parameters key to a validated set of LFP parameters.
 
-    Mirrors the AIND ephys pipeline approach. The key is looked up in
-    ``registries/registered_params.json``, the referenced file under ``params/``
-    is checked against its recorded MD5, and the loaded parameters are validated
-    against ``parameter_schema.json``.
+    Mirrors the AIND ephys pipeline approach. The registry itself is validated against
+    ``schemas/registry.linkml.yaml``, the key is looked up in
+    ``registries/registered_params.json``, the referenced file under ``params/`` is checked
+    against its recorded MD5, and the loaded parameters are validated against
+    ``parameter_schema.json``.
 
     :param parameters_key: The short name of the parameters to load.
         Must be a key registered in ``registries/registered_params.json``.
@@ -43,12 +45,14 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     Raises
     ------
     ValueError
-        If ``parameters_key`` is not registered, or if the MD5 checksum of the
-        resolved file does not match its registry entry.
+        If the registry does not conform to its schema, if ``parameters_key`` is not
+        registered, or if the MD5 checksum of the resolved file does not match its
+        registry entry.
     jsonschema.ValidationError
         If the loaded parameters do not conform to ``parameter_schema.json``.
     """
     registry = json.loads(_PARAMS_REGISTRY_FILE_PATH.read_text())
+    validate_registry(registry, description=f"registry '{_PARAMS_REGISTRY_FILE_PATH.name}'")
     if parameters_key not in registry:
         registered_keys = list(registry.keys())
         message = (

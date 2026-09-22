@@ -1,0 +1,210 @@
+id: https://github.com/dandi-compute/dandi-compute-core/schemas/job_capsule
+name: dandi_compute_job_capsule
+title: DANDI Compute Job Capsule
+description: >-
+  A LinkML schema describing a job capsule, which is one unit of pipeline work over one
+  DANDI asset. The flat record described here is what `JobCapsule.to_dict` produces and
+  `JobCapsule.from_dict` consumes, and it is also one row of the `state.tsv` state table.
+
+prefixes:
+  linkml: https://w3id.org/linkml/
+  dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
+default_prefix: dandi_compute
+default_range: string
+
+imports:
+  - linkml:types
+
+enums:
+  JobStatus:
+    description: >-
+      Where a job capsule has reached in its lifecycle. One status replaces the presence
+      flags the state table used to carry, and names the same subsets the queue selects on.
+    permissible_values:
+      pending:
+        description: A code directory exists, but the capsule has not been submitted.
+
+      stalled:
+        description: A submitted marker exists, but nothing has been logged since.
+
+      failed:
+        description: >-
+          Logs exist without output. This covers both a run still in progress and a run
+          that failed, because nothing recorded about a capsule tells the two apart.
+
+      successful:
+        description: A derivatives directory exists.
+
+      unknown:
+        description: >-
+          Nothing that would place the capsule in the lifecycle was observed. Also the
+          fallback for a status cell that is empty or unrecognised.
+
+classes:
+  JobInfo:
+    description: >-
+      The immutable identity of one job capsule. These fields are parsed back out of the
+      capsule's directory layout and submission script, so they describe what was run
+      rather than what was asked for.
+    attributes:
+      job_id:
+        description: >-
+          The `job-{YYMMDD}{hash}` directory name of the capsule. A `-2`, `-3` counter is
+          appended when one logical job forms a second capsule on the same day.
+        range: string
+        required: true
+        pattern: "^job-\\d{6}[0-9a-f]{6}(?:-(?:[2-9]|\\d{2,}))?$"
+
+      dandiset_id:
+        description: The six-digit Dandiset the source asset belongs to.
+        range: string
+        required: true
+        pattern: "^\\d{6}$"
+
+      dandi_path:
+        description: The source asset's path within its Dandiset.
+        range: string
+        required: true
+
+      pipeline:
+        description: The pipeline that formed this capsule, such as "aind+ephys" or "lfp".
+        range: string
+        required: true
+
+      version:
+        description: >-
+          The pipeline release the capsule was prepared against, such as `v1.2.2`. The
+          leading `v` is optional, a release need not carry three parts, and a pre-release
+          or build suffix may follow, as in `v1.0.0-fixes` or `v1.1.1+b268fd2+a66c8df`.
+        range: string
+        required: true
+        pattern: "^v?\\d+(?:\\.\\d+)*(?:[-+][0-9A-Za-z.+-]+)?$"
+
+      params:
+        description: The registered parameter set key the capsule was formed with.
+        range: string
+        required: true
+
+      config:
+        description: >-
+          The registered SLURM configuration key the capsule was formed with. Pipelines
+          with no configuration of their own record a placeholder here rather than omitting it.
+        range: string
+        required: true
+
+      codebase:
+        description: >-
+          The version of this repository that formed the capsule. Deliberately excluded
+          from a capsule's identity, since a capsule is the same logical job regardless of
+          which codebase version produced it. Reads `unknown` when the package is running
+          from a source tree with no installed distribution to report a version.
+        range: string
+        required: true
+        pattern: "^(?:unknown|v?\\d+(?:\\.\\d+)*(?:[-+][0-9A-Za-z.+-]+)?)$"
+
+  JobCapsule:
+    description: >-
+      One job capsule as it is serialised. This is a `JobInfo` flattened together with the
+      capsule's lifecycle status, its source asset, its timestamps and its output mappings.
+      One of these is one row of `state.tsv`.
+    tree_root: true
+    is_a: JobInfo
+    attributes:
+      content_id:
+        description: >-
+          The source asset's DANDI content identifier. Null when the capsule's upstream
+          source could not be resolved, which is recorded rather than guessed at.
+        range: string
+        required: false
+
+      asset_size_bytes:
+        description: The source asset's size in bytes, or null alongside an unresolved content_id.
+        range: integer
+        minimum_value: 0
+        required: false
+
+      status:
+        description: Where this capsule has reached in its lifecycle.
+        range: JobStatus
+        required: true
+
+      dataset_description_path:
+        description: >-
+          A mapping from the capsule's dataset description path to the content identifier
+          of the asset at that path.
+        range: string
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: false
+
+      output_paths:
+        description: >-
+          A mapping from each output asset path under the capsule's derivatives directory
+          to that asset's content identifier.
+        range: string
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: false
+
+      log_paths:
+        description: >-
+          A mapping from each log asset path under the capsule's logs directory to that
+          asset's content identifier.
+        range: string
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: false
+
+      created_at:
+        description: >-
+          When the capsule was formed, taken from its submission script. An ISO 8601
+          timestamp, treated as UTC when it carries no offset.
+        range: string
+        required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
+
+      job_submission_time:
+        description: >-
+          When the job left the queue, taken from the earliest submitted marker. A capsule
+          may carry several markers after a resubmission, so the earliest is the one used.
+        range: string
+        required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
+
+      job_completion_time:
+        description: >-
+          When the job last wrote a log. Null for a capsule that has not run.
+        range: string
+        required: false
+        pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?$"
+
+      queue_wait_seconds:
+        description: >-
+          Whole seconds between `created_at` and `job_submission_time`. Derived rather than
+          stored, so it is written to the state table but ignored when one is read back.
+        range: integer
+        minimum_value: 0
+        required: false
+
+      run_duration_seconds:
+        description: >-
+          Whole seconds between `job_submission_time` and `job_completion_time`. Derived on
+          the same terms as `queue_wait_seconds`.
+        range: integer
+        minimum_value: 0
+        required: false
+
+  StateTable:
+    description: >-
+      A whole `state.tsv` table, as the list of job capsule records it holds. The table is
+      strictly tabular on disk. Every mapping-valued column is written there as compact JSON.
+    attributes:
+      capsules:
+        description: One entry per job capsule, in the table's sort order.
+        range: JobCapsule
+        multivalued: true
+        inlined: true
+        inlined_as_list: true
