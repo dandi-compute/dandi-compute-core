@@ -34,6 +34,9 @@ classes:
       params:
         description: >-
           The registered parameter set names this pipeline forms job capsules for.
+          This is the global queue setting for the pipeline. It does not take
+          precedence over the per-asset overrides in `asset_overrides`. An asset
+          named there is governed by its own override instead.
         range: string
         multivalued: true
         required: false
