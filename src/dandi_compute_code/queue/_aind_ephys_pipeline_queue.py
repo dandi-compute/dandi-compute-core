@@ -14,6 +14,10 @@ from typing import ClassVar
 
 from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY
+
+# Sphinx resolves the inherited ``entries`` annotation against this module, so the name it
+# refers to has to be importable from here.
+from ._job_capsule import JobCapsule  # noqa: F401
 from ._pipeline_queue import PipelineQueue
 from ._queue_utils import _latest_repository_version_tag
 from ..aind_ephys_pipeline import prepare_aind_ephys_job
