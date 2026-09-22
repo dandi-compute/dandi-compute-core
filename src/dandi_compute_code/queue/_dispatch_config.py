@@ -17,6 +17,7 @@ import dataclasses
 import logging
 import pathlib
 
+from ._capsule_resources import CapsuleResources
 from ._globals import _DISPATCH_JOB_NAME_PREFIX, _DISPATCH_JOB_NAME_SANITIZE_RE, _SBATCH_DIRECTIVE_RE
 from ..aind_ephys_pipeline._globals import _RAW_TEMPLATE_FILE_PATH as _AIND_TEMPLATE_FILE_PATH
 from ..lfp_pipeline._globals import _RAW_TEMPLATE_FILE_PATH as _LFP_TEMPLATE_FILE_PATH
@@ -159,6 +160,21 @@ class DispatchConfig:
         sanitized_pipeline = _DISPATCH_JOB_NAME_SANITIZE_RE.sub("-", self.pipeline).strip("-")
         job_name = f"{_DISPATCH_JOB_NAME_PREFIX}-{sanitized_pipeline}"
         return job_name
+
+    def template_resources(self) -> CapsuleResources:
+        """
+        These settings expressed as a capsule's resource request.
+
+        Capsules are grouped by what they ask SLURM for, and this is the group a capsule whose
+        own script could not be read belongs to.
+        """
+        resources = CapsuleResources(
+            memory=self.memory,
+            cpus_per_task=self.cpus_per_task,
+            partition=self.partition,
+            time_limit=self.time_limit,
+        )
+        return resources
 
     def array_specification(self, task_count: int, /) -> str:
         """

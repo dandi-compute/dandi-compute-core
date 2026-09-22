@@ -20,16 +20,17 @@ import pathlib
 import subprocess
 from typing import Literal
 
+from ._capsule_resources import CapsuleResources
 from ._dispatch_config import DispatchConfig
 from ._globals import _ACTIVE_SLURM_JOB_STATES, _SBATCH_JOB_ID_RE
 from ._handle_template import generate_array_dispatch_script
 
 _log = logging.getLogger(__name__)
 
-#: Name of the manifest listing the capsules an array covers, one per line.
-_MANIFEST_FILE_NAME = "manifest.txt"
-#: Name of the generated array dispatch script.
-_DISPATCH_SCRIPT_FILE_NAME = "dispatch.sh"
+#: Name of the manifest listing the capsules one array covers, one per line.
+_MANIFEST_FILE_NAME_TEMPLATE = "manifest-{index}.txt"
+#: Name of one generated array dispatch script.
+_DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "dispatch-{index}.sh"
 
 DispatchStatus = Literal["dispatched", "no-pending", "dispatcher-active"]
 
@@ -41,7 +42,7 @@ class DispatchResult:
     pipeline: str
     status: DispatchStatus
     task_count: int = 0
-    array_job_id: str | None = None
+    array_job_ids: tuple[str, ...] = ()
     dispatch_directory: pathlib.Path | None = None
 
     def summary(self) -> str:
@@ -51,7 +52,13 @@ class DispatchResult:
         if self.status == "dispatcher-active":
             return f"{self.pipeline}: the dispatcher is already running; its array has not been exhausted yet."
         noun = "capsule" if self.task_count == 1 else "capsules"
-        return f"{self.pipeline}: dispatched {self.task_count} {noun} as array job {self.array_job_id}."
+        if len(self.array_job_ids) == 1:
+            return f"{self.pipeline}: dispatched {self.task_count} {noun} as array job {self.array_job_ids[0]}."
+        job_ids = ", ".join(self.array_job_ids)
+        return (
+            f"{self.pipeline}: dispatched {self.task_count} {noun} as {len(self.array_job_ids)} array jobs "
+            f"grouped by requested resources ({job_ids})."
+        )
 
 
 def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str]) -> list[str]:
@@ -64,6 +71,29 @@ def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str])
     pipeline_segment = f"/pipeline-{pipeline}/"
     selected = [code_dir_path for code_dir_path in code_dir_paths if pipeline_segment in code_dir_path]
     return selected
+
+
+def _group_by_requested_resources(
+    *,
+    code_dir_paths: list[str],
+    capsule_resources: dict[str, CapsuleResources],
+    fallback: CapsuleResources,
+) -> dict[CapsuleResources, list[str]]:
+    """
+    Split capsules into one group per distinct set of requested resources.
+
+    An array carries a single ``#SBATCH`` header, so capsules asking for different things
+    cannot share one without the smaller header truncating the larger job. A capsule whose
+    own script could not be read falls into the *fallback* group, which is its pipeline's
+    template.
+
+    Groups keep the order their first capsule appeared in, so dispatch stays deterministic.
+    """
+    groups: dict[CapsuleResources, list[str]] = {}
+    for code_dir_path in code_dir_paths:
+        resources = capsule_resources.get(code_dir_path, fallback)
+        groups.setdefault(resources, []).append(code_dir_path)
+    return groups
 
 
 def _active_dispatcher_job_ids(job_name: str, /) -> list[str]:
@@ -126,15 +156,21 @@ def dispatch_pipeline_jobs(
     processing_directory: pathlib.Path,
     dispatch_config: DispatchConfig,
     dandiset_id: str,
+    capsule_resources: dict[str, CapsuleResources] | None = None,
     test: bool = False,
 ) -> DispatchResult:
     """
-    Place *pipeline*'s pending capsules in a single SLURM array job.
+    Place *pipeline*'s pending capsules in SLURM array jobs, grouped by requested resources.
 
-    The capsules belonging to *pipeline* are taken out of *code_dir_paths*, written to a
-    manifest, and covered by one array whose throttle is this pipeline's concurrency limit.
-    Each array task reads its capsule out of the manifest by task index, downloads it,
-    claims it with a submitted marker, and runs it.
+    The capsules belonging to *pipeline* are taken out of *code_dir_paths* and grouped by
+    what their submission scripts ask SLURM for. Each group gets an array of its own, sized
+    for that group, because an array carries a single ``#SBATCH`` header and a task runs its
+    capsule directly. Every capsule of a pipeline normally asks for the same thing, so this
+    is one array per pipeline in practice. Each array task reads its capsule out of its
+    manifest by task index, downloads it, claims it with a submitted marker, and runs it.
+
+    The configured concurrency limit is what the pipeline may run at once in total, so it is
+    shared out across the arrays rather than applied to each of them.
 
     Nothing is dispatched while a dispatcher for *pipeline* is still active on the cluster.
     That array already holds the pending tasks, so a second one would only duplicate them.
@@ -150,6 +186,9 @@ def dispatch_pipeline_jobs(
         from the compute nodes for as long as the array lives.
     :param dispatch_config: This pipeline's dispatcher settings.
     :param dandiset_id: The Dandiset the capsules are downloaded from and uploaded back to.
+    :param capsule_resources: What each capsule asks SLURM for, keyed by ``code`` directory
+        path. See :func:`~dandi_compute_code.queue.read_capsule_resources`. A capsule missing
+        from it is grouped with the pipeline's own template.
     :param test: When ``True``, each array task leaves its working tree on disk for debugging.
     :returns: What was dispatched, or why nothing was.
     :rtype: DispatchResult
@@ -168,54 +207,81 @@ def dispatch_pipeline_jobs(
             job_name,
             ", ".join(active_job_ids),
         )
-        return DispatchResult(pipeline=pipeline, status="dispatcher-active", array_job_id=active_job_ids[0])
+        return DispatchResult(pipeline=pipeline, status="dispatcher-active", array_job_ids=tuple(active_job_ids))
 
-    dispatched_code_dir_paths = pipeline_code_dir_paths[: dispatch_config.max_array_tasks]
-    if len(dispatched_code_dir_paths) < len(pipeline_code_dir_paths):
+    groups = _group_by_requested_resources(
+        code_dir_paths=pipeline_code_dir_paths,
+        capsule_resources=capsule_resources or {},
+        fallback=dispatch_config.template_resources(),
+    )
+    if len(groups) > 1:
         _log.info(
-            "Holding %d capsule(s) for pipeline %s back until the next dispatch; an array covers at most %d",
-            len(pipeline_code_dir_paths) - len(dispatched_code_dir_paths),
+            "Pipeline %s has capsules asking for %d different sets of resources; dispatching one array each",
             pipeline,
-            dispatch_config.max_array_tasks,
+            len(groups),
         )
+
+    # The configured limit is what this pipeline may run at once in total, so it is shared out
+    # across the arrays rather than applied to each of them.
+    max_concurrent_per_group = max(1, dispatch_config.max_concurrent // len(groups))
 
     now = datetime.datetime.now()
     timestamp = f"{now.year:04d}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}"
     dispatch_directory = processing_directory / f"{job_name}-{timestamp}"
     dispatch_directory.mkdir(parents=True, exist_ok=True)
 
-    manifest_file_path = dispatch_directory / _MANIFEST_FILE_NAME
-    manifest_file_path.write_text("".join(f"{code_dir_path}\n" for code_dir_path in dispatched_code_dir_paths))
+    array_job_ids: list[str] = []
+    dispatched_count = 0
+    for group_index, (resources, group_code_dir_paths) in enumerate(groups.items(), start=1):
+        dispatched_code_dir_paths = group_code_dir_paths[: dispatch_config.max_array_tasks]
+        if len(dispatched_code_dir_paths) < len(group_code_dir_paths):
+            _log.info(
+                "Holding %d capsule(s) for pipeline %s back until the next dispatch; an array covers at most %s",
+                len(group_code_dir_paths) - len(dispatched_code_dir_paths),
+                pipeline,
+                dispatch_config.max_array_tasks,
+            )
 
-    script_file_path = dispatch_directory / _DISPATCH_SCRIPT_FILE_NAME
-    generate_array_dispatch_script(
-        script_file_path=script_file_path,
-        job_name=job_name,
-        dispatch_directory=str(dispatch_directory.absolute()),
-        memory=dispatch_config.memory,
-        cpus_per_task=dispatch_config.cpus_per_task,
-        partition=dispatch_config.partition,
-        time_limit=dispatch_config.time_limit,
-        array_specification=dispatch_config.array_specification(len(dispatched_code_dir_paths)),
-        dandiset_id=dandiset_id,
-        manifest_file_path=str(manifest_file_path.absolute()),
-        keep_task_directory=test,
-    )
+        manifest_file_path = dispatch_directory / _MANIFEST_FILE_NAME_TEMPLATE.format(index=group_index)
+        manifest_file_path.write_text("".join(f"{code_dir_path}\n" for code_dir_path in dispatched_code_dir_paths))
 
-    _log.info(
-        "Dispatching %d capsule(s) for pipeline %s as array %s (at most %d at a time)",
-        len(dispatched_code_dir_paths),
-        pipeline,
-        job_name,
-        dispatch_config.max_concurrent,
-    )
-    array_job_id = _submit_array_job(script_file_path)
+        script_file_path = dispatch_directory / _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE.format(index=group_index)
+        generate_array_dispatch_script(
+            script_file_path=script_file_path,
+            job_name=job_name,
+            dispatch_directory=str(dispatch_directory.absolute()),
+            memory=resources.memory,
+            cpus_per_task=resources.cpus_per_task,
+            partition=resources.partition,
+            time_limit=resources.time_limit,
+            array_specification=dataclasses.replace(
+                dispatch_config, max_concurrent=max_concurrent_per_group
+            ).array_specification(len(dispatched_code_dir_paths)),
+            dandiset_id=dandiset_id,
+            manifest_file_path=str(manifest_file_path.absolute()),
+            keep_task_directory=test,
+        )
+
+        _log.info(
+            "Dispatching %d capsule(s) for pipeline %s as array %s requesting %s / %d CPU / %s / %s"
+            " (at most %d at a time)",
+            len(dispatched_code_dir_paths),
+            pipeline,
+            job_name,
+            resources.memory,
+            resources.cpus_per_task,
+            resources.partition,
+            resources.time_limit,
+            max_concurrent_per_group,
+        )
+        array_job_ids.append(_submit_array_job(script_file_path))
+        dispatched_count += len(dispatched_code_dir_paths)
 
     result = DispatchResult(
         pipeline=pipeline,
         status="dispatched",
-        task_count=len(dispatched_code_dir_paths),
-        array_job_id=array_job_id,
+        task_count=dispatched_count,
+        array_job_ids=tuple(array_job_ids),
         dispatch_directory=dispatch_directory,
     )
     return result

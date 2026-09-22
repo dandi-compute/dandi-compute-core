@@ -89,7 +89,13 @@ Those two limits are the whole of what is configurable, and deliberately so.
 
 A capsule runs inside its array task rather than being submitted as a job of its own, which means the task's allocation is the one the capsule actually gets. `#SBATCH` directives are read by the `sbatch` command when it parses a script at submission time, so the header inside a capsule run with `bash` is a block of inert comments.
 
-Rather than restate those requests in the queue configuration, the dispatcher reads them back out of the pipeline's own submission template (`src/dandi_compute_code/{aind_ephys_pipeline,lfp_pipeline}/templates/submission_template.txt`) and puts them on the array. Every capsule of a pipeline is rendered from that one template, so one array can carry the exact values its capsules ask for, and the template stays the single place they are written. An `aind+ephys` array comes out at 1GB / 1 CPU / `mit_normal` / 12h and an `lfp` array at 16GB / 1 CPU / `mit_preemptable` / 48h, matching their templates line for line. A pipeline with no packaged template falls back to deliberately generous requests, since under-provisioning a task means the capsule inside it is killed mid-run.
+Rather than restate those requests in the queue configuration, the dispatcher reads each pending capsule's own `code/submit.sh` back out of the archive and groups capsules by what they ask for. Each group gets an array sized for it.
+
+Pipelines differ here for real reasons. The AIND submission script is a Nextflow driver that dispatches the heavy work to its own jobs and needs very little itself, so its array comes out at 1GB / 1 CPU / `mit_normal` / 12h. The LFP script does its work in process and needs a lot, so its array comes out at 16GB / 1 CPU / `mit_preemptable` / 48h.
+
+Capsules of one pipeline normally agree, since one template renders them all, so this is one array per pipeline in practice. They can diverge when a template changed between the releases that prepared them, and a capsule needing more than its neighbours would otherwise be truncated by an array sized for them. The configured concurrency limit is what the pipeline may run at once in total, so it is shared out across the arrays rather than applied to each.
+
+A capsule whose script cannot be read falls back to its pipeline's packaged submission template, and a pipeline with no packaged template falls back to deliberately generous requests. Under-provisioning a task means the capsule inside it is killed mid-run, so both fallbacks err high.
 
 Running the capsule in the task is what keeps the throttle honest with no coordination of our own: a task finishing *is* its capsule finishing, so SLURM admits the next one at exactly the right moment. The alternative of submitting the capsule separately and waiting on it would spend two job slots per unit of work and would free the slot early whenever the waiting task was killed first.
 

@@ -29,6 +29,7 @@ from collections.abc import Collection, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ._capsule_resources import read_capsule_resources
 from ._dispatch import DispatchResult, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
@@ -958,6 +959,7 @@ class QueueState:
 
         code_dir_paths = cls.pending_code_dirs()
         _log.info("Found %d pending queue entries", len(code_dir_paths))
+        capsule_resources = read_capsule_resources(code_dir_paths)
 
         results: dict[str, DispatchResult] = {}
         for pipeline_name in pipelines:
@@ -974,6 +976,7 @@ class QueueState:
                 processing_directory=processing_directory,
                 dispatch_config=dispatch_config,
                 dandiset_id=dandiset_id,
+                capsule_resources=capsule_resources,
                 test=test,
             )
         return results

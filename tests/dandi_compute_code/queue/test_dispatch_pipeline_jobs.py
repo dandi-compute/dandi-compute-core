@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import DispatchConfig, dispatch_pipeline_jobs
+from dandi_compute_code.queue import CapsuleResources, DispatchConfig, dispatch_pipeline_jobs
 
 # dispatch_pipeline_jobs reaches the cluster through two subprocess calls that cannot run in
 # CI: `squeue` (is a dispatcher still working through its array?) and `sbatch` (submit the
@@ -36,6 +36,7 @@ def _dispatch(
     processing_directory: pathlib.Path,
     code_dir_paths: list[str],
     dispatch_config: DispatchConfig | None = None,
+    capsule_resources: dict | None = None,
     squeue_stdout: str = "",
     test: bool = False,
 ):
@@ -50,8 +51,19 @@ def _dispatch(
             processing_directory=processing_directory,
             dispatch_config=dispatch_config or DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
+            capsule_resources=capsule_resources,
             test=test,
         )
+
+
+def _script(result, index: int = 1) -> str:
+    """The generated dispatch script for one resource group."""
+    return (result.dispatch_directory / f"dispatch-{index}.sh").read_text()
+
+
+def _manifest(result, index: int = 1) -> list[str]:
+    """The manifest lines for one resource group."""
+    return (result.dispatch_directory / f"manifest-{index}.txt").read_text().splitlines()
 
 
 @pytest.mark.ai_generated
@@ -63,7 +75,7 @@ def test_dispatch_places_every_pending_capsule_of_the_pipeline_in_one_array(
 
     assert result.status == "dispatched"
     assert result.task_count == 3
-    assert result.array_job_id == "4242"
+    assert result.array_job_ids == ("4242",)
 
 
 @pytest.mark.ai_generated
@@ -71,7 +83,7 @@ def test_dispatch_writes_one_manifest_line_per_capsule(processing_directory: pat
     """The manifest maps array task index to capsule, one capsule per line."""
     result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
-    manifest_lines = (result.dispatch_directory / "manifest.txt").read_text().splitlines()
+    manifest_lines = _manifest(result)
     assert manifest_lines == _AIND_CODE_DIR_PATHS
 
 
@@ -83,7 +95,7 @@ def test_dispatch_ignores_capsules_belonging_to_another_pipeline(processing_dire
         code_dir_paths=[*_AIND_CODE_DIR_PATHS, _LFP_CODE_DIR_PATH],
     )
 
-    manifest_lines = (result.dispatch_directory / "manifest.txt").read_text().splitlines()
+    manifest_lines = _manifest(result)
     assert manifest_lines == _AIND_CODE_DIR_PATHS
 
 
@@ -98,7 +110,7 @@ def test_dispatch_script_carries_the_job_name_and_configured_throttle(
         dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=2),
     )
 
-    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    script = _script(result)
     assert "#SBATCH --job-name=dandicompute-dispatch-aind-ephys" in script
     assert "#SBATCH --array=1-3%2" in script
 
@@ -128,7 +140,7 @@ def test_dispatch_script_requests_what_the_capsule_itself_asks_for(
         dispatch_config=dispatch_config,
     )
 
-    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    script = _script(result)
     assert "#SBATCH --mem=16GB" in script
     assert "#SBATCH --cpus-per-task=4" in script
     assert "#SBATCH --partition=mit_preemptable" in script
@@ -147,7 +159,7 @@ def test_dispatch_places_every_capsule_in_one_array_when_uncapped(
     )
 
     assert result.task_count == len(_AIND_CODE_DIR_PATHS)
-    manifest_lines = (result.dispatch_directory / "manifest.txt").read_text().splitlines()
+    manifest_lines = _manifest(result)
     assert manifest_lines == _AIND_CODE_DIR_PATHS
 
 
@@ -163,7 +175,7 @@ def test_dispatch_script_runs_each_capsule_inside_its_array_task(
     """
     result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
-    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    script = _script(result)
     assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"' in script
     assert "sbatch" not in script
 
@@ -181,7 +193,7 @@ def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
     """
     result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
-    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    script = _script(result)
     assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
     assert 'CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"' in script
     assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"' in script
@@ -204,7 +216,7 @@ def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory:
         )
 
     sbatch_command = mock_run.call_args_list[-1].args[0]
-    assert sbatch_command == ["sbatch", str((result.dispatch_directory / "dispatch.sh").absolute())]
+    assert sbatch_command == ["sbatch", str((result.dispatch_directory / "dispatch-1.sh").absolute())]
 
 
 @pytest.mark.ai_generated
@@ -245,7 +257,7 @@ def test_dispatch_does_not_resubmit_while_the_dispatcher_is_still_active(
         )
 
     assert result.status == "dispatcher-active"
-    assert result.array_job_id == "1234_[3-12%2]"
+    assert result.array_job_ids == ("1234_[3-12%2]",)
     assert mock_run.call_count == 1
     assert list(processing_directory.iterdir()) == []
 
@@ -279,7 +291,7 @@ def test_dispatch_holds_capsules_beyond_the_array_size_limit_back(processing_dir
     )
 
     assert result.task_count == 2
-    manifest_lines = (result.dispatch_directory / "manifest.txt").read_text().splitlines()
+    manifest_lines = _manifest(result)
     assert manifest_lines == _AIND_CODE_DIR_PATHS[:2]
 
 
@@ -295,7 +307,7 @@ def test_dispatch_script_removes_task_directories_unless_running_in_test_mode(
         test=test_mode,
     )
 
-    script = (result.dispatch_directory / "dispatch.sh").read_text()
+    script = _script(result)
     assert ('rm -rf "$TASK_DIRECTORY"' in script) is expected_removal
 
 
@@ -357,3 +369,100 @@ def test_dispatch_raises_when_squeue_fails(processing_directory: pathlib.Path) -
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
+
+
+# Capsules of one pipeline normally agree on resources, since one template renders them all.
+# They can diverge when a template changed between the releases that prepared them, and an
+# array carries a single `#SBATCH` header, so a divergent capsule needs an array of its own.
+
+_LIGHT = CapsuleResources(memory="1GB", cpus_per_task=1, partition="mit_normal", time_limit="12:00:00")
+_HEAVY = CapsuleResources(memory="16GB", cpus_per_task=1, partition="mit_preemptable", time_limit="48:00:00")
+
+
+@pytest.mark.ai_generated
+def test_dispatch_splits_capsules_that_ask_for_different_resources(
+    processing_directory: pathlib.Path,
+) -> None:
+    """Capsules asking for different things get an array each, so neither is truncated."""
+    capsule_resources = {
+        _AIND_CODE_DIR_PATHS[0]: _LIGHT,
+        _AIND_CODE_DIR_PATHS[1]: _HEAVY,
+        _AIND_CODE_DIR_PATHS[2]: _LIGHT,
+    }
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        capsule_resources=capsule_resources,
+    )
+
+    assert result.task_count == 3
+    assert len(result.array_job_ids) == 2
+    assert _manifest(result, 1) == [_AIND_CODE_DIR_PATHS[0], _AIND_CODE_DIR_PATHS[2]]
+    assert _manifest(result, 2) == [_AIND_CODE_DIR_PATHS[1]]
+    assert "#SBATCH --mem=1GB" in _script(result, 1)
+    assert "#SBATCH --mem=16GB" in _script(result, 2)
+    assert "#SBATCH --partition=mit_preemptable" in _script(result, 2)
+
+
+@pytest.mark.ai_generated
+def test_dispatch_shares_the_concurrency_limit_across_resource_groups(
+    processing_directory: pathlib.Path,
+) -> None:
+    """
+    The limit is what the pipeline may run at once in total, not per array.
+
+    Applying it to each array would let a pipeline that split into groups quietly run several
+    times its configured limit.
+    """
+    capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=4),
+        capsule_resources=capsule_resources,
+    )
+
+    assert "#SBATCH --array=1-1%2" in _script(result, 1)
+    assert "#SBATCH --array=1-1%2" in _script(result, 2)
+
+
+@pytest.mark.ai_generated
+def test_dispatch_keeps_one_array_when_every_capsule_agrees(processing_directory: pathlib.Path) -> None:
+    """The common case stays a single array per pipeline rather than fragmenting."""
+    capsule_resources = dict.fromkeys(_AIND_CODE_DIR_PATHS, _LIGHT)
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        capsule_resources=capsule_resources,
+    )
+
+    assert len(result.array_job_ids) == 1
+    assert result.task_count == 3
+
+
+@pytest.mark.ai_generated
+def test_dispatch_groups_an_unreadable_capsule_with_the_pipeline_template(
+    processing_directory: pathlib.Path,
+) -> None:
+    """A capsule whose own script could not be read falls back rather than being dropped."""
+    dispatch_config = DispatchConfig(
+        pipeline="aind+ephys",
+        memory="1GB",
+        cpus_per_task=1,
+        partition="mit_normal",
+        time_limit="12:00:00",
+    )
+    capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT}
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=dispatch_config,
+        capsule_resources=capsule_resources,
+    )
+
+    assert len(result.array_job_ids) == 1
+    assert _manifest(result) == _AIND_CODE_DIR_PATHS

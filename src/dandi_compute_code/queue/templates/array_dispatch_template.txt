@@ -11,7 +11,7 @@ set -euo pipefail
 
 DANDISET_ID="{{ dandiset_id }}"
 MANIFEST_FILE_PATH="{{ manifest_file_path }}"
-TASK_DIRECTORY="{{ dispatch_directory }}/task-${SLURM_ARRAY_TASK_ID}"
+TASK_DIRECTORY="{{ dispatch_directory }}/task-${SLURM_ARRAY_JOB_ID}-${SLURM_ARRAY_TASK_ID}"
 
 CODE_DIR_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$MANIFEST_FILE_PATH")
 if [ -z "$CODE_DIR_PATH" ]; then

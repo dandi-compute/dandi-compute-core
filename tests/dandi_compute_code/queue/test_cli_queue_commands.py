@@ -345,7 +345,7 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(tmp_path: pat
     runner = CliRunner()
 
     results = {
-        "aind+ephys": DispatchResult(pipeline="aind+ephys", status="dispatched", task_count=3, array_job_id="4242"),
+        "aind+ephys": DispatchResult(pipeline="aind+ephys", status="dispatched", task_count=3, array_job_ids=("4242",)),
         "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
     }
 
@@ -368,7 +368,7 @@ def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(tmp_path: 
     processing_dir.mkdir()
     runner = CliRunner()
 
-    results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", array_job_id="9001")}
+    results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", array_job_ids=("9001",))}
 
     with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
         result = runner.invoke(
