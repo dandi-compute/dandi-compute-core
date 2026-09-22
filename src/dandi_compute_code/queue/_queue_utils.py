@@ -1,7 +1,7 @@
 """
-Private helpers for the :mod:`._queue_state` model.
+Private helpers for the :mod:`._pipeline_queue` model.
 
-This companion module holds the lower-level utilities the ``QueueState`` /
+This companion module holds the lower-level utilities the ``PipelineQueue`` /
 ``JobCapsule`` model depends on (assets-path parsing, capsule-record construction,
 upstream-metadata lookup, queue-config validation, content-id ordering, and log
 parsing).

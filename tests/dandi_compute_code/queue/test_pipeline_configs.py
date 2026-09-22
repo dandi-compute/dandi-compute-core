@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 from dandi_compute_code.queue._globals import _PACKAGED_PIPELINE_CONFIGS_PATH
 
 
@@ -12,7 +12,7 @@ from dandi_compute_code.queue._globals import _PACKAGED_PIPELINE_CONFIGS_PATH
 def test_packaged_pipeline_configs_file_exists_and_validates() -> None:
     """The pipeline_configs.json packaged with this repo exists and validates."""
     assert _PACKAGED_PIPELINE_CONFIGS_PATH.exists()
-    loaded = QueueState.load_pipeline_config()
+    loaded = PipelineQueue.load_pipeline_config()
     assert "pipelines" in loaded
     assert loaded["pipelines"]
 
@@ -33,7 +33,7 @@ def test_load_pipeline_config_raises_when_packaged_config_fails_linkml_validatio
         mock.patch("dandi_compute_code.queue._queue_utils._PACKAGED_PIPELINE_CONFIGS_PATH", invalid_config_file),
         pytest.raises(ValueError, match="LinkML validation failed"),
     ):
-        QueueState.load_pipeline_config()
+        PipelineQueue.load_pipeline_config()
 
 
 @pytest.mark.ai_generated
@@ -45,4 +45,4 @@ def test_load_pipeline_config_raises_when_packaged_config_missing(tmp_path: path
         mock.patch("dandi_compute_code.queue._queue_utils._PACKAGED_PIPELINE_CONFIGS_PATH", missing_config_file),
         pytest.raises(FileNotFoundError),
     ):
-        QueueState.load_pipeline_config()
+        PipelineQueue.load_pipeline_config()

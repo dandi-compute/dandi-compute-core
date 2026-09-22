@@ -284,7 +284,7 @@ def dispatch_pipeline_jobs(
     :param pipeline: The pipeline to dispatch.
     :param code_dir_paths: Capsule ``code`` directory paths (relative to the Dandiset root)
         awaiting submission, across all pipelines. See
-        :meth:`~dandi_compute_code.queue.QueueState.pending_code_dirs`.
+        :meth:`~dandi_compute_code.queue.PipelineQueue.pending_code_dirs`.
     :param processing_directory: Directory the dispatch directory is created in. It holds the
         manifest, the dispatch script, and the array's logs, so it has to remain readable
         from the compute nodes for as long as the array lives.

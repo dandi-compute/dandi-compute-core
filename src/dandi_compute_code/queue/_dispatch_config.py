@@ -121,7 +121,7 @@ class DispatchConfig:
 
         :param pipeline: The pipeline name as it appears in the pipeline configuration.
         :param pipeline_config: A loaded pipeline configuration, as returned by
-            :meth:`~dandi_compute_code.queue.QueueState.load_pipeline_config`.
+            :meth:`~dandi_compute_code.queue.PipelineQueue.load_pipeline_config`.
         :param max_concurrent: Overrides the configured concurrency limit when given.
         :raises ValueError: If *pipeline* is not present in *pipeline_config*.
         """

@@ -54,12 +54,12 @@ def test_cli_archive_by_status_fails_without_dandi_devel() -> None:
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
 def test_cli_archive_by_status_invokes_archive_by_status_with_defaults(status: str) -> None:
-    """dandicompute archive --status calls QueueState.archive_by_status with the default Dandiset IDs."""
+    """dandicompute archive --status calls PipelineQueue.archive_by_status with the default Dandiset IDs."""
     runner = CliRunner()
 
     with (
         mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
-        mock.patch(f"{_GROUP}.QueueState.from_dandi") as mock_from_dandi,
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
     ):
         mock_archive = mock_from_dandi.return_value.archive_by_status
         mock_archive.return_value = ["derivatives/example-capsule"]
@@ -87,7 +87,7 @@ def test_cli_archive_by_status_forwards_custom_dandiset_ids(tmp_path: pathlib.Pa
 
     with (
         mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
-        mock.patch(f"{_GROUP}.QueueState.from_dandi") as mock_from_dandi,
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
     ):
         mock_archive = mock_from_dandi.return_value.archive_by_status
         mock_archive.return_value = ["derivatives/example-capsule"]
@@ -126,7 +126,7 @@ def test_cli_archive_by_status_reports_nothing_to_archive(status: str) -> None:
 
     with (
         mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
-        mock.patch(f"{_GROUP}.QueueState.from_dandi") as mock_from_dandi,
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
     ):
         mock_archive = mock_from_dandi.return_value.archive_by_status
         mock_archive.return_value = []

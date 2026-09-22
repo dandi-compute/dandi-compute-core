@@ -8,7 +8,7 @@ from dandi_compute_code._cli import _dandicompute_group
 from dandi_compute_code.queue import TEST_QUEUE_CONTENT_ID, CapsuleResources, DispatchedArray, DispatchResult
 
 # These tests exercise CLI argument wiring. Each command delegates directly to
-# the ``QueueState`` model, so the model methods are mocked here to isolate the
+# the ``PipelineQueue`` model, so the model methods are mocked here to isolate the
 # delegation (option parsing and forwarded kwargs) under test.
 
 _GROUP = "dandi_compute_code._cli._dandicompute_group"
@@ -21,7 +21,7 @@ def test_cli_prepare_test_creates_capsules_for_the_test_content_id() -> None:
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["prepare", "aind", "--test"])
 
@@ -35,12 +35,12 @@ def test_cli_prepare_test_creates_capsules_for_the_test_content_id() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_jobs_create_forwards_pipeline_as_only_pipeline() -> None:
-    """dandicompute jobs create --pipeline <name> forwards only_pipeline to QueueState.create_job_capsules."""
+    """dandicompute jobs create --pipeline <name> forwards only_pipeline to PipelineQueue.create_job_capsules."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["jobs", "create", "--pipeline", "lfp", "--limit", "5"])
 
@@ -55,12 +55,12 @@ def test_cli_jobs_create_forwards_pipeline_as_only_pipeline() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_jobs_create_forwards_latest_flag() -> None:
-    """dandicompute jobs create --latest forwards force_latest_versions to QueueState.create_job_capsules."""
+    """dandicompute jobs create --latest forwards force_latest_versions to PipelineQueue.create_job_capsules."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["jobs", "create", "--latest"])
 
@@ -75,7 +75,7 @@ def test_cli_jobs_create_defaults_to_no_limit() -> None:
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["jobs", "create"])
 
@@ -90,7 +90,7 @@ def test_cli_jobs_create_requires_a_dandi_api_key() -> None:
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": ""}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(_dandicompute_group, ["jobs", "create"])
 
@@ -100,12 +100,12 @@ def test_cli_jobs_create_requires_a_dandi_api_key() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_prepare_test_passes_config_key() -> None:
-    """dandicompute prepare aind --test forwards --config to QueueState.create_job_capsules."""
+    """dandicompute prepare aind --test forwards --config to PipelineQueue.create_job_capsules."""
     runner = CliRunner()
 
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
-        mock.patch(f"{_GROUP}.QueueState.create_job_capsules") as mock_create,
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules") as mock_create,
     ):
         result = runner.invoke(
             _dandicompute_group,
@@ -150,7 +150,7 @@ def test_cli_aind_prepare_passes_config_key() -> None:
 
 @pytest.mark.ai_generated
 def test_cli_queue_clean_calls_helper(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue clean delegates to QueueState and reports removed paths."""
+    """dandicompute queue clean delegates to PipelineQueue and reports removed paths."""
     dandiset_dir = tmp_path / "dandiset"
     dandiset_dir.mkdir()
 
@@ -159,7 +159,7 @@ def test_cli_queue_clean_calls_helper(tmp_path: pathlib.Path) -> None:
     mock_state.clean_unsubmitted_capsules.return_value = fake_removed
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.from_dandi", return_value=mock_state) as mock_from_dandi:
+    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "clean", "--dandiset", str(dandiset_dir)],
@@ -182,7 +182,7 @@ def test_cli_queue_clean_reports_nothing_found(tmp_path: pathlib.Path) -> None:
     mock_state.clean_unsubmitted_capsules.return_value = []
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.from_dandi", return_value=mock_state):
+    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "clean", "--dandiset", str(dandiset_dir)],
@@ -195,7 +195,7 @@ def test_cli_queue_clean_reports_nothing_found(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.ai_generated
 def test_cli_queue_stats_calls_helper_and_reports_output(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue stats delegates to QueueState.aggregate_statistics."""
+    """dandicompute queue stats delegates to PipelineQueue.aggregate_statistics."""
     dandiset_dir = tmp_path / "dandiset"
     dandiset_dir.mkdir()
 
@@ -203,7 +203,7 @@ def test_cli_queue_stats_calls_helper_and_reports_output(tmp_path: pathlib.Path)
     mock_state.aggregate_statistics.return_value = {"successful_asset_bytes_total": 0}
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.from_dandi", return_value=mock_state) as mock_from_dandi:
+    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "stats", "--dandiset", str(dandiset_dir)],
@@ -222,7 +222,7 @@ def test_cli_queue_stats_calls_helper_and_reports_output(tmp_path: pathlib.Path)
 
 @pytest.mark.ai_generated
 def test_cli_queue_stats_forwards_custom_dandiset_id(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue stats forwards --dandiset-id to QueueState.from_dandi/aggregate_statistics."""
+    """dandicompute queue stats forwards --dandiset-id to PipelineQueue.from_dandi/aggregate_statistics."""
     dandiset_dir = tmp_path / "dandiset"
     dandiset_dir.mkdir()
 
@@ -230,7 +230,7 @@ def test_cli_queue_stats_forwards_custom_dandiset_id(tmp_path: pathlib.Path) -> 
     mock_state.aggregate_statistics.return_value = {}
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.from_dandi", return_value=mock_state) as mock_from_dandi:
+    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "stats", "--dandiset", str(dandiset_dir), "--dandiset-id", "000123"],
@@ -243,12 +243,12 @@ def test_cli_queue_stats_forwards_custom_dandiset_id(tmp_path: pathlib.Path) -> 
 
 @pytest.mark.ai_generated
 def test_cli_issues_dump_calls_helper(tmp_path: pathlib.Path) -> None:
-    """dandicompute issues dump delegates to QueueState.dump_issues and reports output."""
+    """dandicompute issues dump delegates to PipelineQueue.dump_issues and reports output."""
     dandiset_dir = tmp_path / "dandiset"
     dandiset_dir.mkdir()
 
     runner = CliRunner()
-    with mock.patch(f"{_GROUP}.QueueState.dump_issues", return_value=[]) as mock_dump:
+    with mock.patch(f"{_GROUP}.PipelineQueue.dump_issues", return_value=[]) as mock_dump:
         result = runner.invoke(
             _dandicompute_group,
             ["issues", "dump", "--directory", str(dandiset_dir)],
@@ -266,12 +266,12 @@ def test_cli_issues_dump_calls_helper(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.ai_generated
 def test_cli_issues_summarize_calls_helper(tmp_path: pathlib.Path) -> None:
-    """dandicompute issues summarize delegates to QueueState.summarize_issues and reports output."""
+    """dandicompute issues summarize delegates to PipelineQueue.summarize_issues and reports output."""
     dandiset_dir = tmp_path / "dandiset"
     dandiset_dir.mkdir()
 
     runner = CliRunner()
-    with mock.patch(f"{_GROUP}.QueueState.summarize_issues", return_value={}) as mock_summarize:
+    with mock.patch(f"{_GROUP}.PipelineQueue.summarize_issues", return_value={}) as mock_summarize:
         result = runner.invoke(
             _dandicompute_group,
             ["issues", "summarize", "--directory", str(dandiset_dir)],
@@ -316,12 +316,12 @@ def test_cli_queue_process_requires_processing_directory() -> None:
 def test_cli_queue_process_forwards_its_options(
     tmp_path: pathlib.Path, extra_arguments: list[str], expected_keyword_arguments: dict
 ) -> None:
-    """dandicompute queue process forwards each of its options to QueueState.process_queue."""
+    """dandicompute queue process forwards each of its options to PipelineQueue.process_queue."""
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir), *extra_arguments],
@@ -366,7 +366,7 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(tmp_path: pat
         "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
     }
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir)],
@@ -387,7 +387,7 @@ def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(tmp_path: 
 
     results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", active_job_ids=("9001",))}
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir)],
@@ -429,7 +429,7 @@ def test_cli_queue_pending_reports_and_sets_exit_code(
     """dandicompute queue pending prints the boolean and exits 0 when pending, 1 otherwise."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.has_pending_jobs", return_value=pending) as mock_has_pending:
+    with mock.patch(f"{_GROUP}.PipelineQueue.has_pending_jobs", return_value=pending) as mock_has_pending:
         result = runner.invoke(_dandicompute_group, ["queue", "pending"])
 
     assert result.exit_code == expected_exit_code, result.output
@@ -442,7 +442,7 @@ def test_cli_queue_pending_silent_suppresses_output(tmp_path: pathlib.Path) -> N
     """dandicompute queue pending --silent still sets the exit code but prints nothing."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.has_pending_jobs", return_value=False):
+    with mock.patch(f"{_GROUP}.PipelineQueue.has_pending_jobs", return_value=False):
         result = runner.invoke(_dandicompute_group, ["queue", "pending", "--silent"])
 
     assert result.exit_code == 1, result.output
@@ -456,7 +456,7 @@ def test_cli_queue_process_reports_when_no_pipelines_are_configured(tmp_path: pa
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}):
+    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}):
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir)],
@@ -474,7 +474,7 @@ def test_cli_queue_process_rejects_max_without_pipeline(tmp_path: pathlib.Path) 
     processing_dir.mkdir()
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.QueueState.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
         result = runner.invoke(
             _dandicompute_group,
             ["queue", "process", "--processing", str(processing_dir), "--max", "4"],

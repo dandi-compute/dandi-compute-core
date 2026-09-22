@@ -10,7 +10,7 @@ from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
-from ..queue import TEST_QUEUE_CONTENT_ID, QueueState, clean_dispatch_directories
+from ..queue import TEST_QUEUE_CONTENT_ID, PipelineQueue, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
 
@@ -240,7 +240,7 @@ def _prepare_aind_command(
         raise click.ClickException("`DANDI_API_KEY` environment variable is not set.")
 
     if test:
-        QueueState.create_job_capsules(
+        PipelineQueue.create_job_capsules(
             content_ids=[TEST_QUEUE_CONTENT_ID],
             pipeline_directory=pipeline_directory,
             config_key=config_key,
@@ -345,7 +345,7 @@ def _jobs_create_command(
     _configure_logging(silent=silent)
     _require_dandi_api_key()
 
-    created_count = QueueState.create_job_capsules(
+    created_count = PipelineQueue.create_job_capsules(
         config_key=config_key,
         limit=limit,
         only_pipeline=only_pipeline,
@@ -418,7 +418,7 @@ def _queue_refresh_command(
     Rewrite state.tsv into both Dandisets.
 
     Ephemerally rebuilds and rewrites derivatives/state.tsv within both the source and
-    archived Dandisets themselves (see QueueState.write_dandiset_state_table), so each always
+    archived Dandisets themselves (see PipelineQueue.write_dandiset_state_table), so each always
     reflects its current state fetched fresh from its own assets.jsonld.
     """
     _configure_logging(silent=silent)
@@ -426,7 +426,7 @@ def _queue_refresh_command(
     _require_dandi_devel()
 
     for target_dandiset_id in (dandiset_id, archive_dandiset_id):
-        QueueState.write_dandiset_state_table(
+        PipelineQueue.write_dandiset_state_table(
             dandiset_id=target_dandiset_id,
             processing_directory=processing_directory,
             test=test,
@@ -459,7 +459,7 @@ def _queue_clean_command(
     _configure_logging(silent=silent)
     _require_dandi_api_key()
 
-    state = QueueState.from_dandi()
+    state = PipelineQueue.from_dandi()
     removed = state.clean_unsubmitted_capsules(dandiset_directory=dandiset_directory)
     if removed:
         if not silent:
@@ -523,7 +523,7 @@ def _queue_stats_command(
     """Write aggregate queue statistics from the live queue state."""
     _configure_logging(silent=silent)
 
-    state = QueueState.from_dandi(dandiset_id=dandiset_id)
+    state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
     state.aggregate_statistics(
         dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
@@ -554,7 +554,7 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
         dandicompute queue pending --silent && dandicompute queue process ...
     """
     _configure_logging(silent=silent)
-    pending = QueueState.has_pending_jobs()
+    pending = PipelineQueue.has_pending_jobs()
     if not silent:
         _styled_echo(text="true" if pending else "false", color="green" if pending else "yellow")
     context.exit(0 if pending else 1)
@@ -627,7 +627,7 @@ def _queue_process_command(
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    results = QueueState.process_queue(
+    results = PipelineQueue.process_queue(
         processing_directory=processing_directory,
         only_pipeline=only_pipeline,
         max_concurrent=max_concurrent,
@@ -704,7 +704,7 @@ def _issues_dump_command(
     """Scan nextflow and slurm logs and write per-capsule issue records."""
     _configure_logging(silent=silent)
 
-    QueueState.dump_issues(
+    PipelineQueue.dump_issues(
         dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
         processing_directory=processing_directory,
@@ -766,7 +766,7 @@ def _issues_summarize_command(
     """Summarize discovered issue lines by descending occurrence count."""
     _configure_logging(silent=silent)
 
-    QueueState.summarize_issues(
+    PipelineQueue.summarize_issues(
         dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
         processing_directory=processing_directory,
@@ -866,7 +866,7 @@ def _archive_command(
             _styled_echo(text=f"\nArchived job capsule: {capsule_path}", color="green")
         return
 
-    state = QueueState.from_dandi(dandiset_id=dandiset_id)
+    state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
     archived = state.archive_by_status(
         status=status,
         dandiset_id=dandiset_id,

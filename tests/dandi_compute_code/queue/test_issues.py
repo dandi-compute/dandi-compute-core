@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 from testing_utilities import write_job_capsule_logs
 
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 _JOB_CAPSULES_DANDISET_ID = "001697"
 
@@ -32,8 +32,8 @@ def test_dump_issues_writes_per_capsule_records(tmp_path: pathlib.Path) -> None:
         slurm_lines_by_file={"job-456_slurm.log": ["all good"]},
     )
 
-    with mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file:
-        records = QueueState.dump_issues(dandiset_directory=dandiset_dir)
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
+        records = PipelineQueue.dump_issues(dandiset_directory=dandiset_dir)
 
     assert len(records) == 1
     assert records[0]["capsule_path"].endswith("job-240101aa0001")
@@ -57,8 +57,8 @@ def test_dump_issues_forwards_dandiset_id_and_relative_path(tmp_path: pathlib.Pa
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
 
-    with mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file:
-        QueueState.dump_issues(
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
+        PipelineQueue.dump_issues(
             dandiset_directory=dandiset_dir,
             dandiset_id="000123",
             relative_path="derivatives/custom_dump.json",
@@ -97,8 +97,8 @@ def test_summarize_issues_writes_descending_frequency(tmp_path: pathlib.Path) ->
         slurm_lines_by_file={"job-002_slurm.log": ["done"]},
     )
 
-    with mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file:
-        summary = QueueState.summarize_issues(dandiset_directory=dandiset_dir)
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
+        summary = PipelineQueue.summarize_issues(dandiset_directory=dandiset_dir)
 
     assert summary == {"3": ["error: common failure"], "1": ["error: unique failure"]}
 
@@ -124,8 +124,8 @@ def test_summarize_issues_forwards_dandiset_id_to_dump_and_summary(tmp_path: pat
     processing_dir = tmp_path / "processing"
     processing_dir.mkdir()
 
-    with mock.patch("dandi_compute_code.queue._queue_state.write_dandiset_file") as mock_write_file:
-        QueueState.summarize_issues(
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
+        PipelineQueue.summarize_issues(
             dandiset_directory=dandiset_dir,
             dandiset_id="000123",
             processing_directory=processing_dir,

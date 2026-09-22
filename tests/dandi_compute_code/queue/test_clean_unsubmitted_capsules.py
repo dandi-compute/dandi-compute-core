@@ -5,7 +5,7 @@ from unittest import mock
 import pytest
 from testing_utilities import create_job_capsule_directory
 
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 
 @pytest.mark.ai_generated
@@ -13,21 +13,21 @@ def test_clean_unsubmitted_capsules_raises_without_dandi_api_key(tmp_path: pathl
     """clean_unsubmitted_capsules raises RuntimeError when DANDI_API_KEY is not set."""
     with mock.patch.dict(os.environ, {}, clear=True):
         with pytest.raises(RuntimeError, match="DANDI_API_KEY"):
-            QueueState(entries=[]).clean_unsubmitted_capsules(dandiset_directory=tmp_path)
+            PipelineQueue(entries=[]).clean_unsubmitted_capsules(dandiset_directory=tmp_path)
 
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_removes_queued_directories(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules removes capsule dirs that are queued (code, no logs, no output)."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-pending")
+        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-pending")
     )
 
     with mock.patch("subprocess.run") as mock_run:
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert not queued_dir.exists()
@@ -36,19 +36,19 @@ def test_clean_unsubmitted_capsules_removes_queued_directories(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_skips_entries_with_output(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules does not remove capsules that already have output."""
     dandiset_dir = tmp_path / "dandiset"
     completed_dir = create_job_capsule_directory(
         base_dir=dandiset_dir,
-        entry=example_queue_state.entry_for(dandi_path="sub-successful"),
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-successful"),
         with_logs=True,
         with_output=True,
     )
 
     with mock.patch("subprocess.run") as mock_run:
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == []
     assert completed_dir.exists()
@@ -57,18 +57,18 @@ def test_clean_unsubmitted_capsules_skips_entries_with_output(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_skips_entries_with_logs(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules does not remove capsules that have logs (already run)."""
     dandiset_dir = tmp_path / "dandiset"
     failed_dir = create_job_capsule_directory(
         base_dir=dandiset_dir,
-        entry=example_queue_state.entry_for(dandi_path="sub-failed/ses-one"),
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-failed/ses-one"),
         with_logs=True,
     )
 
     with mock.patch("subprocess.run") as mock_run:
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == []
     assert failed_dir.exists()
@@ -77,19 +77,19 @@ def test_clean_unsubmitted_capsules_skips_entries_with_logs(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_ignores_dataset_description_in_logs(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """A logs/ directory holding only dataset_description.json does not protect a queued capsule."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-pending")
+        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-pending")
     )
     logs_dir = queued_dir / "logs"
     logs_dir.mkdir()
     (logs_dir / "dataset_description.json").write_text("{}\n")
 
     with mock.patch("subprocess.run"):
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert not queued_dir.exists()
@@ -97,16 +97,16 @@ def test_clean_unsubmitted_capsules_ignores_dataset_description_in_logs(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_skips_entries_with_submitted_marker(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules does not remove capsules with a submitted marker file."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-pending"), submitted=True
+        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-pending"), submitted=True
     )
 
     with mock.patch("subprocess.run") as mock_run:
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == []
     assert queued_dir.exists()
@@ -115,30 +115,30 @@ def test_clean_unsubmitted_capsules_skips_entries_with_submitted_marker(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_returns_empty_list_when_nothing_queued(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules returns an empty list when nothing is materialized on disk."""
     dandiset_dir = tmp_path / "dandiset"
 
-    removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+    removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == []
 
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_removes_empty_parent_directories(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules removes empty pipeline/session dirs after last capsule removal."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-sole/ses-capsule")
+        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-sole/ses-capsule")
     )
     pipeline_dir = queued_dir.parent
     session_dir = pipeline_dir.parent
 
     with mock.patch("subprocess.run"):
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert not pipeline_dir.exists()
@@ -147,22 +147,23 @@ def test_clean_unsubmitted_capsules_removes_empty_parent_directories(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_keeps_non_empty_parent_directories(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules keeps pipeline/version dirs when a sibling capsule remains."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwoa")
+        base_dir=dandiset_dir,
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwoa"),
     )
     remaining_dir = create_job_capsule_directory(
         base_dir=dandiset_dir,
-        entry=example_queue_state.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwob"),
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwob"),
         with_output=True,
     )
     pipeline_dir = queued_dir.parent
 
     with mock.patch("subprocess.run"):
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert remaining_dir.exists()
@@ -171,18 +172,18 @@ def test_clean_unsubmitted_capsules_keeps_non_empty_parent_directories(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_prunes_empty_parents(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """Removing the sole capsule in a pipeline tree prunes the emptied parent directories."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
         base_dir=dandiset_dir,
-        entry=example_queue_state.entry_for(dandi_path="sub-sole/ses-capsule"),
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-sole/ses-capsule"),
     )
     pipeline_dir = queued_dir.parent
 
     with mock.patch("subprocess.run"):
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert not queued_dir.exists()
@@ -191,21 +192,21 @@ def test_clean_unsubmitted_capsules_prunes_empty_parents(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_removes_only_queued_not_submitted(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules only removes queued capsules, leaving submitted ones intact."""
     dandiset_dir = tmp_path / "dandiset"
     queued_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_queue_state.entry_for(dandi_path="sub-pending")
+        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-pending")
     )
     submitted_dir = create_job_capsule_directory(
         base_dir=dandiset_dir,
-        entry=example_queue_state.entry_for(dandi_path="sub-already/ses-submitted"),
+        entry=example_pipeline_queue.entry_for(dandi_path="sub-already/ses-submitted"),
         submitted=True,
     )
 
     with mock.patch("subprocess.run"):
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [queued_dir]
     assert not queued_dir.exists()
@@ -214,7 +215,7 @@ def test_clean_unsubmitted_capsules_removes_only_queued_not_submitted(
 
 @pytest.mark.ai_generated
 def test_clean_unsubmitted_capsules_removed_entry_via_fallback_capsule_resolution(
-    example_queue_state: QueueState, tmp_path: pathlib.Path, dandi_api_key: None
+    example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules removes queued entry when dandi_path differs from the on-disk path."""
     dandiset_dir = tmp_path / "dandiset"
@@ -234,7 +235,7 @@ def test_clean_unsubmitted_capsules_removed_entry_via_fallback_capsule_resolutio
     (capsule_dir / "code" / "submit.sh").write_text("#!/bin/bash\necho hello\n")
 
     with mock.patch("subprocess.run") as mock_run:
-        removed = example_queue_state.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
+        removed = example_pipeline_queue.clean_unsubmitted_capsules(dandiset_directory=dandiset_dir)
 
     assert removed == [capsule_dir]
     assert not capsule_dir.exists()

@@ -14,7 +14,7 @@ import pytest
 import dandi_compute_code.queue._queue_utils
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
 from dandi_compute_code.dandiset._job_id import _format_job_id, _parse_job_hash
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 _JOB_ID = "job-240101a1b2c3"
 _CAPSULE_PATH = f"derivatives/dandisets-001/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-test/{_JOB_ID}"
@@ -65,10 +65,10 @@ def _source_metadata() -> AssetsJsonldMetadata:
     )
 
 
-def _build_state(*, dataset_description: dict) -> QueueState:
+def _build_state(*, dataset_description: dict) -> PipelineQueue:
     with (
         mock.patch(
-            "dandi_compute_code.queue._queue_state.load_assets_jsonld_metadata",
+            "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
             return_value=_capsule_metadata(),
         ),
         mock.patch(
@@ -81,7 +81,7 @@ def _build_state(*, dataset_description: dict) -> QueueState:
             return_value=dataset_description,
         ),
     ):
-        state = QueueState.from_dandi()
+        state = PipelineQueue.from_dandi()
     return state
 
 

@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import QueueState
+from dandi_compute_code.queue import PipelineQueue
 
 _ISSUE_EXAMPLE_PIPELINE_CONFIG = {
     "pipelines": {
@@ -23,6 +23,6 @@ def test_load_pipeline_config_validates_issue_example_schema(tmp_path: pathlib.P
     config_file.write_text(json.dumps(_ISSUE_EXAMPLE_PIPELINE_CONFIG))
 
     with mock.patch("dandi_compute_code.queue._queue_utils._PACKAGED_PIPELINE_CONFIGS_PATH", config_file):
-        loaded = QueueState.load_pipeline_config()
+        loaded = PipelineQueue.load_pipeline_config()
 
     assert loaded == _ISSUE_EXAMPLE_PIPELINE_CONFIG

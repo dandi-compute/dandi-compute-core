@@ -1,10 +1,14 @@
 """
-QueueState — typed container for ``state.tsv``.
+PipelineQueue — typed container for ``state.tsv``.
 
 ``state.tsv`` is a tab-separated table where each row is one job
-capsule. :class:`QueueState` is the container over it — a list of
+capsule. :class:`PipelineQueue` is the container over it, a list of
 :class:`~._job_capsule.JobCapsule` objects (the typed row model, defined in
 :mod:`._job_capsule`) with convenience helpers for filtering and round-trip I/O.
+
+The container itself is pipeline agnostic. Everything that differs between pipelines
+is reached through the hooks at the bottom of the class, which a pipeline specific
+subclass overrides. See :class:`~._aind_ephys_pipeline_queue.AindEphysPipelineQueue`.
 """
 
 from __future__ import annotations
@@ -24,14 +28,13 @@ import subprocess
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Literal
+from typing import ClassVar, Literal
 
 from ._capsule_resources import read_capsule_resources
 from ._dispatch import DispatchResult, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
-from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
-from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY, _PARAMS_REGISTRIES
+from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
 from ._job_capsule import _STATE_TSV_FIELD_NAMES, JobCapsule
 from ._queue_utils import (
     _CapsuleProvenanceCache,
@@ -40,7 +43,6 @@ from ._queue_utils import (
     _extract_error_lines,
     _extract_nextflow_timeline_data,
     _finalize_job_capsule_records,
-    _latest_repository_version_tag,
     _list_capsule_log_directories,
     _load_pipeline_config,
     _order_content_ids_for_uniform_dandiset_sampling,
@@ -48,7 +50,7 @@ from ._queue_utils import (
     _sort_key,
     _UpstreamMetadataCache,
 )
-from ..aind_ephys_pipeline import UnmappedContentIDError, prepare_aind_ephys_job
+from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset import move_job_capsule, write_dandiset_file
 from ..dandiset._globals import (
     _FAILED_RUNS_ARCHIVE_DANDISET_ID,
@@ -72,8 +74,18 @@ _STATE_TSV_RELATIVE_PATH = "derivatives/state.tsv"
 
 
 @dataclass
-class QueueState:
-    """Container for all entries in ``state.tsv``."""
+class PipelineQueue:
+    """
+    Container for all entries in ``state.tsv``.
+
+    Also the base class every pipeline specific queue derives from. The base class
+    itself owns any pipeline no subclass claims, which is how the LFP pipeline is
+    served, since it ships inside this package and needs no behaviour of its own.
+    """
+
+    #: Pipeline names, as they appear in the packaged pipeline configuration, that this
+    #: class owns the creation behaviour of. Empty on the base class, which is the fallback.
+    pipelines: ClassVar[tuple[str, ...]] = ()
 
     entries: list[JobCapsule]
 
@@ -133,6 +145,23 @@ class QueueState:
                 return entry
         message = f"No entry with dandi_path={dandi_path!r} and config={config!r}"
         raise KeyError(message)
+
+    @classmethod
+    def for_pipeline(cls, pipeline: str, /) -> type[PipelineQueue]:
+        """
+        The queue class owning the pipeline specific behaviour of *pipeline*.
+
+        A subclass claims a pipeline by naming it in :attr:`pipelines`. Subclasses are
+        discovered rather than registered, so a new pipeline queue only has to be imported
+        by :mod:`dandi_compute_code.queue` to take effect.
+
+        :param pipeline: The pipeline name as it appears in the packaged pipeline configuration.
+        :return: The claiming subclass, or :class:`PipelineQueue` when no subclass claims it.
+        """
+        for subclass in PipelineQueue.__subclasses__():
+            if pipeline in subclass.pipelines:
+                return subclass
+        return PipelineQueue
 
     @staticmethod
     def pending_code_dirs() -> list[str]:
@@ -205,23 +234,19 @@ class QueueState:
         params_id = entry["md5"][:7] if entry else params_key
         return params_id
 
-    @staticmethod
-    def resolve_config_key_to_id(*, pipeline: str, config_key: str) -> str:
+    @classmethod
+    def resolve_config_key_to_id(cls, *, pipeline: str, config_key: str) -> str:
         """
         Resolve a human-readable config key to its 7-character hash ID.
 
-        The LFP pipeline has no config of its own, so it resolves to the empty string, which
-        is what its job capsules record. Otherwise the lookup mirrors
-        :meth:`resolve_params_key_to_id`.
+        Delegates to the queue class that owns *pipeline* (see :meth:`for_pipeline`).
         """
-        if pipeline == "lfp":
-            return ""
-        entry = _CONFIGS_REGISTRIES.get(pipeline, {}).get(config_key)
-        config_id = entry["md5"][:7] if entry else config_key
+        queue_class = cls.for_pipeline(pipeline)
+        config_id = queue_class._resolve_config_key_to_id(pipeline=pipeline, config_key=config_key)
         return config_id
 
     @classmethod
-    def from_metadata(cls, metadata: AssetsJsonldMetadata, /) -> QueueState:
+    def from_metadata(cls, metadata: AssetsJsonldMetadata, /) -> PipelineQueue:
         """
         Build a queue state from indexed DANDI assets metadata.
 
@@ -249,7 +274,7 @@ class QueueState:
         return cls(entries=[JobCapsule.from_dict(record) for record in records])
 
     @classmethod
-    def from_jsonld(cls, *, file_path: pathlib.Path) -> QueueState:
+    def from_jsonld(cls, *, file_path: pathlib.Path) -> PipelineQueue:
         """
         Build a queue state from a local DANDI ``assets.jsonld`` file.
 
@@ -287,7 +312,7 @@ class QueueState:
         )
 
     @classmethod
-    def from_dandi(cls, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> QueueState:
+    def from_dandi(cls, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> PipelineQueue:
         """
         Build a queue state from a Dandiset's remote ``assets.jsonld`` metadata.
 
@@ -506,7 +531,7 @@ class QueueState:
         """
         Move every entry with the given *status* into the failed runs archive.
 
-        *status* names the :class:`QueueState` property selecting the entries to
+        *status* names the :class:`PipelineQueue` property selecting the entries to
         archive: ``"failed"`` (:attr:`failed` — code and logs present, no output),
         ``"pending"`` (:attr:`pending` — code prepared but never submitted), or
         ``"stalled"`` (:attr:`stalled` — submitted to the scheduler but no logs or
@@ -666,36 +691,33 @@ class QueueState:
             if entry.content_id
         }
 
-    @staticmethod
-    def resolve_latest_pipeline_version(*, pipeline: str, pipeline_directory: pathlib.Path | None = None) -> str:
+    @classmethod
+    def resolve_latest_pipeline_version(cls, *, pipeline: str, pipeline_directory: pathlib.Path | None = None) -> str:
         """
         The latest version of *pipeline* available on this machine.
 
         New job capsules always run the latest locally available pipeline version, so there is
         no version priority list to maintain. What "locally available" means depends on the
-        pipeline. The AIND ephys pipeline lives in its own repository, checked out next to
-        this one on the cluster, so its latest version is the highest release tag in that
-        checkout. The LFP pipeline ships inside this package, so its latest version is this
-        package's own version.
+        pipeline, so the answer comes from the queue class that owns *pipeline* (see
+        :meth:`for_pipeline`).
 
         :param pipeline: The pipeline name as it appears in the packaged pipeline configuration.
         :param pipeline_directory: Local checkout of the pipeline repository, for pipelines
-            that live in one. Defaults to the AIND ephys pipeline checkout on MIT Engaging.
+            that live in one.
         :return: The version string to form new job capsules against.
         :rtype: str
         """
-        if pipeline == "lfp":
-            latest_version = f"v{importlib.metadata.version('dandi-compute-code')}"
-            return latest_version
-
-        latest_version = _latest_repository_version_tag(pipeline_directory or _DEFAULT_AIND_PIPELINE_DIRECTORY)
+        queue_class = cls.for_pipeline(pipeline)
+        latest_version = queue_class._resolve_latest_pipeline_version(pipeline_directory=pipeline_directory)
         return latest_version
 
-    @staticmethod
-    def _qualifying_content_ids(pipeline: str, /) -> list[str]:
+    @classmethod
+    def _qualifying_content_ids(cls, pipeline: str, /) -> list[str]:
         """Content IDs qualifying for *pipeline*, ordered so a limit samples Dandisets uniformly."""
-        fetch = _fetch_qualifying_lfp_content_ids if pipeline == "lfp" else _fetch_qualifying_aind_content_ids
-        ordered_content_ids = _order_content_ids_for_uniform_dandiset_sampling(content_ids=fetch())
+        queue_class = cls.for_pipeline(pipeline)
+        ordered_content_ids = _order_content_ids_for_uniform_dandiset_sampling(
+            content_ids=queue_class._fetch_qualifying_content_ids()
+        )
         return ordered_content_ids
 
     @classmethod
@@ -773,24 +795,14 @@ class QueueState:
 
                     _log.info(f"Creating a job capsule for {label}.")
                     try:
-                        if pipeline_name == "lfp":
-                            script_file_path = prepare_lfp_job(
-                                content_id=content_id,
-                                parameters_key=params_key,
-                                pipeline_version=version,
-                                force_new_capsule=force_latest_versions,
-                                silent=True,
-                            )
-                        else:
-                            script_file_path = prepare_aind_ephys_job(
-                                content_id=content_id,
-                                parameters_key=params_key,
-                                pipeline_version=version,
-                                pipeline_directory=pipeline_directory,
-                                config_key=config_key,
-                                force_new_capsule=force_latest_versions,
-                                silent=True,
-                            )
+                        script_file_path = cls.for_pipeline(pipeline_name)._prepare_job(
+                            content_id=content_id,
+                            parameters_key=params_key,
+                            pipeline_version=version,
+                            pipeline_directory=pipeline_directory,
+                            config_key=config_key,
+                            force_new_capsule=force_latest_versions,
+                        )
                     except UnmappedContentIDError as error:
                         _log.warning(f"Skipping {label}: {error}")
                         continue
@@ -875,7 +887,7 @@ class QueueState:
         (default ``derivatives/issues_summary.json``) via
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
         """
-        records = QueueState.dump_issues(
+        records = PipelineQueue.dump_issues(
             dandiset_directory=dandiset_directory,
             dandiset_id=dandiset_id,
             relative_path=dump_relative_path,
@@ -915,7 +927,7 @@ class QueueState:
         return summary
 
     @classmethod
-    def from_tsv(cls, file_path: pathlib.Path, /) -> QueueState:
+    def from_tsv(cls, file_path: pathlib.Path, /) -> PipelineQueue:
         """
         Load from an existing ``state.tsv`` file.
 
@@ -935,3 +947,58 @@ class QueueState:
             reader = csv.DictReader(file_stream, delimiter="\t")
             entries = [JobCapsule.from_tsv_row(row) for row in reader]
         return cls(entries=entries)
+
+    @classmethod
+    def _resolve_latest_pipeline_version(cls, *, pipeline_directory: pathlib.Path | None = None) -> str:
+        """
+        The latest version of a pipeline that ships inside this package, which is this
+        package's own version. *pipeline_directory* is unused for such a pipeline.
+        """
+        latest_version = f"v{importlib.metadata.version('dandi-compute-code')}"
+        return latest_version
+
+    @classmethod
+    def _resolve_config_key_to_id(cls, *, pipeline: str, config_key: str) -> str:
+        """
+        Resolve *config_key* against the registered configs of *pipeline*.
+
+        The LFP pipeline has no config of its own, so it resolves to the empty string, which
+        is what its job capsules record. A pipeline with no registered configs, or a key that
+        is already a raw hash ID, resolves to *config_key* unchanged.
+        """
+        if pipeline == "lfp":
+            return ""
+        entry = _CONFIGS_REGISTRIES.get(pipeline, {}).get(config_key)
+        config_id = entry["md5"][:7] if entry else config_key
+        return config_id
+
+    @classmethod
+    def _fetch_qualifying_content_ids(cls) -> list[str]:
+        """Content IDs qualifying for this queue's pipelines, in no particular order."""
+        content_ids = _fetch_qualifying_lfp_content_ids()
+        return content_ids
+
+    @classmethod
+    def _prepare_job(
+        cls,
+        *,
+        content_id: str,
+        parameters_key: str,
+        pipeline_version: str,
+        pipeline_directory: pathlib.Path | None,
+        config_key: str,
+        force_new_capsule: bool,
+    ) -> pathlib.Path | None:
+        """
+        Form one job capsule and return its submission script, or ``None`` when a capsule
+        already exists on the archive. *pipeline_directory* and *config_key* are unused by
+        pipelines that ship inside this package.
+        """
+        script_file_path = prepare_lfp_job(
+            content_id=content_id,
+            parameters_key=parameters_key,
+            pipeline_version=pipeline_version,
+            force_new_capsule=force_new_capsule,
+            silent=True,
+        )
+        return script_file_path
