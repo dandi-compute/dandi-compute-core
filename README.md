@@ -68,36 +68,25 @@ dandicompute queue pending --silent && dandicompute queue process --processing .
 
 ## Schemas
 
-Every structure this package defines and passes around is described by a [LinkML](https://linkml.io) schema under `src/dandi_compute_code/schemas/`. The schemas are the source of truth for what these structures may contain. The Python classes carry the behaviour.
+The internal structures this package defines and passes around are described by [LinkML](https://linkml.io) schemas under `src/dandi_compute_code/schemas/`. The schemas are the source of truth for what these structures may contain. The Python classes carry the behaviour.
+
+A pipeline's *parameter* schema is not among them. Those stay plain JSON Schema, written by hand, because that is the form the documentation website renders and the form the pipelines validate against directly.
 
 | Schema | Describes |
 | --- | --- |
 | `pipeline_config.linkml.yaml` | `queue/pipeline_configs.json`: which parameter sets each pipeline forms capsules for, its per-asset overrides and its dispatcher limits. |
 | `registry.linkml.yaml` | Every `registries/*.json` file, which maps a short key onto a packaged file and the MD5 it must still have. |
-| `lfp_parameters.linkml.yaml` | The LFP extraction parameters in `lfp_pipeline/params/`. |
 | `job_capsule.linkml.yaml` | A job capsule's identity and lifecycle status, which is one row of `state.tsv`. |
 | `dispatch.linkml.yaml` | One pipeline's array dispatcher settings, and what one dispatch attempt produced. |
 | `assets_metadata.linkml.yaml` | The slice of a Dandiset's `assets.jsonld` this package indexes. |
 
 Validation happens twice, because the two validators are good at different things.
 
-At runtime, `dandi_compute_code.schemas.validate_against_schema` validates against these schemas using `linkml-runtime`, which the base install already carries. Loading the pipeline configuration, a registry or a set of LFP parameters goes through it, so a malformed file is rejected where it is read rather than misread.
+At runtime, `dandi_compute_code.schemas.validate_against_schema` validates against these schemas using `linkml-runtime`, which the base install already carries. Loading the pipeline configuration or a registry goes through it, so a malformed file is rejected where it is read rather than misread.
 
 In CI, the `Validate LinkML schemas` workflow installs the full `linkml` distribution (`pip install --group schemas`), compiles every schema to JSON Schema and validates every packaged data file against the schema that describes it. That validator rejects mismatched scalar types where the runtime one quietly normalizes them, and compiling the schemas catches one that loads but does not express what it appears to. The workflow sets `DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION=1`, so those checks fail rather than skip if the toolchain ever goes missing there.
 
 The same test module also asserts that each schema class carries exactly the fields of the dataclass it describes, so a schema cannot drift once its model changes.
-
-### Published JSON Schemas
-
-A pipeline's parameter schema is also published as JSON Schema, because that is the form the documentation website renders. Those files are generated from their LinkML source rather than maintained alongside it, so the two cannot disagree:
-
-```bash
-python -m dandi_compute_code.schemas
-```
-
-This writes `src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json`. Do not edit that file by hand. CI regenerates it and fails if the committed copy differs, and also checks that the published schema rejects exactly what the runtime LinkML path rejects.
-
-The generated output is flat and self-contained, with every enumeration inlined rather than referenced through `$defs`, so a renderer can show a field's allowed values without resolving anything. A numeric set of allowed values is declared in the LinkML schema as an enumeration (its values being text) and pointed at from the slot it governs by a `numeric_enum` annotation. The generator and `validate_against_schema` both resolve that one declaration, so a schema carrying such an annotation is enforced wherever it is validated rather than only where a caller remembers to check.
 
 To add a schema, put it in `src/dandi_compute_code/schemas/` named `[name].linkml.yaml` and add it to `SCHEMA_PATHS` and `SCHEMA_TREE_ROOTS` in `schemas/_globals.py`. Both validation layers enumerate those, so it is covered by CI from then on.
 
@@ -130,8 +119,7 @@ Non-code files for the AIND ephys pipeline are organized under the following sub
 
 Non-code files for the LFP pipeline are organized under the following subdirectories of `src/dandi_compute_code/lfp_pipeline/`:
 
-- **`params/`** — JSON parameter files (e.g., `name-default.json`) plus `parameter_schema.json`, the JSON Schema that defines and constrains the exposed LFP parameters and is what the website renders.
-  `parameter_schema.json` is generated from `src/dandi_compute_code/schemas/lfp_parameters.linkml.yaml`, which is the source of truth. Do not edit it by hand. After changing the LinkML schema, regenerate it with `python -m dandi_compute_code.schemas`. CI fails if the committed file is out of date.
+- **`params/`** — JSON parameter files (e.g., `name-default.json`) plus `parameter_schema.json`, the JSON Schema that defines and constrains the exposed LFP parameters. It is written by hand and is what both the website renders and `validate_lfp_parameters` checks against.
   To add a new parameters file:
   1. Add the `name-[id].json` file to this directory.
   2. Register it in `registries/registered_params.json` by adding an entry with the short name as the key, and its relative `path` and full MD5 `md5` as values.

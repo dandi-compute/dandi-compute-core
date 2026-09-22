@@ -1,16 +1,19 @@
-id: https://github.com/dandi-compute/pipeline_config
+id: https://github.com/dandi-compute/dandi-compute-core/schemas/pipeline_config
 name: dandi_compute_pipeline_config
 title: DANDI Compute Pipeline Config
 description: >-
   A LinkML schema describing a configuration structure for DANDI Compute pipelines,
   including the parameter sets each pipeline forms job capsules for and asset overrides.
+
 prefixes:
   linkml: https://w3id.org/linkml/
   dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
 default_prefix: dandi_compute
 default_range: string
+
 imports:
   - linkml:types
+
 classes:
   PipelinesConfig:
     description: >-
@@ -23,6 +26,7 @@ classes:
         multivalued: true
         inlined: true
         inlined_as_list: false
+
   Pipeline:
     description: >-
       Configuration for a single pipeline, keyed by its name
@@ -33,6 +37,7 @@ classes:
         identifier: true
         range: string
         required: true
+
       params:
         description: >-
           The registered parameter set names this pipeline forms job capsules for.
@@ -42,6 +47,7 @@ classes:
         range: string
         multivalued: true
         required: false
+
       asset_overrides:
         description: >-
           A mapping of asset identifiers (e.g. UUIDs) to an override value.
@@ -51,6 +57,7 @@ classes:
         inlined: true
         inlined_as_list: false
         required: false
+
       dispatch:
         description: >-
           Settings for the single SLURM array job that runs this pipeline's job
@@ -60,6 +67,7 @@ classes:
         multivalued: false
         inlined: true
         required: false
+
   Dispatch:
     description: >-
       Queue limits for one pipeline's array dispatcher. One array job per pipeline owns
@@ -74,6 +82,7 @@ classes:
         range: integer
         minimum_value: 1
         required: false
+
       max_array_tasks:
         description: >-
           Upper bound on the number of capsules placed in one array. Capsules beyond it
@@ -83,6 +92,7 @@ classes:
         range: integer
         minimum_value: 1
         required: false
+
   AssetOverride:
     description: >-
       An override configuration for a single asset, identified by its
@@ -94,6 +104,7 @@ classes:
         identifier: true
         range: string
         required: true
+
       override:
         description: >-
           The override configuration. May be null to indicate the

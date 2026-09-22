@@ -15,7 +15,6 @@ import linkml_runtime.utils.schemaview
 import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
-from dandi_compute_code.lfp_pipeline import validate_lfp_parameters
 from dandi_compute_code.queue import (
     JOB_STATUSES,
     CapsuleResources,
@@ -25,14 +24,7 @@ from dandi_compute_code.queue import (
     JobCapsule,
     JobInfo,
 )
-from dandi_compute_code.schemas import (
-    PARAMETER_JSON_SCHEMAS,
-    SCHEMA_PATHS,
-    SCHEMA_TREE_ROOTS,
-    build_parameter_json_schema,
-    validate_against_schema,
-    validate_registry,
-)
+from dandi_compute_code.schemas import SCHEMA_PATHS, SCHEMA_TREE_ROOTS, validate_against_schema, validate_registry
 
 _REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _PACKAGE_ROOT = _REPOSITORY_ROOT / "src" / "dandi_compute_code"
@@ -43,9 +35,6 @@ _REGISTRY_FILE_PATHS = [
     _PACKAGE_ROOT / "aind_ephys_pipeline" / "registries" / "registered_params.json",
     _PACKAGE_ROOT / "lfp_pipeline" / "registries" / "registered_params.json",
 ]
-
-#: Every LFP parameters file packaged with the pipeline.
-_LFP_PARAMS_FILE_PATHS = sorted((_PACKAGE_ROOT / "lfp_pipeline" / "params").glob("name-*.json"))
 
 _EXAMPLE_JOB_INFO = JobInfo(
     job_id="job-250101abcdef",
@@ -109,15 +98,6 @@ def test_packaged_registries_validate(registry_file_path: pathlib.Path) -> None:
     registry = json.loads(registry_file_path.read_text())
 
     assert validate_registry(registry) == registry
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize("params_file_path", _LFP_PARAMS_FILE_PATHS, ids=lambda path: path.name)
-def test_packaged_lfp_parameters_validate(params_file_path: pathlib.Path) -> None:
-    """Every packaged LFP parameters file conforms to its schema."""
-    parameters = json.loads(params_file_path.read_text())
-
-    assert validate_against_schema(parameters, schema="lfp_parameters") == parameters
 
 
 @pytest.mark.ai_generated
@@ -218,85 +198,6 @@ def test_registry_rejects_an_entry_missing_its_checksum() -> None:
 
     with pytest.raises(ValueError, match="LinkML validation"):
         validate_registry(invalid)
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize("schema_name", sorted(PARAMETER_JSON_SCHEMAS))
-def test_published_json_schema_is_up_to_date(schema_name: str) -> None:
-    """
-    The committed JSON Schema is exactly what its LinkML source generates.
-
-    The documentation website renders the JSON Schema, so it is committed rather than built
-    on demand. This is what stops it drifting from the LinkML schema it comes from. Run
-    ``python -m dandi_compute_code.schemas`` to regenerate it.
-    """
-    committed = json.loads(PARAMETER_JSON_SCHEMAS[schema_name].output_path.read_text())
-
-    assert committed == build_parameter_json_schema(schema_name)
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize("schema_name", sorted(PARAMETER_JSON_SCHEMAS))
-def test_published_json_schema_constrains_every_field(schema_name: str) -> None:
-    """
-    Every field the generated JSON Schema publishes carries its allowed values or a type.
-
-    A field that generated as neither would render on the website as an unconstrained value,
-    which is the failure mode of describing a numeric set in a schema whose enumerations are
-    text.
-    """
-    json_schema = build_parameter_json_schema(schema_name)
-
-    unconstrained = [
-        name
-        for name, property_schema in json_schema["properties"].items()
-        if "enum" not in property_schema and "type" not in property_schema
-    ]
-
-    assert unconstrained == []
-
-
-@pytest.mark.ai_generated
-def test_published_json_schema_accepts_the_packaged_parameters() -> None:
-    """The generated JSON Schema accepts the parameters files shipped alongside it."""
-    jsonschema = pytest.importorskip("jsonschema")
-    json_schema = build_parameter_json_schema("lfp_parameters")
-
-    for params_file_path in _LFP_PARAMS_FILE_PATHS:
-        jsonschema.validate(instance=json.loads(params_file_path.read_text()), schema=json_schema)
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("filter_family", "chebyshev"),
-        ("filter_band", [2, 400]),
-        ("filter_order", 3),
-        ("filter_direction", "backward"),
-        ("reference_scheme", "average"),
-        ("resample_target_fs", 30000),
-        ("spatial_factor", 2),
-        ("bad_channel_method", "std"),
-    ],
-)
-def test_published_json_schema_rejects_what_the_loader_rejects(field: str, value: object) -> None:
-    """
-    The published JSON Schema and the runtime LinkML path agree on what is invalid.
-
-    The website renders one and the pipeline enforces the other, so a value the two disagreed
-    about would be documented as allowed while being refused, or the reverse.
-    """
-    jsonschema = pytest.importorskip("jsonschema")
-    json_schema = build_parameter_json_schema("lfp_parameters")
-    parameters = json.loads((_PACKAGE_ROOT / "lfp_pipeline" / "params" / "name-default.json").read_text())
-    parameters[field] = value
-
-    with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate(instance=parameters, schema=json_schema)
-
-    with pytest.raises(ValueError):
-        validate_lfp_parameters(parameters)
 
 
 @pytest.mark.ai_generated

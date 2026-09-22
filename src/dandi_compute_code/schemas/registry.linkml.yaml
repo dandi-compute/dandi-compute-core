@@ -5,13 +5,16 @@ description: >-
   A LinkML schema describing the packaged registry files that map a short, stable key
   onto a versioned file shipped with a pipeline. The same shape is used by every
   registry, whether it registers parameter sets or SLURM configurations.
+
 prefixes:
   linkml: https://w3id.org/linkml/
   dandi_compute: https://github.com/dandi-compute/dandi-compute-core/schemas/
 default_prefix: dandi_compute
 default_range: string
+
 imports:
   - linkml:types
+
 classes:
   Registry:
     description: >-
@@ -25,6 +28,7 @@ classes:
         multivalued: true
         inlined: true
         inlined_as_list: false
+
   RegistryEntry:
     description: >-
       One registered file. The key is the short name callers pass, and the entry records
@@ -36,12 +40,14 @@ classes:
         identifier: true
         range: string
         required: true
+
       path:
         description: >-
           The registered file's name, relative to the pipeline's own params or configs
           directory.
         range: string
         required: true
+
       md5:
         description: >-
           The full MD5 checksum of the registered file. A loader recomputes this and
@@ -50,6 +56,7 @@ classes:
         range: string
         required: true
         pattern: "^[0-9a-f]{32}$"
+
       description:
         description: >-
           What this entry is for, and how it differs from the others. Optional because the

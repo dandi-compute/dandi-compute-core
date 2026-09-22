@@ -1,8 +1,8 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://raw.githubusercontent.com/dandi-compute/dandi-compute-core/main/src/dandi_compute_code/lfp_pipeline/params/parameter_schema.json",
-    "title": "DANDI Compute LFP Extraction Parameters",
-    "description": "One complete set of LFP extraction parameters, as stored in a file under the pipeline's `params/` directory. Every field is required, so a parameters file always states the whole configuration rather than leaning on defaults applied somewhere else.",
+    "title": "DANDI Compute LFP extraction parameters",
+    "description": "The minimal set of parameters exposed by the DANDI Compute LFP extraction pipeline. This schema is owned by this pipeline. Some fields correspond to concepts in the AIND ephys parameters schema (https://github.com/dandi-compute/aind-ephys-pipeline/blob/main/pipeline/default_params_schema.json); others are custom to this pipeline. Each field notes its SpikeInterface mapping and whether it aligns with the AIND schema or is custom.",
     "type": "object",
     "additionalProperties": false,
     "required": [
@@ -17,7 +17,7 @@
     ],
     "properties": {
         "filter_family": {
-            "description": "Filter design family, forwarded to SpikeInterface `bandpass_filter` as `ftype`.",
+            "description": "Filter design family, forwarded to SpikeInterface `bandpass_filter` as `ftype`. Custom to this pipeline; the AIND schema does not expose the filter family.",
             "enum": [
                 "butter",
                 "bessel",
@@ -25,8 +25,16 @@
             ]
         },
         "filter_band": {
-            "description": "The (freq_min, freq_max) bandpass edges in Hz, forwarded to SpikeInterface `bandpass_filter`. Corresponds to the AIND `lfp.filter.{freq_min, freq_max}` fields, but restricted here to a fixed set of bands, each written low edge first.",
+            "description": "The (freq_min, freq_max) bandpass edges in Hz, forwarded to SpikeInterface `bandpass_filter`. Corresponds to the AIND `lfp.filter.{freq_min, freq_max}` fields, but restricted here to a fixed set of bands.",
             "enum": [
+                [
+                    1,
+                    400
+                ],
+                [
+                    0.5,
+                    500
+                ],
                 [
                     0.1,
                     300
@@ -34,14 +42,6 @@
                 [
                     0.5,
                     250
-                ],
-                [
-                    0.5,
-                    500
-                ],
-                [
-                    1,
-                    400
                 ]
             ]
         },
@@ -54,14 +54,14 @@
             ]
         },
         "filter_direction": {
-            "description": "Whether the bandpass filter runs as a single causal pass or a zero-phase forward-backward pass.",
+            "description": "A single forward (causal) pass or a forward-backward (zero-phase) pass, mapped to SpikeInterface `bandpass_filter` `direction`. Custom to this pipeline.",
             "enum": [
                 "causal",
                 "zero-phase"
             ]
         },
         "reference_scheme": {
-            "description": "The re-referencing applied before resampling.",
+            "description": "Re-referencing scheme, mapped to SpikeInterface `common_reference`. 'CMR' is a global median reference (AIND `common_reference` reference=global, operator=median); 'per-shank median' references within each shank group; 'none' skips referencing.",
             "enum": [
                 "none",
                 "CMR",
@@ -69,7 +69,7 @@
             ]
         },
         "resample_target_fs": {
-            "description": "Target LFP sampling frequency in Hz, forwarded to SpikeInterface `resample`. Corresponds to the AIND `lfp.sampling_rate` field, restricted here to a fixed set.",
+            "description": "Target LFP sampling frequency in Hz, forwarded to SpikeInterface `resample`. Corresponds to the AIND `lfp.sampling_rate` field.",
             "enum": [
                 1000,
                 1250,
@@ -77,14 +77,14 @@
             ]
         },
         "spatial_factor": {
-            "description": "Spatial decimation factor. 1 keeps every channel, 4 keeps every fourth channel ordered by depth. Corresponds to the AIND `lfp_spatial_factor` field.",
+            "description": "Spatial decimation factor: 1 keeps every channel, 4 keeps every fourth channel ordered by depth. Corresponds to the AIND `lfp_spatial_factor` field.",
             "enum": [
                 1,
                 4
             ]
         },
         "bad_channel_method": {
-            "description": "The bad channel detection method applied before filtering.",
+            "description": "SpikeInterface `detect_bad_channels` method, or 'none' to skip. Detected channels are removed before filtering. Corresponds to the AIND `detect_and_remove_bad_channels.method` field.",
             "enum": [
                 "none",
                 "coherence+psd",

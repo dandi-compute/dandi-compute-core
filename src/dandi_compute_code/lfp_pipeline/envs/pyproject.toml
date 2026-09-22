@@ -10,4 +10,5 @@ dependencies = [
     "neuroconv",
     "pynwb",
     "numpy",
+    "jsonschema",
 ]

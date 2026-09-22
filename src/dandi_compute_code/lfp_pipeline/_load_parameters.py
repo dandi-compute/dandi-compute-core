@@ -1,16 +1,15 @@
 import hashlib
 import json
 
-from ._globals import _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
-from ..schemas import validate_against_schema, validate_registry
+import jsonschema
 
-#: The packaged schema describing these parameters.
-_SCHEMA = "lfp_parameters"
+from ._globals import _PARAMETER_SCHEMA_FILE_PATH, _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
+from ..schemas import validate_registry
 
 
 def validate_lfp_parameters(parameters, /) -> dict:
     """
-    Validate a set of LFP parameters against the pipeline LinkML schema.
+    Validate a set of LFP parameters against the pipeline JSON schema.
 
     :param parameters: The parameter mapping to validate.
     :type parameters: dict
@@ -19,12 +18,12 @@ def validate_lfp_parameters(parameters, /) -> dict:
 
     Raises
     ------
-    ValueError
-        If the parameters do not conform to ``schemas/lfp_parameters.linkml.yaml``, or if a
-        numeric parameter is outside the fixed set that schema enumerates for it.
+    jsonschema.ValidationError
+        If the parameters do not conform to ``parameter_schema.json``.
     """
-    validated_parameters = validate_against_schema(parameters, schema=_SCHEMA, description="LFP parameters")
-    return validated_parameters
+    schema = json.loads(_PARAMETER_SCHEMA_FILE_PATH.read_text())
+    jsonschema.validate(instance=parameters, schema=schema)
+    return parameters
 
 
 def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
@@ -35,7 +34,7 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     ``schemas/registry.linkml.yaml``, the key is looked up in
     ``registries/registered_params.json``, the referenced file under ``params/`` is checked
     against its recorded MD5, and the loaded parameters are validated against
-    ``schemas/lfp_parameters.linkml.yaml``.
+    ``parameter_schema.json``.
 
     :param parameters_key: The short name of the parameters to load.
         Must be a key registered in ``registries/registered_params.json``.
@@ -47,8 +46,10 @@ def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     ------
     ValueError
         If the registry does not conform to its schema, if ``parameters_key`` is not
-        registered, if the MD5 checksum of the resolved file does not match its registry
-        entry, or if the loaded parameters do not conform to their schema.
+        registered, or if the MD5 checksum of the resolved file does not match its
+        registry entry.
+    jsonschema.ValidationError
+        If the loaded parameters do not conform to ``parameter_schema.json``.
     """
     registry = json.loads(_PARAMS_REGISTRY_FILE_PATH.read_text())
     validate_registry(registry, description=f"registry '{_PARAMS_REGISTRY_FILE_PATH.name}'")

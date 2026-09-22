@@ -27,7 +27,6 @@ _REGISTRY_FILE_PATHS = [
     _PACKAGE_ROOT / "aind_ephys_pipeline" / "registries" / "registered_params.json",
     _PACKAGE_ROOT / "lfp_pipeline" / "registries" / "registered_params.json",
 ]
-_LFP_PARAMS_FILE_PATHS = sorted((_PACKAGE_ROOT / "lfp_pipeline" / "params").glob("name-*.json"))
 
 
 def _import_linkml(module_name: str, /):
@@ -98,14 +97,6 @@ def test_packaged_registries_validate_strictly(registry_file_path: pathlib.Path)
     registry = json.loads(registry_file_path.read_text())
 
     _validate_strictly({"entries": registry}, schema_name="registry")
-
-
-@pytest.mark.ai_generated
-@pytest.mark.parametrize("params_file_path", _LFP_PARAMS_FILE_PATHS, ids=lambda path: path.name)
-def test_packaged_lfp_parameters_validate_strictly(params_file_path: pathlib.Path) -> None:
-    parameters = json.loads(params_file_path.read_text())
-
-    _validate_strictly(parameters, schema_name="lfp_parameters")
 
 
 @pytest.mark.ai_generated
