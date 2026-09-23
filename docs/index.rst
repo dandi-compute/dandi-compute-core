@@ -31,12 +31,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
 
 .. toctree::
    :maxdepth: 1
-   :caption: Development
-
-   Contributing <https://github.com/dandi-compute/dandi-compute-core/blob/main/.github/CONTRIBUTING.md>
-
-.. toctree::
-   :maxdepth: 1
    :caption: Reference
 
    api/index
