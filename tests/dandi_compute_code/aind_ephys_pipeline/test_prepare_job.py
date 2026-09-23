@@ -11,10 +11,12 @@ import json
 import os
 import pathlib
 import re
+import subprocess
 from unittest import mock
 
 import pytest
 
+import dandi_compute_code
 from dandi_compute_code.aind_ephys_pipeline._prepare_job import prepare_aind_ephys_job
 
 # ---------------------------------------------------------------------------
@@ -488,3 +490,72 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
 
     mock_client.assert_not_called()
     mock_urlopen.assert_not_called()
+
+
+_PACKAGE_DIRECTORY = pathlib.Path(dandi_compute_code.__file__).parent
+
+
+def _prepare_test_content_id_job(*, tmp_path: pathlib.Path, base_directory: pathlib.Path, check_output) -> None:
+    """Prepare a job for the test content ID with every external call mocked, and *check_output* standing in for git."""
+    test_content_id = "048d1ee9-83b7-491f-8f02-1ca615b1d455"
+    mapping = {test_content_id: {"001849": "sourcedata/aind-sample.nwb"}}
+    temp_dir = tmp_path / "tmpdir"
+    temp_dir.mkdir()
+    mock_dandiset = mock.MagicMock()
+    mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
+
+    with (
+        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch("subprocess.check_output", side_effect=check_output),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.upload.upload"),
+        mock.patch("tempfile.mkdtemp", return_value=str(temp_dir)),
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "fake-key"}),
+    ):
+        mock_client.return_value.get_dandiset.return_value = mock_dandiset
+        prepare_aind_ephys_job(
+            pipeline_version="v1.1.0",
+            content_id=test_content_id,
+            config_key="default",
+            parameters_key="original",
+            base_directory=base_directory,
+        )
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_reads_the_codebase_commit_from_the_package_location(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """The codebase commit is read from the installed package's own checkout, not from a path in the base directory."""
+    git_working_directories: list[pathlib.Path] = []
+
+    def _recording_check_output(cmd, *, cwd=None, text=False, **kwargs):
+        if "rev-parse" in cmd:
+            git_working_directories.append(pathlib.Path(cwd))
+        return _git_check_output(cmd, cwd=cwd, text=text, **kwargs)
+
+    _prepare_test_content_id_job(
+        tmp_path=tmp_path, base_directory=fake_base_directory, check_output=_recording_check_output
+    )
+
+    assert _PACKAGE_DIRECTORY in git_working_directories
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_explains_a_codebase_that_is_not_a_git_checkout(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """A package not running from a git checkout fails with a message pointing at the editable install."""
+
+    def _check_output_without_codebase_checkout(cmd, *, cwd=None, text=False, **kwargs):
+        if "rev-parse" in cmd and pathlib.Path(cwd) == _PACKAGE_DIRECTORY:
+            raise subprocess.CalledProcessError(returncode=128, cmd=cmd)
+        return _git_check_output(cmd, cwd=cwd, text=text, **kwargs)
+
+    with pytest.raises(RuntimeError, match="installed editable"):
+        _prepare_test_content_id_job(
+            tmp_path=tmp_path, base_directory=fake_base_directory, check_output=_check_output_without_codebase_checkout
+        )
