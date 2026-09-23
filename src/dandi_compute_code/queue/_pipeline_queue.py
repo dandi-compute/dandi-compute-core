@@ -618,7 +618,7 @@ class PipelineQueue:
         return archived
 
     @classmethod
-    def process_queue(
+    def dispatch_jobs(
         cls,
         *,
         base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
@@ -690,7 +690,7 @@ class PipelineQueue:
 
         if jitter_seconds > 0:
             delay = random.uniform(0, jitter_seconds)
-            _log.info("Sleeping %.2f seconds (jitter) before processing queue", delay)
+            _log.info("Sleeping %.2f seconds (jitter) before dispatching jobs", delay)
             time.sleep(delay)
 
         code_dir_paths = cls.pending_code_dirs()

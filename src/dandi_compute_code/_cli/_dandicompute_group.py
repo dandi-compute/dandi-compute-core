@@ -547,7 +547,7 @@ def _jobs_dispatch_command(
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    results = PipelineQueue.process_queue(
+    results = PipelineQueue.dispatch_jobs(
         base_directory=base_directory,
         only_pipeline=only_pipeline,
         max_concurrent=max_concurrent,

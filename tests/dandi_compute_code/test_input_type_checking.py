@@ -161,10 +161,10 @@ _CASES = [
         id="write_dandiset_jobs_table-str-directory",
     ),
     pytest.param(
-        PipelineQueue.process_queue,
+        PipelineQueue.dispatch_jobs,
         (),
         {"base_directory": _PATH, "jitter_seconds": "0"},
-        id="process_queue-str-jitter",
+        id="dispatch_jobs-str-jitter",
     ),
     pytest.param(PipelineQueue.create_job_capsules, (), {"content_ids": "abc"}, id="create_job_capsules-str-ids"),
     pytest.param(JobCapsule.from_dict, ("not a dict",), {}, id="JobCapsule.from_dict"),

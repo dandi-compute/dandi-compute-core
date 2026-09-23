@@ -251,12 +251,12 @@ def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Pa
     runner = CliRunner()
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
-        mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process,
+        mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch,
     ):
         result = runner.invoke(_dandicompute_group, ["jobs", "dispatch", "--base", str(tmp_path / "missing")])
     assert result.exit_code != 0
     assert "Invalid value for '--base'" in result.output
-    mock_process.assert_not_called()
+    mock_dispatch.assert_not_called()
 
 
 @pytest.mark.ai_generated
@@ -278,10 +278,10 @@ def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Pa
 def test_cli_jobs_dispatch_forwards_its_options(
     base_directory: pathlib.Path, extra_arguments: list[str], expected_keyword_arguments: dict
 ) -> None:
-    """dandicompute jobs dispatch forwards each of its options to PipelineQueue.process_queue."""
+    """dandicompute jobs dispatch forwards each of its options to PipelineQueue.dispatch_jobs."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch:
         result = runner.invoke(
             _dandicompute_group,
             ["jobs", "dispatch", "--base", str(base_directory), *extra_arguments],
@@ -289,7 +289,7 @@ def test_cli_jobs_dispatch_forwards_its_options(
         )
 
     assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
+    mock_dispatch.assert_called_once_with(
         **{
             "base_directory": base_directory,
             "only_pipeline": None,
@@ -336,7 +336,7 @@ def test_cli_jobs_dispatch_reports_each_pipelines_dispatch_outcome(base_director
         "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
     }
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["jobs", "dispatch", "--base", str(base_directory)],
@@ -355,7 +355,7 @@ def test_cli_jobs_dispatch_reports_a_dispatcher_that_is_still_working(base_direc
 
     results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", active_job_ids=("9001",))}
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
             ["jobs", "dispatch", "--base", str(base_directory)],
@@ -420,7 +420,7 @@ def test_cli_jobs_dispatch_reports_when_no_pipelines_are_configured(base_directo
     """dandicompute jobs dispatch says so rather than staying silent with nothing to dispatch."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}):
         result = runner.invoke(
             _dandicompute_group,
             ["jobs", "dispatch", "--base", str(base_directory)],
@@ -436,7 +436,7 @@ def test_cli_jobs_dispatch_rejects_max_without_pipeline(base_directory: pathlib.
     """--max overrides a per-pipeline setting, so it may not be given for every pipeline at once."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch:
         result = runner.invoke(
             _dandicompute_group,
             ["jobs", "dispatch", "--base", str(base_directory), "--max", "4"],
@@ -445,7 +445,7 @@ def test_cli_jobs_dispatch_rejects_max_without_pipeline(base_directory: pathlib.
 
     assert result.exit_code != 0
     assert "requires --pipeline" in result.output
-    mock_process.assert_not_called()
+    mock_dispatch.assert_not_called()
 
 
 @pytest.mark.ai_generated
