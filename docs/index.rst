@@ -28,7 +28,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
 
    infrastructure
    dispatch
-   troubleshooting
 
 .. toctree::
    :maxdepth: 2
