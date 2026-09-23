@@ -48,7 +48,7 @@ LFP capsules are currently formed one level shallower, under `derivatives/dandis
 | `code/main_multi_backend.nf` | Copy of the pipeline entry point | Not used |
 | `code/capsule_versions.env` | Copy of the pipeline's pinned capsule versions | Not used |
 | `logs/` | `nextflow.log`, `job-{id}_slurm.log`, Nextflow reports such as `timeline.html` | `duct_*` resource usage, `job-{id}_slurm.log` |
-| outputs | `derivatives/nwb/`, `derivatives/visualization/`, `derivatives/postprocessed/` | `nwb/{asset}_desc-lfp` |
+| outputs | `derivatives/nwb/`, `derivatives/visualization/`, `derivatives/postprocessed/` | `derivatives/nwb/{asset}_desc-lfp` |
 
 ## The job ID
 
@@ -135,10 +135,6 @@ stateDiagram-v2
 
 `archived` is not a status. An archived capsule has moved to `001873`, where it keeps whichever status it had.
 
-:::{note}
-Status is keyed on what has been uploaded to the archive. The LFP submission script does not currently run `dandi upload`, and it writes its output to `nwb/` rather than `derivatives/`. Under the current rules an LFP capsule therefore reads as `stalled` after it has run, and could not reach `successful` even once uploaded.
-:::
-
 ### Timestamps
 
 `jobs.tsv` records three timestamps, each read from the `dateModified` of an asset on the archive.
@@ -175,11 +171,11 @@ sequenceDiagram
     Task->>DANDI: upload code/submitted_date-* (claim)
     Task->>Run: bash code/submit.sh, tee to the capsule's SLURM log path
     Run->>Proc: run in and write to the preparation tree
-    Run->>DANDI: dandi upload (AIND)
+    Run->>DANDI: dandi upload
     Run->>Proc: append the tree's name to processing/done.txt
 ```
 
-The submission script refers to the preparation tree by absolute path. That tree, `processing/prepare-job-*/001697/{capsule}/`, is where the pipeline writes its intermediate results, logs and outputs, and where AIND's closing `dandi upload` uploads them from. The copy an array task downloads is used only to read `submit.sh` and to claim the capsule. Preparation trees therefore have to outlive the capsule's run, and nothing removes them automatically. `processing/done.txt` lists the ones whose script ran to completion.
+The submission script refers to the preparation tree by absolute path. That tree, `processing/prepare-job-*/001697/{capsule}/`, is where the pipeline writes its intermediate results, logs and outputs, and where its closing `dandi upload` uploads them from. The copy an array task downloads is used only to read `submit.sh` and to claim the capsule. Preparation trees therefore have to outlive the capsule's run, and nothing removes them automatically. `processing/done.txt` lists the ones whose script ran to completion.
 
 ## Formation rules
 

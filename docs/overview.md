@@ -90,7 +90,7 @@ sequenceDiagram
     SLURM->>DANDI: task downloads its capsule's code/
     SLURM->>DANDI: task uploads a submitted_date-* marker (claim)
     SLURM->>SLURM: task runs submit.sh
-    SLURM->>DANDI: submit.sh uploads outputs and logs (AIND runs dandi upload)
+    SLURM->>DANDI: submit.sh uploads outputs and logs
 
     Note over CLI: queue refresh
     CLI->>DANDI: rewrite derivatives/jobs.tsv and paths.tsv

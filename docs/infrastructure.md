@@ -72,7 +72,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | temporary trees from `queue refresh`, `queue stats`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
 
 :::{important}
-A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and AIND's closing `dandi upload` uploads from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.
+A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and its closing `dandi upload` uploads from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.
 :::
 
 Because the AIND submission script checks out a tag in the shared `aind-ephys-pipeline/` checkout, two AIND capsules targeting different pipeline versions should not start at the same moment. In practice every new capsule targets the latest tag, so they agree.
@@ -108,7 +108,7 @@ When Nextflow finishes, the script moves the results out of `intermediate/` into
 
 ### LFP execution
 
-Each LFP capsule's `submit.sh` registers the `dandi-compute-lfp` image with DataLad (once per dataset), then runs `python -m dandi_compute_code.lfp_pipeline` inside it through `datalad containers-run`, wrapped in `duct` to record resource usage into `logs/`. The container image tag is the version of this package that prepared the capsule.
+Each LFP capsule's `submit.sh` registers the `dandi-compute-lfp` image with DataLad (once per dataset), then runs `python -m dandi_compute_code.lfp_pipeline` inside it through `datalad containers-run`, wrapped in `duct` to record resource usage into `logs/`. The container image tag is the version of this package that prepared the capsule. The output goes to `derivatives/nwb/`. The script then uploads the capsule, and still uploads its logs when the run fails, after removing any partial output.
 
 ## The LFP container
 
