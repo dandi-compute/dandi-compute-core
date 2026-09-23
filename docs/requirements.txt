@@ -1,3 +1,5 @@
 sphinx>=7.0
 pydata-sphinx-theme>=0.15
 sphinx-autodoc-typehints>=2.0
+myst-parser>=3.0
+sphinxcontrib-mermaid>=1.0

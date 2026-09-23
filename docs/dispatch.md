@@ -65,7 +65,7 @@ Running the capsule in the task keeps the throttle honest with no coordination o
 
 ### The one directive reproduced by hand
 
-`#SBATCH --output` points into the capsule's own `logs/` directory, which is where the capsule's closing `dandi upload` publishes its SLURM log from and where `dandicompute issues dump` globs it back as `logs/*slurm.log`.
+`#SBATCH --output` points into the capsule's own `logs/` directory, which is where the capsule's closing `dandi upload` uploads its SLURM log from and where `dandicompute issues dump` globs it back as `logs/*slurm.log`.
 
 The array task therefore parses that path out of the capsule script, expands the SLURM filename patterns, and tees the run into it. `pipefail` keeps a failing capsule a failing array task through that pipe.
 
@@ -124,7 +124,7 @@ The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline
 
 ## The log directory
 
-Dispatch works inside the `processing/` directory of the base directory given by `--base` (see the README for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
+Dispatch works inside the `processing/` directory of the base directory given by `--base` (see [Infrastructure](infrastructure.md) for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
 
 Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}`. For resource group `n` it writes:
 

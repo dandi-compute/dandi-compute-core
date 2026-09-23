@@ -24,7 +24,16 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
+    "myst_parser",
+    "sphinxcontrib.mermaid",
 ]
+
+# The narrative pages are Markdown so they also read well on GitHub. Fenced ``mermaid`` blocks
+# render as diagrams in both places.
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+myst_enable_extensions = ["colon_fence", "deflist"]
+myst_fence_as_directive = ["mermaid"]
+myst_heading_anchors = 3
 
 autosummary_generate = True
 # The LFP pipeline runtime dependencies are an optional extra, so mock them to
@@ -44,7 +53,7 @@ intersphinx_mapping = {
 }
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md", "internal/**"]
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -60,3 +69,14 @@ html_theme_options = {
 }
 
 html_static_path = ["_static"]
+
+# Top-level pages with no subpages would only show an empty "Section Navigation", so the primary
+# sidebar is kept only for pages in a section with subpages, and for the API reference.
+html_sidebars = {
+    "*": [],
+    "overview": ["sidebar-nav-bs"],
+    "job_capsules": ["sidebar-nav-bs"],
+    "infrastructure": ["sidebar-nav-bs"],
+    "dispatch": ["sidebar-nav-bs"],
+    "setup": ["sidebar-nav-bs"],
+}
