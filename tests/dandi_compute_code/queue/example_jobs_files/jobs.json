@@ -1,0 +1,60 @@
+{
+  "job_id": {
+    "Description": "The `job-{YYMMDD}{hash}` directory name of the capsule. A `-2`, `-3` counter is appended when one logical job forms a second capsule on the same day."
+  },
+  "dandiset_id": {
+    "Description": "The six-digit Dandiset the source asset belongs to."
+  },
+  "within_dandiset_path": {
+    "Description": "The source asset's path within its Dandiset."
+  },
+  "pipeline": {
+    "Description": "The pipeline that formed this capsule, such as \"aind+ephys\" or \"lfp\"."
+  },
+  "version": {
+    "Description": "The pipeline release the capsule was prepared against, such as `v1.2.2`. The leading `v` is optional, a release need not carry three parts, and a pre-release or build suffix may follow, as in `v1.0.0-fixes` or `v1.1.1+b268fd2+a66c8df`."
+  },
+  "params": {
+    "Description": "The registered parameter set key the capsule was formed with."
+  },
+  "config": {
+    "Description": "The registered SLURM configuration key the capsule was formed with. Pipelines with no configuration of their own record a placeholder here rather than omitting it."
+  },
+  "codebase": {
+    "Description": "The version of this repository that formed the capsule. Deliberately excluded from a capsule's identity, since a capsule is the same logical job regardless of which codebase version produced it. Reads `unknown` when the package is running from a source tree with no installed distribution to report a version."
+  },
+  "content_id": {
+    "Description": "The source asset's DANDI content identifier. Null when the capsule's upstream source could not be resolved, which is recorded rather than guessed at."
+  },
+  "asset_size_bytes": {
+    "Description": "The source asset's size in bytes, or null alongside an unresolved content_id.",
+    "Units": "B"
+  },
+  "status": {
+    "Description": "Where this capsule has reached in its lifecycle.",
+    "Levels": {
+      "pending": "A code directory exists, but the capsule has not been submitted.",
+      "stalled": "A submitted marker exists, but nothing has been logged since.",
+      "failed": "Logs exist without output. This covers both a run still in progress and a run that failed, because nothing recorded about a capsule tells the two apart.",
+      "successful": "A derivatives directory exists.",
+      "unknown": "Nothing that would place the capsule in the lifecycle was observed. Also the fallback for a status cell that is empty or unrecognised."
+    }
+  },
+  "created_at": {
+    "Description": "When the capsule was formed, taken from its submission script. An ISO 8601 timestamp, treated as UTC when it carries no offset."
+  },
+  "job_submission_time": {
+    "Description": "When the job left the queue, taken from the earliest submitted marker. A capsule may carry several markers after a resubmission, so the earliest is the one used."
+  },
+  "job_completion_time": {
+    "Description": "When the job last wrote a log. Null for a capsule that has not run."
+  },
+  "queue_wait_seconds": {
+    "Description": "Whole seconds between `created_at` and `job_submission_time`. Derived rather than stored, so it is written to the jobs table but ignored when one is read back.",
+    "Units": "s"
+  },
+  "run_duration_seconds": {
+    "Description": "Whole seconds between `job_submission_time` and `job_completion_time`. Derived on the same terms as `queue_wait_seconds`.",
+    "Units": "s"
+  }
+}

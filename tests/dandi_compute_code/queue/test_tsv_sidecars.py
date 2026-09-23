@@ -5,6 +5,8 @@ import pytest
 
 from dandi_compute_code.queue import JOB_STATUSES, PipelineQueue
 
+_EXAMPLE_JOBS_FILES_DIR = pathlib.Path(__file__).parent / "example_jobs_files"
+
 
 def _header(tsv_string: str) -> list[str]:
     return tsv_string.splitlines()[0].split("\t")
@@ -28,6 +30,19 @@ def test_sidecar_describes_every_column_in_order(sidecar_string: str, tsv_string
     for column in sidecar.values():
         assert column["Description"].strip() != ""
         assert "\n" not in column["Description"]
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("sidecar_string", "example_file_name"),
+    [
+        pytest.param(PipelineQueue.to_tsv_sidecar_string(), "jobs.json", id="jobs"),
+        pytest.param(PipelineQueue.to_paths_tsv_sidecar_string(), "paths.json", id="paths"),
+    ],
+)
+def test_sidecar_matches_committed_example(sidecar_string: str, example_file_name: str) -> None:
+    """Each sidecar matches the committed example exactly, so any change to it shows up in review."""
+    assert sidecar_string == (_EXAMPLE_JOBS_FILES_DIR / example_file_name).read_text()
 
 
 @pytest.mark.ai_generated

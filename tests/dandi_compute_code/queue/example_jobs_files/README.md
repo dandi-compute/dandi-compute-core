@@ -8,6 +8,10 @@ Each row is one job capsule, matching the format produced by `PipelineQueue.to_t
 Every capsule has a dataset description. The failed and successful ones also have a log, and the successful ones an output.
 Which mapping a path belongs to is read from where it sits beneath the capsule directory.
 
+`jobs.json` and `paths.json` are the exact BIDS-style sidecars written beside those two tables.
+They are generated from the job capsule LinkML schema, and a test fails whenever the generated sidecars stop matching them.
+After an intended change to a column description, regenerate them with `PipelineQueue.to_tsv_sidecar_string()` and `PipelineQueue.to_paths_tsv_sidecar_string()`.
+
 The failed and successful capsules carry mock submission and completion times, so their `queue_wait_seconds` and `run_duration_seconds` are filled in. The stalled ones have a submission time only.
 Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `within_dandiset_path`, which is named to describe the scenario it covers.
 Rows that share a `within_dandiset_path` are told apart by their `config`.

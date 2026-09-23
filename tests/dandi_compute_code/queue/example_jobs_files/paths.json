@@ -1,0 +1,11 @@
+{
+  "job_id": {
+    "Description": "The `job_id` of the `jobs.tsv` row this path belongs to."
+  },
+  "path": {
+    "Description": "The asset's path, relative to the root of the Dandiset holding the capsule. Where it sits beneath the capsule directory says which mapping it belongs to. The dataset description is `dataset_description.json`, outputs are under `derivatives/` and logs are under `logs/`."
+  },
+  "content_id": {
+    "Description": "The DANDI content identifier of the asset at `path`."
+  }
+}
