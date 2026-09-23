@@ -25,7 +25,7 @@ Read it in three layers.
 
 - **Configuration** is packaged with the code. `pipeline_configs.json` names the pipelines and their parameter sets, and each pipeline's registries pin those names to checksummed files.
 - **Job state** lives on the archive. Each capsule is a `jobs.tsv` row and a set of `paths.tsv` rows, rebuilt from `assets.jsonld` on demand.
-- **Dispatch records** are produced by `jobs process` and kept under the base directory's `processing/derivatives/logs/`.
+- **Dispatch records** are produced by `jobs dispatch` and kept under the base directory's `processing/derivatives/logs/`.
 
 ## Configuration
 

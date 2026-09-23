@@ -78,14 +78,14 @@ dandicompute jobs create --limit 20          # at most 20 new capsules
 ### Run the queue
 
 ```bash
-dandicompute jobs pending --silent && dandicompute jobs process
+dandicompute jobs pending --silent && dandicompute jobs dispatch
 ```
 
-`jobs process` is safe to run repeatedly. A pipeline whose dispatcher is still on the cluster is skipped, so overlapping invocations never stack arrays. [Array dispatch](dispatch.md) explains the mechanism in full, including how array resources are sized.
+`jobs dispatch` is safe to run repeatedly. A pipeline whose dispatcher is still on the cluster is skipped, so overlapping invocations never stack arrays. [Array dispatch](dispatch.md) explains the mechanism in full, including how array resources are sized.
 
 ```bash
-dandicompute jobs process --pipeline lfp --max 4   # one pipeline, overriding its limit
-dandicompute jobs process --jitter 0               # no random start delay
+dandicompute jobs dispatch --pipeline lfp --max 4   # one pipeline, overriding its limit
+dandicompute jobs dispatch --jitter 0               # no random start delay
 ```
 
 ### Report on the queue

@@ -67,8 +67,8 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | `aind-ephys-pipeline/` | Kept up to date by hand. Each AIND job runs `git checkout {version}` in it before starting. | Never |
 | `work/` | Nextflow | `dandicompute clean --work` |
 | `processing/prepare-job-*` | `prepare aind`, `jobs create` | Nothing automatic |
-| `processing/dandicompute-dispatch-*` | `jobs process` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
-| `processing/derivatives/logs/` | `jobs process` and its array tasks | Never. It is the permanent dispatch record. |
+| `processing/dandicompute-dispatch-*` | `jobs dispatch` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
+| `processing/derivatives/logs/` | `jobs dispatch` and its array tasks | Never. It is the permanent dispatch record. |
 | temporary trees from `jobs refresh`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
 
 :::{important}

@@ -246,14 +246,14 @@ def test_cli_issues_summarize_calls_helper(base_directory: pathlib.Path) -> None
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_rejects_a_missing_base_directory(tmp_path: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Path) -> None:
     """Queue process command rejects a --base that does not exist."""
     runner = CliRunner()
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
         mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process,
     ):
-        result = runner.invoke(_dandicompute_group, ["jobs", "process", "--base", str(tmp_path / "missing")])
+        result = runner.invoke(_dandicompute_group, ["jobs", "dispatch", "--base", str(tmp_path / "missing")])
     assert result.exit_code != 0
     assert "Invalid value for '--base'" in result.output
     mock_process.assert_not_called()
@@ -275,16 +275,16 @@ def test_cli_jobs_process_rejects_a_missing_base_directory(tmp_path: pathlib.Pat
         pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
     ],
 )
-def test_cli_jobs_process_forwards_its_options(
+def test_cli_jobs_dispatch_forwards_its_options(
     base_directory: pathlib.Path, extra_arguments: list[str], expected_keyword_arguments: dict
 ) -> None:
-    """dandicompute jobs process forwards each of its options to PipelineQueue.process_queue."""
+    """dandicompute jobs dispatch forwards each of its options to PipelineQueue.process_queue."""
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
         result = runner.invoke(
             _dandicompute_group,
-            ["jobs", "process", "--base", str(base_directory), *extra_arguments],
+            ["jobs", "dispatch", "--base", str(base_directory), *extra_arguments],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -302,8 +302,8 @@ def test_cli_jobs_process_forwards_its_options(
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_reports_each_pipelines_dispatch_outcome(base_directory: pathlib.Path) -> None:
-    """dandicompute jobs process prints one summary line per configured pipeline."""
+def test_cli_jobs_dispatch_reports_each_pipelines_dispatch_outcome(base_directory: pathlib.Path) -> None:
+    """dandicompute jobs dispatch prints one summary line per configured pipeline."""
     runner = CliRunner()
 
     results = {
@@ -339,7 +339,7 @@ def test_cli_jobs_process_reports_each_pipelines_dispatch_outcome(base_directory
     with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
-            ["jobs", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -349,7 +349,7 @@ def test_cli_jobs_process_reports_each_pipelines_dispatch_outcome(base_directory
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_reports_a_dispatcher_that_is_still_working(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_reports_a_dispatcher_that_is_still_working(base_directory: pathlib.Path) -> None:
     """A pipeline left alone because its array is still live is reported as such."""
     runner = CliRunner()
 
@@ -358,7 +358,7 @@ def test_cli_jobs_process_reports_a_dispatcher_that_is_still_working(base_direct
     with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
-            ["jobs", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -367,13 +367,13 @@ def test_cli_jobs_process_reports_a_dispatcher_that_is_still_working(base_direct
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_requires_dandi_devel(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_requires_dandi_devel(base_directory: pathlib.Path) -> None:
     """Queue process command exits non-zero when DANDI_DEVEL is not set."""
     runner = CliRunner()
 
     result = runner.invoke(
         _dandicompute_group,
-        ["jobs", "process", "--base", str(base_directory)],
+        ["jobs", "dispatch", "--base", str(base_directory)],
         env={"DANDI_API_KEY": "test-key"},
     )
 
@@ -416,14 +416,14 @@ def test_cli_jobs_pending_silent_suppresses_output(tmp_path: pathlib.Path) -> No
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_reports_when_no_pipelines_are_configured(base_directory: pathlib.Path) -> None:
-    """dandicompute jobs process says so rather than staying silent with nothing to dispatch."""
+def test_cli_jobs_dispatch_reports_when_no_pipelines_are_configured(base_directory: pathlib.Path) -> None:
+    """dandicompute jobs dispatch says so rather than staying silent with nothing to dispatch."""
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}):
         result = runner.invoke(
             _dandicompute_group,
-            ["jobs", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -432,14 +432,14 @@ def test_cli_jobs_process_reports_when_no_pipelines_are_configured(base_director
 
 
 @pytest.mark.ai_generated
-def test_cli_jobs_process_rejects_max_without_pipeline(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_rejects_max_without_pipeline(base_directory: pathlib.Path) -> None:
     """--max overrides a per-pipeline setting, so it may not be given for every pipeline at once."""
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
         result = runner.invoke(
             _dandicompute_group,
-            ["jobs", "process", "--base", str(base_directory), "--max", "4"],
+            ["jobs", "dispatch", "--base", str(base_directory), "--max", "4"],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 

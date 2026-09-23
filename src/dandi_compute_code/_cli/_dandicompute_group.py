@@ -477,7 +477,7 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
     Prints ``false`` and exits with code 1 when nothing is pending. This lets a
     crontab skip the dispatch entirely when there is no work, for example:
 
-        dandicompute jobs pending --silent && dandicompute jobs process ...
+        dandicompute jobs pending --silent && dandicompute jobs dispatch ...
     """
     _configure_logging(silent=silent)
     pending = PipelineQueue.has_pending_jobs()
@@ -486,8 +486,8 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
     context.exit(0 if pending else 1)
 
 
-# dandicompute jobs process [OPTIONS]
-@_jobs_group.command(name="process")
+# dandicompute jobs dispatch [OPTIONS]
+@_jobs_group.command(name="dispatch")
 @_base_option
 @click.option(
     "--pipeline",
@@ -529,7 +529,7 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
     default=30.0,
     show_default=True,
 )
-def _jobs_process_command(
+def _jobs_dispatch_command(
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
     max_concurrent: int | None = None,
