@@ -10,7 +10,6 @@ derivatives/
 ├── jobs.json                          # BIDS-style sidecar describing the jobs.tsv columns
 ├── paths.tsv                          # one row per asset path of each capsule
 ├── paths.json                         # BIDS-style sidecar describing the paths.tsv columns
-├── queue_stats.json
 ├── issues_dump.json
 ├── issues_summary.json
 └── dandisets-{first 3 digits}/
@@ -106,7 +105,7 @@ The job ID alone does not say what was run. That is recorded in the capsule's `d
 }
 ```
 
-`queue refresh` reads this block back for every capsule to build `jobs.tsv`. Pipeline versions are written "BIDS-safe", with `-` replaced by `+`, so `v1.0.0-fixes` is recorded as `v1.0.0+fixes`.
+`jobs refresh` reads this block back for every capsule to build `jobs.tsv`. Pipeline versions are written "BIDS-safe", with `-` replaced by `+`, so `v1.0.0-fixes` is recorded as `v1.0.0+fixes`.
 
 ## Lifecycle
 
@@ -119,7 +118,7 @@ stateDiagram-v2
     pending --> stalled: array task claims it<br/>(code/submitted_date-* uploaded)
     stalled --> failed: a log appears<br/>(logs/ holds a file)
     failed --> successful: outputs appear<br/>(derivatives/ exists)
-    pending --> [*]: queue clean<br/>(deleted)
+    pending --> [*]: clean --unsubmitted<br/>(deleted)
     pending --> archived: archive --status pending
     stalled --> archived: archive --status stalled
     failed --> archived: archive --status failed
@@ -148,6 +147,8 @@ stateDiagram-v2
 | `job_completion_time` | The latest file under `logs/` |
 
 `queue_wait_seconds` and `run_duration_seconds` are the differences between consecutive pairs. They are derived when the table is written and ignored when it is read back.
+
+`process_wall_time_seconds` sums the duration of every process in the capsule's Nextflow `logs/timeline.html`. `jobs refresh` downloads each report to fill it in, and leaves it empty for a capsule with no readable report.
 
 ## From preparation to results
 

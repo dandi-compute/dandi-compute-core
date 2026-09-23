@@ -48,6 +48,7 @@ _JOBS_TSV_FIELD_NAMES = [
     "job_completion_time",
     "queue_wait_seconds",
     "run_duration_seconds",
+    "process_wall_time_seconds",
 ]
 
 #: The ``JobCapsule`` mapping fields that ``paths.tsv`` holds, in the order their rows are written.
@@ -161,6 +162,7 @@ class JobCapsule:
     created_at: str | None = None
     job_submission_time: str | None = None
     job_completion_time: str | None = None
+    process_wall_time_seconds: int | None = None
     dataset_description_path: dict[str, str] = field(default_factory=dict)
     output_paths: dict[str, str] = field(default_factory=dict)
     log_paths: dict[str, str] = field(default_factory=dict)
@@ -320,6 +322,7 @@ class JobCapsule:
             created_at=data.get("created_at"),
             job_submission_time=data.get("job_submission_time"),
             job_completion_time=data.get("job_completion_time"),
+            process_wall_time_seconds=data.get("process_wall_time_seconds"),
             dataset_description_path=dict(data.get("dataset_description_path") or {}),
             output_paths=dict(data.get("output_paths") or {}),
             log_paths=dict(data.get("log_paths") or {}),
@@ -345,6 +348,7 @@ class JobCapsule:
             "job_completion_time": self.job_completion_time,
             "queue_wait_seconds": self.queue_wait_seconds,
             "run_duration_seconds": self.run_duration_seconds,
+            "process_wall_time_seconds": self.process_wall_time_seconds,
         }
 
     def to_tsv_row(self) -> dict[str, str]:
@@ -390,9 +394,9 @@ class JobCapsule:
         moved there still carries them as JSON columns, and those are read back when present.
 
         The derived duration columns are not read back -- they are recomputed from the
-        timestamps. ``job_submission_time`` is read leniently so that tables written
-        before that column existed still parse, and a ``status`` cell that is empty or
-        holds an unrecognised value falls back to ``"unknown"``.
+        timestamps. ``job_submission_time`` and ``process_wall_time_seconds`` are read
+        leniently so that tables written before those columns existed still parse, and a
+        ``status`` cell that is empty or holds an unrecognised value falls back to ``"unknown"``.
         """
         job = JobInfo(
             job_id=row["job_id"],
@@ -414,6 +418,8 @@ class JobCapsule:
         content_id = row["content_id"] or None
         asset_size_bytes_raw = row["asset_size_bytes"]
         asset_size_bytes = int(asset_size_bytes_raw) if asset_size_bytes_raw != "" else None
+        process_wall_time_seconds_raw = row.get("process_wall_time_seconds", "")
+        process_wall_time_seconds = int(process_wall_time_seconds_raw) if process_wall_time_seconds_raw != "" else None
 
         return cls(
             job=job,
@@ -423,6 +429,7 @@ class JobCapsule:
             created_at=_parse_optional_str(row["created_at"]),
             job_submission_time=_parse_optional_str(row.get("job_submission_time", "")),
             job_completion_time=_parse_optional_str(row["job_completion_time"]),
+            process_wall_time_seconds=process_wall_time_seconds,
             dataset_description_path=_parse_json_dict(row.get("dataset_description_path", "")),
             output_paths=_parse_json_dict(row.get("output_paths", "")),
             log_paths=_parse_json_dict(row.get("log_paths", "")),

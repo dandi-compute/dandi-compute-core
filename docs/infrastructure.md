@@ -67,9 +67,9 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | `aind-ephys-pipeline/` | Kept up to date by hand. Each AIND job runs `git checkout {version}` in it before starting. | Never |
 | `work/` | Nextflow | `dandicompute clean --work` |
 | `processing/prepare-job-*` | `prepare aind`, `jobs create` | Nothing automatic |
-| `processing/dandicompute-dispatch-*` | `queue process` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
-| `processing/derivatives/logs/` | `queue process` and its array tasks | Never. It is the permanent dispatch record. |
-| temporary trees from `queue refresh`, `queue stats`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
+| `processing/dandicompute-dispatch-*` | `jobs process` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
+| `processing/derivatives/logs/` | `jobs process` and its array tasks | Never. It is the permanent dispatch record. |
+| temporary trees from `jobs refresh`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
 
 :::{important}
 A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and its closing `dandi upload` uploads from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.

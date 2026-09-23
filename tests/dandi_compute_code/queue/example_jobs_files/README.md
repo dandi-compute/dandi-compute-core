@@ -13,6 +13,7 @@ They are generated from the job capsule LinkML schema, and a test fails whenever
 After an intended change to a column description, regenerate them with `PipelineQueue.to_tsv_sidecar_string()` and `PipelineQueue.to_paths_tsv_sidecar_string()`.
 
 The failed and successful capsules carry mock submission and completion times, so their `queue_wait_seconds` and `run_duration_seconds` are filled in. The stalled ones have a submission time only.
+`sub-successful` carries a `process_wall_time_seconds` of 215, the total of `../example_timeline_reports/two_steps.html`.
 Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `within_dandiset_path`, which is named to describe the scenario it covers.
 Rows that share a `within_dandiset_path` are told apart by their `config`.
 

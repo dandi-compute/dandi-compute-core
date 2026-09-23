@@ -94,11 +94,3 @@ def test_named_selectors_read_the_status_field(selector: str, expected_status: s
     selected = getattr(queue, selector)
 
     assert [entry.status for entry in selected] == [expected_status]
-
-
-@pytest.mark.ai_generated
-def test_successful_asset_bytes_total_counts_only_successful_entries() -> None:
-    """Only capsules that produced output contribute their source-asset size."""
-    queue = PipelineQueue(entries=[_entry(each) for each in JOB_STATUSES])
-
-    assert queue.successful_asset_bytes_total == 1024

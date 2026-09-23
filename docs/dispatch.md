@@ -4,7 +4,7 @@ Every pipeline is run on the cluster by exactly one SLURM array job, its dispatc
 
 ## How a dispatch works
 
-`dandicompute queue process` reads the job capsules awaiting submission from the DANDI assets metadata, takes the ones belonging to each configured pipeline, writes them to a manifest, and submits an array covering them.
+`dandicompute jobs process` reads the job capsules awaiting submission from the DANDI assets metadata, takes the ones belonging to each configured pipeline, writes them to a manifest, and submits an array covering them.
 
 Each array task then:
 
@@ -89,13 +89,13 @@ Those two limits are the whole of what is configurable, per the section above. A
 ## Running a dispatch
 
 ```bash
-dandicompute queue process
+dandicompute jobs process
 ```
 
-To skip the dispatch entirely when there is no queued work, gate it on `queue pending`, which exits 0 when at least one job awaits submission and 1 when nothing does:
+To skip the dispatch entirely when there is no queued work, gate it on `jobs pending`, which exits 0 when at least one job awaits submission and 1 when nothing does:
 
 ```bash
-dandicompute queue pending --silent && dandicompute queue process
+dandicompute jobs pending --silent && dandicompute jobs process
 ```
 
 The output reports what each pipeline dispatched, with one line per array naming that group's size, its requests and its share of the limit:
@@ -115,7 +115,7 @@ lfp: dispatched 1 capsule as array job 902.
 To dispatch a single pipeline, optionally overriding its configured limit for that invocation:
 
 ```bash
-dandicompute queue process --pipeline lfp --max 4
+dandicompute jobs process --pipeline lfp --max 4
 ```
 
 The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once.
