@@ -69,7 +69,7 @@ def test_archive_by_status_returns_empty_list_when_nothing_matches(status: str, 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
 def test_archive_by_status_moves_every_matching_entry(
-    status: str, example_pipeline_queue: PipelineQueue, dandi_api_key: None
+    status: str, example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, dandi_api_key: None
 ) -> None:
     """archive_by_status calls move_job_capsule once per matching entry, with its resolved capsule path."""
     selectors = _STATUS_EXAMPLE_SELECTORS[status]
@@ -82,7 +82,7 @@ def test_archive_by_status_moves_every_matching_entry(
         mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
         mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
     ):
-        archived = matching_state.archive_by_status(status=status)
+        archived = matching_state.archive_by_status(status=status, base_directory=base_directory)
 
     assert archived == expected_paths
     assert mock_move.call_count == len(expected_paths)
@@ -91,7 +91,7 @@ def test_archive_by_status_moves_every_matching_entry(
             capsule_path=expected_path,
             source_dandiset_id=_JOB_CAPSULES_DANDISET_ID,
             target_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
-            processing_directory=None,
+            base_directory=base_directory,
             test=False,
         )
 
@@ -118,11 +118,10 @@ def test_archive_by_status_ignores_non_matching_entries(
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
-def test_archive_by_status_forwards_processing_directory_and_test_flag(
-    status: str, example_pipeline_queue: PipelineQueue, tmp_path: pathlib.Path, dandi_api_key: None
+def test_archive_by_status_forwards_base_directory_and_test_flag(
+    status: str, example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, dandi_api_key: None
 ) -> None:
-    """archive_by_status forwards processing_directory and test through to move_job_capsule."""
-    processing_dir = tmp_path / "processing"
+    """archive_by_status forwards base_directory and test through to move_job_capsule."""
     single_entry = example_pipeline_queue.entry_for(**_STATUS_EXAMPLE_SELECTORS[status][0])
     single_matching_state = PipelineQueue(entries=[single_entry])
     expected_path = single_entry.capsule_path()
@@ -132,19 +131,21 @@ def test_archive_by_status_forwards_processing_directory_and_test_flag(
         mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
         mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
     ):
-        single_matching_state.archive_by_status(status=status, processing_directory=processing_dir, test=True)
+        single_matching_state.archive_by_status(status=status, base_directory=base_directory, test=True)
 
     mock_move.assert_called_once_with(
         capsule_path=expected_path,
         source_dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         target_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
-        processing_directory=processing_dir,
+        base_directory=base_directory,
         test=True,
     )
 
 
 @pytest.mark.ai_generated
-def test_archive_by_status_forwards_dandiset_ids(example_pipeline_queue: PipelineQueue, dandi_api_key: None) -> None:
+def test_archive_by_status_forwards_dandiset_ids(
+    example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, dandi_api_key: None
+) -> None:
     """archive_by_status forwards custom dandiset IDs to load_assets_jsonld_metadata and move_job_capsule."""
     single_entry = example_pipeline_queue.entry_for(**_STATUS_EXAMPLE_SELECTORS["failed"][0])
     single_matching_state = PipelineQueue(entries=[single_entry])
@@ -157,13 +158,15 @@ def test_archive_by_status_forwards_dandiset_ids(example_pipeline_queue: Pipelin
             "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata
         ) as mock_load_metadata,
     ):
-        single_matching_state.archive_by_status(status="failed", dandiset_id="000123", archive_dandiset_id="000456")
+        single_matching_state.archive_by_status(
+            status="failed", dandiset_id="000123", archive_dandiset_id="000456", base_directory=base_directory
+        )
 
     mock_load_metadata.assert_called_once_with(dandiset_id="000123")
     mock_move.assert_called_once_with(
         capsule_path=expected_path,
         source_dandiset_id="000123",
         target_dandiset_id="000456",
-        processing_directory=None,
+        base_directory=base_directory,
         test=False,
     )

@@ -290,9 +290,9 @@ def test_explicit_content_ids_skip_the_network_fetch() -> None:
 
 @pytest.mark.ai_generated
 def test_passes_optional_args_through(tmp_path: pathlib.Path) -> None:
-    """The pipeline directory and config key reach the job builder."""
-    fake_pipeline_dir = tmp_path / "pipeline"
-    fake_pipeline_dir.mkdir()
+    """The base directory and config key reach the job builder."""
+    fake_base_dir = tmp_path / "base"
+    fake_base_dir.mkdir()
 
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
@@ -300,12 +300,12 @@ def test_passes_optional_args_through(tmp_path: pathlib.Path) -> None:
     ):
         PipelineQueue.create_job_capsules(
             content_ids=["asset-bbb"],
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_dir,
             config_key="v1",
         )
 
     call_kwargs = mock_prepare.call_args.kwargs
-    assert call_kwargs["pipeline_directory"] == fake_pipeline_dir
+    assert call_kwargs["base_directory"] == fake_base_dir
     assert call_kwargs["config_key"] == "v1"
 
 

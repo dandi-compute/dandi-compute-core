@@ -46,15 +46,15 @@ def _git_check_output(cmd, *, cwd=None, text=False, **kwargs):
 
 
 @pytest.fixture()
-def fake_pipeline_dir(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Create a minimal fake pipeline directory structure."""
-    pipeline_dir = tmp_path / "pipeline_repo"
+def fake_base_directory(base_directory: pathlib.Path) -> pathlib.Path:
+    """Create a base directory holding a minimal fake pipeline directory structure."""
+    pipeline_dir = base_directory / "aind-ephys-pipeline"
     pipeline_dir.mkdir()
     main_nf = pipeline_dir / "pipeline" / "main_multi_backend.nf"
     main_nf.parent.mkdir(parents=True)
     main_nf.write_text("// fake nextflow pipeline")
     (pipeline_dir / "pipeline" / "capsule_versions.env").write_text("CAPSULE_VERSION=1\n")
-    return pipeline_dir
+    return base_directory
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ def test_prepare_aind_ephys_job_extracts_sub_entity_from_path(
     expected_sub: str,
     expected_output_path: str,
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """prepare_aind_ephys_job resolves the 'sub' entity from directory parts when absent in the filename."""
     content_id = "04000000-0000-0000-0000-000000000000"
@@ -117,10 +117,10 @@ def test_prepare_aind_ephys_job_extracts_sub_entity_from_path(
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
-    mock_mkdtemp.assert_called_once_with(dir=mock.ANY, prefix="prepare-job-")
+    mock_mkdtemp.assert_called_once_with(dir=fake_base_directory / "processing", prefix="prepare-job-")
     assert f"sub-{expected_sub}" in str(script_path)
     assert expected_output_path in str(script_path)
 
@@ -128,7 +128,7 @@ def test_prepare_aind_ephys_job_extracts_sub_entity_from_path(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_test_content_id_uses_sub_test(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """The test content ID (sourcedata/aind-sample.nwb) gets sub='test' injected as a special case."""
     # The production mapping for this ID is {'001849': 'sourcedata/aind-sample.nwb'},
@@ -158,7 +158,7 @@ def test_prepare_aind_ephys_job_test_content_id_uses_sub_test(
             content_id=test_content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     assert "sourcedata/aind-sample" in str(script_path)
@@ -183,14 +183,14 @@ def test_prepare_aind_ephys_job_raises_on_missing_sub_entity(tmp_path: pathlib.P
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=tmp_path,
+            base_directory=tmp_path,
         )
 
 
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_uses_simplified_job_id_format(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """prepare_aind_ephys_job names the job capsule directory `job-{YYMMDD}+{hash}` and nothing else."""
     content_id = "07000000-0000-0000-0000-000000000000"
@@ -218,7 +218,7 @@ def test_prepare_aind_ephys_job_uses_simplified_job_id_format(
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     capsule_dir_name = pathlib.Path(str(script_path)).parent.parent.name
@@ -230,7 +230,7 @@ def test_prepare_aind_ephys_job_uses_simplified_job_id_format(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_writes_job_provenance_in_dataset_description(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """dataset_description.json records everything the capsule directory name no longer spells out."""
     content_id = "07100000-0000-0000-0000-000000000000"
@@ -258,7 +258,7 @@ def test_prepare_aind_ephys_job_writes_job_provenance_in_dataset_description(
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     capsule_directory = script_path.parent.parent
@@ -281,7 +281,7 @@ def test_prepare_aind_ephys_job_writes_job_provenance_in_dataset_description(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_skips_when_a_capsule_already_exists(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """A capsule prepared on an earlier date is recognised by its job hash, so nothing is formed twice."""
     content_id = "07200000-0000-0000-0000-000000000000"
@@ -314,7 +314,7 @@ def test_prepare_aind_ephys_job_skips_when_a_capsule_already_exists(
                 content_id=content_id,
                 config_key="default",
                 parameters_key="original",
-                pipeline_directory=fake_pipeline_dir,
+                base_directory=fake_base_directory,
             )
 
     script_path = _run([])
@@ -331,7 +331,7 @@ def test_prepare_aind_ephys_job_skips_when_a_capsule_already_exists(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_writes_codebase_version_in_dataset_description(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """dataset_description.json records the installed codebase version with a leading v."""
     content_id = "07500000-0000-0000-0000-000000000000"
@@ -359,7 +359,7 @@ def test_prepare_aind_ephys_job_writes_codebase_version_in_dataset_description(
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     output_directory = script_path.parent.parent
@@ -377,7 +377,7 @@ def test_prepare_aind_ephys_job_writes_codebase_version_in_dataset_description(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_accepts_matching_minor_version_params(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """Parameters files remain compatible when only the pipeline patch version differs."""
     content_id = "08000000-0000-0000-0000-000000000000"
@@ -405,7 +405,7 @@ def test_prepare_aind_ephys_job_accepts_matching_minor_version_params(
             content_id=content_id,
             config_key="default",
             parameters_key="original",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     assert script_path.exists()
@@ -414,7 +414,7 @@ def test_prepare_aind_ephys_job_accepts_matching_minor_version_params(
 @pytest.mark.ai_generated
 def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version_for_default_params(
     tmp_path: pathlib.Path,
-    fake_pipeline_dir: pathlib.Path,
+    fake_base_directory: pathlib.Path,
 ) -> None:
     """Parameters remain compatible with newer pipeline minor versions in the same major series."""
     content_id = "09000000-0000-0000-0000-000000000000"
@@ -442,7 +442,7 @@ def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version_for_default
             content_id=content_id,
             config_key="default",
             parameters_key="default",
-            pipeline_directory=fake_pipeline_dir,
+            base_directory=fake_base_directory,
         )
 
     assert script_path.exists()
@@ -462,7 +462,7 @@ def test_newer_params_rejected_early(tmp_path: pathlib.Path) -> None:
             dandiset_path="sub-mouse01/sub-mouse01_ecephys.nwb",
             config_key="default",
             parameters_key="default",
-            pipeline_directory=tmp_path,
+            base_directory=tmp_path,
         )
 
     mock_client.assert_not_called()
@@ -483,7 +483,7 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
             dandiset_path="sub-mouse01/sub-mouse01_ecephys.nwb",
             config_key="default",
             parameters_key="default",
-            pipeline_directory=tmp_path,
+            base_directory=tmp_path,
         )
 
     mock_client.assert_not_called()

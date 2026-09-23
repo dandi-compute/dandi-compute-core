@@ -1,8 +1,8 @@
 """
 AindEphysPipelineQueue — the ``aind+ephys`` flavour of :class:`~._pipeline_queue.PipelineQueue`.
 
-The AIND ephys pipeline lives in its own repository, checked out next to this one on the
-cluster, and carries a config registry of its own. Those are the only things that set it
+The AIND ephys pipeline lives in its own repository, checked out next to this one under the
+structured base directory, and carries a config registry of its own. Those are the only things that set it
 apart from the pipeline agnostic queue, so this subclass is just the hooks that differ.
 """
 
@@ -15,13 +15,14 @@ from typing import ClassVar
 import beartype
 
 from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
-from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY
+from ._globals import _CONFIGS_REGISTRIES
 
 # Sphinx resolves the inherited ``entries`` annotation against this module, so the name it
 # refers to has to be importable from here.
 from ._job_capsule import JobCapsule  # noqa: F401
 from ._pipeline_queue import PipelineQueue
 from ._queue_utils import _latest_repository_version_tag
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _aind_pipeline_directory
 from ..aind_ephys_pipeline import prepare_aind_ephys_job
 
 
@@ -33,17 +34,17 @@ class AindEphysPipelineQueue(PipelineQueue):
     pipelines: ClassVar[tuple[str, ...]] = ("aind+ephys",)
 
     @classmethod
-    def _resolve_latest_pipeline_version(cls, *, pipeline_directory: pathlib.Path | None = None) -> str:
+    def _resolve_latest_pipeline_version(cls, *, base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY) -> str:
         """
         The highest release tag in the local AIND ephys pipeline checkout.
 
         Parameters
         ----------
-        pipeline_directory : pathlib.Path, optional
-            Local checkout of the AIND ephys pipeline repository. Defaults to the
-            checkout on MIT Engaging.
+        base_directory : pathlib.Path, optional
+            The structured base directory holding the AIND ephys pipeline
+            checkout. Defaults to the one on MIT Engaging.
         """
-        latest_version = _latest_repository_version_tag(pipeline_directory or _DEFAULT_AIND_PIPELINE_DIRECTORY)
+        latest_version = _latest_repository_version_tag(_aind_pipeline_directory(base_directory))
         return latest_version
 
     @classmethod
@@ -70,7 +71,7 @@ class AindEphysPipelineQueue(PipelineQueue):
         content_id: str,
         parameters_key: str,
         pipeline_version: str,
-        pipeline_directory: pathlib.Path | None,
+        base_directory: pathlib.Path,
         config_key: str,
         force_new_capsule: bool,
     ) -> pathlib.Path | None:
@@ -82,7 +83,7 @@ class AindEphysPipelineQueue(PipelineQueue):
             content_id=content_id,
             parameters_key=parameters_key,
             pipeline_version=pipeline_version,
-            pipeline_directory=pipeline_directory,
+            base_directory=base_directory,
             config_key=config_key,
             force_new_capsule=force_new_capsule,
             silent=True,

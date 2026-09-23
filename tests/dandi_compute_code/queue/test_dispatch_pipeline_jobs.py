@@ -33,7 +33,7 @@ def _mock_subprocess_run(*, squeue_stdout: str = "", sbatch_stdout: str = "Submi
 
 def _dispatch(
     *,
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
     code_dir_paths: list[str],
     dispatch_config: DispatchConfig | None = None,
     capsule_resources: dict | None = None,
@@ -48,7 +48,7 @@ def _dispatch(
         return dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=code_dir_paths,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=dispatch_config or DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
             capsule_resources=capsule_resources,
@@ -68,10 +68,10 @@ def _manifest(result, index: int = 1) -> list[str]:
 
 @pytest.mark.ai_generated
 def test_dispatch_places_every_pending_capsule_of_the_pipeline_in_one_array(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """All of a pipeline's pending capsules go out as a single array job."""
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     assert result.status == "dispatched"
     assert result.task_count == 3
@@ -79,19 +79,19 @@ def test_dispatch_places_every_pending_capsule_of_the_pipeline_in_one_array(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_writes_one_manifest_line_per_capsule(processing_directory: pathlib.Path) -> None:
+def test_dispatch_writes_one_manifest_line_per_capsule(base_directory: pathlib.Path) -> None:
     """The manifest maps array task index to capsule, one capsule per line."""
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     manifest_lines = _manifest(result)
     assert manifest_lines == _AIND_CODE_DIR_PATHS
 
 
 @pytest.mark.ai_generated
-def test_dispatch_ignores_capsules_belonging_to_another_pipeline(processing_directory: pathlib.Path) -> None:
+def test_dispatch_ignores_capsules_belonging_to_another_pipeline(base_directory: pathlib.Path) -> None:
     """A pipeline's array covers only its own capsules."""
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=[*_AIND_CODE_DIR_PATHS, _LFP_CODE_DIR_PATH],
     )
 
@@ -101,11 +101,11 @@ def test_dispatch_ignores_capsules_belonging_to_another_pipeline(processing_dire
 
 @pytest.mark.ai_generated
 def test_dispatch_script_carries_the_job_name_and_configured_throttle(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """The name and the throttle are what the dispatch settings put into the array script."""
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=2),
     )
@@ -117,7 +117,7 @@ def test_dispatch_script_carries_the_job_name_and_configured_throttle(
 
 @pytest.mark.ai_generated
 def test_dispatch_script_requests_what_the_capsule_itself_asks_for(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """
     The array task's allocation is the one its capsule gets, so it matches the capsule's own.
@@ -135,7 +135,7 @@ def test_dispatch_script_requests_what_the_capsule_itself_asks_for(
     )
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         dispatch_config=dispatch_config,
     )
@@ -149,11 +149,11 @@ def test_dispatch_script_requests_what_the_capsule_itself_asks_for(
 
 @pytest.mark.ai_generated
 def test_dispatch_places_every_capsule_in_one_array_when_uncapped(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """A null max_array_tasks holds nothing back for the next dispatch."""
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         dispatch_config=DispatchConfig(pipeline="aind+ephys", max_array_tasks=None),
     )
@@ -165,7 +165,7 @@ def test_dispatch_places_every_capsule_in_one_array_when_uncapped(
 
 @pytest.mark.ai_generated
 def test_dispatch_script_runs_each_capsule_inside_its_array_task(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """
     The capsule runs in the task, so the task finishing is the work finishing.
@@ -173,7 +173,7 @@ def test_dispatch_script_runs_each_capsule_inside_its_array_task(
     That is what makes the array's throttle a limit on concurrent pipeline runs without any
     waiting process to keep alive in between.
     """
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     script = _script(result)
     assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"' in script
@@ -182,7 +182,7 @@ def test_dispatch_script_runs_each_capsule_inside_its_array_task(
 
 @pytest.mark.ai_generated
 def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """
     The capsule's `#SBATCH --output` has to be reproduced by hand.
@@ -191,7 +191,7 @@ def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
     points into the capsule's own logs directory, which is where the capsule uploads its SLURM
     log from and where `issues dump` reads it back.
     """
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     script = _script(result)
     assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
@@ -202,7 +202,7 @@ def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory: pathlib.Path) -> None:
+def test_dispatch_submits_the_generated_script_with_sbatch(base_directory: pathlib.Path) -> None:
     """The array script is what gets handed to sbatch."""
     with mock.patch(
         "dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_mock_subprocess_run()
@@ -210,7 +210,7 @@ def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory:
         result = dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
@@ -220,7 +220,7 @@ def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory:
 
 
 @pytest.mark.ai_generated
-def test_dispatch_asks_squeue_only_about_this_pipelines_dispatcher(processing_directory: pathlib.Path) -> None:
+def test_dispatch_asks_squeue_only_about_this_pipelines_dispatcher(base_directory: pathlib.Path) -> None:
     """The liveness check is scoped to this user and this pipeline's dispatcher job name."""
     with mock.patch(
         "dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_mock_subprocess_run()
@@ -228,7 +228,7 @@ def test_dispatch_asks_squeue_only_about_this_pipelines_dispatcher(processing_di
         dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
@@ -241,7 +241,7 @@ def test_dispatch_asks_squeue_only_about_this_pipelines_dispatcher(processing_di
 
 @pytest.mark.ai_generated
 def test_dispatch_does_not_resubmit_while_the_dispatcher_is_still_active(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """A live dispatcher already owns the pending capsules, so no second array is submitted."""
     with mock.patch(
@@ -251,7 +251,7 @@ def test_dispatch_does_not_resubmit_while_the_dispatcher_is_still_active(
         result = dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
@@ -259,17 +259,17 @@ def test_dispatch_does_not_resubmit_while_the_dispatcher_is_still_active(
     assert result.status == "dispatcher-active"
     assert result.active_job_ids == ("1234_[3-12%2]",)
     assert mock_run.call_count == 1
-    assert list(processing_directory.iterdir()) == []
+    assert list((base_directory / "processing").iterdir()) == []
 
 
 @pytest.mark.ai_generated
-def test_dispatch_reports_no_pending_without_touching_the_cluster(processing_directory: pathlib.Path) -> None:
+def test_dispatch_reports_no_pending_without_touching_the_cluster(base_directory: pathlib.Path) -> None:
     """With nothing pending for the pipeline, neither squeue nor sbatch is called."""
     with mock.patch("dandi_compute_code.queue._dispatch.subprocess.run") as mock_run:
         result = dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=[_LFP_CODE_DIR_PATH],
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
@@ -280,12 +280,12 @@ def test_dispatch_reports_no_pending_without_touching_the_cluster(processing_dir
 
 
 @pytest.mark.ai_generated
-def test_dispatch_holds_capsules_beyond_the_array_size_limit_back(processing_directory: pathlib.Path) -> None:
+def test_dispatch_holds_capsules_beyond_the_array_size_limit_back(base_directory: pathlib.Path) -> None:
     """Capsules past max_array_tasks stay pending for the next dispatch rather than overflowing."""
     dispatch_config = DispatchConfig(pipeline="aind+ephys", max_array_tasks=2)
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         dispatch_config=dispatch_config,
     )
@@ -298,11 +298,11 @@ def test_dispatch_holds_capsules_beyond_the_array_size_limit_back(processing_dir
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(("test_mode", "expected_removal"), [(False, True), (True, False)])
 def test_dispatch_script_removes_task_directories_unless_running_in_test_mode(
-    processing_directory: pathlib.Path, test_mode: bool, expected_removal: bool
+    base_directory: pathlib.Path, test_mode: bool, expected_removal: bool
 ) -> None:
     """Test mode leaves each array task's working tree on disk for debugging."""
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         test=test_mode,
     )
@@ -312,7 +312,7 @@ def test_dispatch_script_removes_task_directories_unless_running_in_test_mode(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_raises_when_sbatch_fails(processing_directory: pathlib.Path) -> None:
+def test_dispatch_raises_when_sbatch_fails(base_directory: pathlib.Path) -> None:
     """A failed array submission is surfaced rather than reported as dispatched."""
     failed_result = mock.MagicMock(returncode=1, stdout="", stderr="boom")
 
@@ -328,14 +328,14 @@ def test_dispatch_raises_when_sbatch_fails(processing_directory: pathlib.Path) -
         dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
 
 
 @pytest.mark.ai_generated
-def test_dispatch_raises_when_sbatch_reports_no_job_id(processing_directory: pathlib.Path) -> None:
+def test_dispatch_raises_when_sbatch_reports_no_job_id(base_directory: pathlib.Path) -> None:
     """Output without a job ID means the array cannot be tracked, so it is an error."""
     with (
         mock.patch(
@@ -347,14 +347,14 @@ def test_dispatch_raises_when_sbatch_reports_no_job_id(processing_directory: pat
         dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
 
 
 @pytest.mark.ai_generated
-def test_dispatch_raises_when_squeue_fails(processing_directory: pathlib.Path) -> None:
+def test_dispatch_raises_when_squeue_fails(base_directory: pathlib.Path) -> None:
     """Without a usable answer from squeue there is no way to tell a live dispatcher apart."""
     failed_result = mock.MagicMock(returncode=1, stdout="", stderr="squeue: error")
 
@@ -365,7 +365,7 @@ def test_dispatch_raises_when_squeue_fails(processing_directory: pathlib.Path) -
         dispatch_pipeline_jobs(
             pipeline="aind+ephys",
             code_dir_paths=_AIND_CODE_DIR_PATHS,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             dispatch_config=DispatchConfig(pipeline="aind+ephys"),
             dandiset_id="001697",
         )
@@ -381,7 +381,7 @@ _HEAVY = CapsuleResources(memory="16GB", cpus_per_task=1, partition="mit_preempt
 
 @pytest.mark.ai_generated
 def test_dispatch_splits_capsules_that_ask_for_different_resources(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """Capsules asking for different things get an array each, so neither is truncated."""
     capsule_resources = {
@@ -391,7 +391,7 @@ def test_dispatch_splits_capsules_that_ask_for_different_resources(
     }
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         capsule_resources=capsule_resources,
     )
@@ -407,7 +407,7 @@ def test_dispatch_splits_capsules_that_ask_for_different_resources(
 
 @pytest.mark.ai_generated
 def test_dispatch_shares_the_concurrency_limit_across_resource_groups(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """
     The limit is what the pipeline may run at once in total, not per array.
@@ -418,7 +418,7 @@ def test_dispatch_shares_the_concurrency_limit_across_resource_groups(
     capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
         dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=4),
         capsule_resources=capsule_resources,
@@ -429,12 +429,12 @@ def test_dispatch_shares_the_concurrency_limit_across_resource_groups(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_keeps_one_array_when_every_capsule_agrees(processing_directory: pathlib.Path) -> None:
+def test_dispatch_keeps_one_array_when_every_capsule_agrees(base_directory: pathlib.Path) -> None:
     """The common case stays a single array per pipeline rather than fragmenting."""
     capsule_resources = dict.fromkeys(_AIND_CODE_DIR_PATHS, _LIGHT)
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         capsule_resources=capsule_resources,
     )
@@ -445,7 +445,7 @@ def test_dispatch_keeps_one_array_when_every_capsule_agrees(processing_directory
 
 @pytest.mark.ai_generated
 def test_dispatch_groups_an_unreadable_capsule_with_the_pipeline_template(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """A capsule whose own script could not be read falls back rather than being dropped."""
     dispatch_config = DispatchConfig(
@@ -458,7 +458,7 @@ def test_dispatch_groups_an_unreadable_capsule_with_the_pipeline_template(
     capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT}
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS,
         dispatch_config=dispatch_config,
         capsule_resources=capsule_resources,
@@ -469,7 +469,7 @@ def test_dispatch_groups_an_unreadable_capsule_with_the_pipeline_template(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_summary_lines_name_each_arrays_group(processing_directory: pathlib.Path) -> None:
+def test_dispatch_summary_lines_name_each_arrays_group(base_directory: pathlib.Path) -> None:
     """
     The summary shows one line per array with what that group asked for.
 
@@ -479,7 +479,7 @@ def test_dispatch_summary_lines_name_each_arrays_group(processing_directory: pat
     capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
         dispatch_config=DispatchConfig(pipeline="aind+ephys", max_concurrent=4),
         capsule_resources=capsule_resources,
@@ -505,18 +505,18 @@ def test_dispatch_summary_lines_are_a_single_line_when_nothing_was_dispatched(st
 
 @pytest.mark.ai_generated
 def test_dispatch_records_manifests_and_scripts_in_the_central_log_directory(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """Every minted manifest and generated script is kept under the pipeline's central log directory."""
     capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
 
     result = _dispatch(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
         capsule_resources=capsule_resources,
     )
 
-    expected_log_directory = processing_directory / "derivatives" / "logs" / "dandicompute-dispatch-aind-ephys"
+    expected_log_directory = base_directory / "processing" / "derivatives" / "logs" / "dandicompute-dispatch-aind-ephys"
     assert result.log_directory == expected_log_directory
     timestamp = result.dispatch_directory.name.removeprefix("dandicompute-dispatch-aind-ephys-")
     recorded_file_names = sorted(path.name for path in expected_log_directory.iterdir())
@@ -530,10 +530,10 @@ def test_dispatch_records_manifests_and_scripts_in_the_central_log_directory(
 
 @pytest.mark.ai_generated
 def test_dispatch_script_writes_its_output_to_the_central_log_directory(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """Array task output goes to the central log directory, named after the dispatch and its group."""
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     timestamp = result.dispatch_directory.name.removeprefix("dandicompute-dispatch-aind-ephys-")
     expected_log_file_path = result.log_directory.absolute() / f"{timestamp}-dispatch-1-%A_%a.log"
@@ -543,9 +543,9 @@ def test_dispatch_script_writes_its_output_to_the_central_log_directory(
 
 
 @pytest.mark.ai_generated
-def test_dispatch_leaves_only_working_trees_to_the_dispatch_directory(processing_directory: pathlib.Path) -> None:
+def test_dispatch_leaves_only_working_trees_to_the_dispatch_directory(base_directory: pathlib.Path) -> None:
     """Nothing worth keeping is written to the dispatch directory, since cleaning removes it."""
-    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
 
     assert list(result.dispatch_directory.iterdir()) == []
     script = _script(result)

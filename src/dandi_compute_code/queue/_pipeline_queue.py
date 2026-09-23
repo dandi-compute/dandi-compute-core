@@ -25,7 +25,6 @@ import logging
 import os
 import pathlib
 import random
-import shutil
 import subprocess
 import time
 from collections.abc import Iterator
@@ -47,19 +46,20 @@ from ._job_capsule import (
     _path_field_name,
 )
 from ._queue_utils import (
+    _capsule_log_paths,
     _CapsuleProvenanceCache,
     _collect_job_capsules,
     _duration_string_to_seconds,
     _extract_error_lines,
     _extract_nextflow_timeline_data,
     _finalize_job_capsule_records,
-    _list_capsule_log_directories,
     _load_pipeline_config,
     _order_content_ids_for_uniform_dandiset_sampling,
-    _remove_empty_parents,
+    _read_text_asset_at_path,
     _sort_key,
     _UpstreamMetadataCache,
 )
+from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset import move_job_capsule, write_dandiset_file
 from ..dandiset._globals import (
@@ -411,7 +411,7 @@ class PipelineQueue:
         *,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         relative_path: str = _JOBS_TSV_RELATIVE_PATH,
-        processing_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> None:
         """
@@ -436,9 +436,9 @@ class PipelineQueue:
         relative_path : str, optional
             Path (relative to the Dandiset root) the ``jobs.tsv`` table is
             written to. The ``paths.tsv`` table is written beside it.
-        processing_directory : pathlib.Path, optional
-            Directory for the temporary working tree used to upload the table.
-            Defaults to the system temporary location.
+        base_directory : pathlib.Path, optional
+            The structured base directory. The temporary working tree used to upload the table is
+            created in its ``processing/`` directory.
         test : bool, optional
             When ``True``, leave the temporary working tree on disk after a
             successful upload for debugging.
@@ -458,41 +458,39 @@ class PipelineQueue:
                 dandiset_id=dandiset_id,
                 relative_path=table_relative_path,
                 content=content,
-                processing_directory=processing_directory,
+                base_directory=base_directory,
                 test=test,
             )
 
     def aggregate_statistics(
         self,
         *,
-        dandiset_directory: pathlib.Path,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         relative_path: str = "derivatives/queue_stats.json",
-        processing_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> dict:
         """
         Write aggregate queue statistics JSON into a Dandiset and return the computed payload.
 
-        Nextflow timeline reports are still located by walking *dandiset_directory* (a local
-        Dandiset clone) -- that part is unchanged. The resulting statistics are written to
-        *relative_path* within *dandiset_id* (default ``derivatives/queue_stats.json``) via
-        :func:`~dandi_compute_code.dandiset.write_dandiset_file`, rather than written to local
-        disk.
+        Each capsule's Nextflow timeline report is read straight from *dandiset_id* on the
+        archive, located through its remote ``assets.jsonld``, so no local Dandiset clone is
+        involved. The resulting statistics are written to *relative_path* within *dandiset_id*
+        (default ``derivatives/queue_stats.json``) via
+        :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
 
         Parameters
         ----------
-        dandiset_directory : pathlib.Path
-            Local clone of the dandiset used to locate Nextflow timeline
-            reports.
         dandiset_id : str, optional
-            The Dandiset the statistics JSON is written into.
+            The Dandiset the Nextflow timeline reports are read from and the
+            statistics JSON is written into.
         relative_path : str, optional
             Path (relative to the Dandiset root) the statistics JSON is written
             to.
-        processing_directory : pathlib.Path, optional
-            Directory for the temporary working tree used to upload the
-            statistics JSON. Defaults to the system temporary location.
+        base_directory : pathlib.Path, optional
+            The structured base directory. The temporary working tree used to
+            upload the statistics JSON is created in its ``processing/``
+            directory.
         test : bool, optional
             When ``True``, leave the temporary working tree on disk after a
             successful upload for debugging.
@@ -504,13 +502,15 @@ class PipelineQueue:
         """
         job_step_wall_time_seconds: collections.defaultdict[str, float] = collections.defaultdict(float)
         timeline_files_processed = 0
+        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
+        asset_paths = set(metadata.path_to_asset_metadata)
         for entry in self.entries:
-            capsule_dir = entry.resolve_capsule_dir(dandiset_directory)
-            timeline_file = capsule_dir / "logs" / "timeline.html"
-            if not timeline_file.is_file():
+            capsule_path = entry.resolve_capsule_path(asset_paths)
+            timeline_html = _read_text_asset_at_path(metadata=metadata, path=f"{capsule_path}/logs/timeline.html")
+            if timeline_html is None:
                 continue
 
-            timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_file.read_text())
+            timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_html)
             if timeline_data is None:
                 continue
 
@@ -554,58 +554,63 @@ class PipelineQueue:
             dandiset_id=dandiset_id,
             relative_path=relative_path,
             content=json.dumps(statistics, indent=2, sort_keys=True) + "\n",
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
         return statistics
 
-    def clean_unsubmitted_capsules(self, *, dandiset_directory: pathlib.Path) -> list[pathlib.Path]:
+    def clean_unsubmitted_capsules(self, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> list[str]:
         """
-        Remove all queued (unsubmitted) capsule directories from the dandiset tree.
+        Delete every queued (unsubmitted) job capsule from a Dandiset on the archive.
 
-        A capsule is *queued* when its directory has a ``code/`` subdirectory but no
-        ``logs/`` or ``derivatives/`` content and no submitted marker. Each matching
-        job capsule directory is deleted from the DANDI archive (via ``dandi delete``)
-        and the local filesystem.
+        A capsule is *queued* when its entry's status is ``"pending"`` and its ``code/``
+        directory carries no submitted marker (``submitted`` or ``submitted_date-*``). Each
+        capsule is resolved against *dandiset_id*'s remote ``assets.jsonld`` and deleted by
+        URL via ``dandi delete``, so no local Dandiset clone is involved.
 
         Parameters
         ----------
-        dandiset_directory : pathlib.Path
-            Local clone of the dandiset used to resolve and delete matching job
-            capsule directories.
+        dandiset_id : str, optional
+            The Dandiset the capsules are deleted from. Defaults to the job
+            capsules Dandiset.
 
         Returns
         -------
-        list of pathlib.Path
-            Job capsule directory paths that were deleted.
+        list of str
+            Capsule paths (relative to the Dandiset root) that were deleted.
 
         Raises
         ------
         RuntimeError
             If ``DANDI_API_KEY`` is not set or is blank.
+        subprocess.CalledProcessError
+            If ``dandi delete`` fails.
         """
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)
 
-        cleanable_capsule_dirs = [
-            capsule_dir
-            for entry in self.entries
-            if (capsule_dir := entry.resolve_unsubmitted_capsule_dir(dandiset_directory)) is not None
-        ]
+        asset_paths = set(load_assets_jsonld_metadata(dandiset_id=dandiset_id).path_to_asset_metadata)
+        removed: list[str] = []
+        for entry in self.with_status("pending"):
+            capsule_path = entry.resolve_capsule_path(asset_paths)
+            capsule_asset_paths = [path for path in asset_paths if path.startswith(f"{capsule_path}/")]
+            if not capsule_asset_paths:
+                continue
 
-        removed: list[pathlib.Path] = []
-        for capsule_dir in cleanable_capsule_dirs:
-            if capsule_dir.is_dir():
-                parent_dir = capsule_dir.parent
-                subprocess.run(
-                    ["dandi", "delete", str(capsule_dir)],
-                    input=b"y\n",
-                    check=True,
-                )
-                shutil.rmtree(capsule_dir)
-                _remove_empty_parents(start=parent_dir, stop=dandiset_directory / "derivatives")
-                removed.append(capsule_dir)
+            submitted_marker_prefixes = (f"{capsule_path}/code/submitted", f"{capsule_path}/code/submitted_date-")
+            if any(
+                path == submitted_marker_prefixes[0] or path.startswith(submitted_marker_prefixes[1])
+                for path in capsule_asset_paths
+            ):
+                continue
+
+            subprocess.run(
+                ["dandi", "delete", f"dandi://dandi/{dandiset_id}/{capsule_path}/"],
+                input=b"y\n",
+                check=True,
+            )
+            removed.append(capsule_path)
 
         return removed
 
@@ -615,7 +620,7 @@ class PipelineQueue:
         status: Literal["failed", "pending", "stalled"],
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
-        processing_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> list[str]:
         """
@@ -642,9 +647,9 @@ class PipelineQueue:
         archive_dandiset_id : str, optional
             Dandiset entries are archived *to*. Defaults to the failed runs
             archive Dandiset.
-        processing_directory : pathlib.Path, optional
-            Directory for the temporary working tree used by each move. Defaults
-            to the system temporary location.
+        base_directory : pathlib.Path, optional
+            The structured base directory. The temporary working tree used by each move is
+            created in its ``processing/`` directory.
         test : bool, optional
             When ``True``, leave each temporary working tree on disk after a
             successful move for debugging.
@@ -678,7 +683,7 @@ class PipelineQueue:
                 capsule_path=capsule_path,
                 source_dandiset_id=dandiset_id,
                 target_dandiset_id=archive_dandiset_id,
-                processing_directory=processing_directory,
+                base_directory=base_directory,
                 test=test,
             )
             archived.append(capsule_path)
@@ -689,7 +694,7 @@ class PipelineQueue:
     def process_queue(
         cls,
         *,
-        processing_directory: pathlib.Path,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         only_pipeline: str | None = None,
         max_concurrent: int | None = None,
         jitter_seconds: float = 30.0,
@@ -711,10 +716,11 @@ class PipelineQueue:
 
         Parameters
         ----------
-        processing_directory : pathlib.Path
-            Directory the per-pipeline dispatch directories are created in,
-            along with the central ``derivatives/logs/`` directory that keeps each
-            dispatcher's manifests, scripts and output. Both have to stay
+        base_directory : pathlib.Path, optional
+            The structured base directory. The per-pipeline dispatch directories
+            are created in its ``processing/`` directory, along with the central
+            ``derivatives/logs/`` directory that keeps each dispatcher's
+            manifests, scripts and output. Both have to stay
             readable from the compute nodes for as long as an array lives.
         only_pipeline : str, optional
             Dispatch only this pipeline instead of every configured one.
@@ -776,7 +782,7 @@ class PipelineQueue:
             results[pipeline_name] = dispatch_pipeline_jobs(
                 pipeline=pipeline_name,
                 code_dir_paths=code_dir_paths,
-                processing_directory=processing_directory,
+                base_directory=base_directory,
                 dispatch_config=dispatch_config,
                 dandiset_id=dandiset_id,
                 capsule_resources=capsule_resources,
@@ -801,7 +807,9 @@ class PipelineQueue:
         }
 
     @classmethod
-    def resolve_latest_pipeline_version(cls, *, pipeline: str, pipeline_directory: pathlib.Path | None = None) -> str:
+    def resolve_latest_pipeline_version(
+        cls, *, pipeline: str, base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY
+    ) -> str:
         """
         The latest version of *pipeline* available on this machine.
 
@@ -815,9 +823,9 @@ class PipelineQueue:
         pipeline : str
             The pipeline name as it appears in the packaged pipeline
             configuration.
-        pipeline_directory : pathlib.Path, optional
-            Local checkout of the pipeline repository, for pipelines that live
-            in one.
+        base_directory : pathlib.Path, optional
+            The structured base directory, holding the checkout of the pipeline
+            repository for pipelines that live in one.
 
         Returns
         -------
@@ -825,7 +833,7 @@ class PipelineQueue:
             The version string to form new job capsules against.
         """
         queue_class = cls.for_pipeline(pipeline)
-        latest_version = queue_class._resolve_latest_pipeline_version(pipeline_directory=pipeline_directory)
+        latest_version = queue_class._resolve_latest_pipeline_version(base_directory=base_directory)
         return latest_version
 
     @classmethod
@@ -846,7 +854,7 @@ class PipelineQueue:
         content_ids: list[str] | None = None,
         limit: int | None = None,
         force_latest_versions: bool = False,
-        pipeline_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     ) -> int:
         """
         Form new job capsules for qualifying assets that do not have one yet.
@@ -878,8 +886,8 @@ class PipelineQueue:
         force_latest_versions : bool, optional
             Form a capsule for every qualifying asset against the latest
             pipeline and codebase versions, whether or not one already exists.
-        pipeline_directory : pathlib.Path, optional
-            Local checkout of the AIND pipeline repository.
+        base_directory : pathlib.Path, optional
+            The structured base directory each capsule is prepared from.
 
         Returns
         -------
@@ -902,7 +910,7 @@ class PipelineQueue:
             if limit is not None and created_count >= limit:
                 break
 
-            version = cls.resolve_latest_pipeline_version(pipeline=pipeline_name, pipeline_directory=pipeline_directory)
+            version = cls.resolve_latest_pipeline_version(pipeline=pipeline_name, base_directory=base_directory)
             config_id = cls.resolve_config_key_to_id(pipeline=pipeline_name, config_key=config_key)
             pipeline_content_ids = (
                 content_ids if content_ids is not None else cls._qualifying_content_ids(pipeline_name)
@@ -927,7 +935,7 @@ class PipelineQueue:
                             content_id=content_id,
                             parameters_key=params_key,
                             pipeline_version=version,
-                            pipeline_directory=pipeline_directory,
+                            base_directory=base_directory,
                             config_key=config_key,
                             force_new_capsule=force_latest_versions,
                         )
@@ -944,38 +952,46 @@ class PipelineQueue:
     @staticmethod
     def dump_issues(
         *,
-        dandiset_directory: pathlib.Path,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         relative_path: str = "derivatives/issues_dump.json",
-        processing_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> list[dict]:
         """
         Scan nextflow/slurm logs and write per-capsule error lines into a Dandiset.
 
-        Logs are still located by walking *dandiset_directory* (a local Dandiset clone) --
-        that part is unchanged. The resulting records are written to *relative_path* within
+        Each capsule's ``logs/nextflow.log`` and ``logs/*slurm.log`` are read straight from
+        *dandiset_id* on the archive, located through its remote ``assets.jsonld``, so no
+        local Dandiset clone is involved. The resulting records are written to *relative_path* within
         *dandiset_id* (default ``derivatives/issues_dump.json``) via
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`, rather than written to local
         disk.
         """
+        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
         records: list[dict] = []
-        for logs_dir in _list_capsule_log_directories(dandiset_directory=dandiset_directory):
-            nextflow_log = logs_dir / "nextflow.log"
-            slurm_logs = sorted(path for path in logs_dir.glob("*slurm.log") if path.is_file())
+        for capsule_path, log_paths in _capsule_log_paths(metadata.path_to_asset_metadata).items():
+            nextflow_log_path = f"{capsule_path}/logs/nextflow.log"
+            has_nextflow_log = nextflow_log_path in log_paths
+            nextflow_errors = (
+                _extract_error_lines(_read_text_asset_at_path(metadata=metadata, path=nextflow_log_path) or "")
+                if has_nextflow_log
+                else []
+            )
 
-            nextflow_errors = _extract_error_lines(log_file=nextflow_log)
-            slurm_errors = {log_file.name: _extract_error_lines(log_file=log_file) for log_file in slurm_logs}
-            slurm_errors = {key: value for key, value in slurm_errors.items() if value}
+            slurm_errors: dict[str, list[str]] = {}
+            for log_path in log_paths:
+                if not log_path.endswith("slurm.log"):
+                    continue
+                errors = _extract_error_lines(_read_text_asset_at_path(metadata=metadata, path=log_path) or "")
+                if errors:
+                    slurm_errors[pathlib.PurePosixPath(log_path).name] = errors
             if not nextflow_errors and not slurm_errors:
                 continue
 
             records.append(
                 {
-                    "capsule_path": logs_dir.parent.relative_to(dandiset_directory).as_posix(),
-                    "nextflow_log": (
-                        nextflow_log.relative_to(dandiset_directory).as_posix() if nextflow_log.is_file() else None
-                    ),
+                    "capsule_path": capsule_path,
+                    "nextflow_log": nextflow_log_path if has_nextflow_log else None,
                     "nextflow_errors": nextflow_errors,
                     "slurm_errors": {
                         log_name: errors for log_name, errors in sorted(slurm_errors.items(), key=lambda item: item[0])
@@ -992,7 +1008,7 @@ class PipelineQueue:
             dandiset_id=dandiset_id,
             relative_path=relative_path,
             content=json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
         return records
@@ -1000,11 +1016,10 @@ class PipelineQueue:
     @staticmethod
     def summarize_issues(
         *,
-        dandiset_directory: pathlib.Path,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         dump_relative_path: str = "derivatives/issues_dump.json",
         relative_path: str = "derivatives/issues_summary.json",
-        processing_directory: pathlib.Path | None = None,
+        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> dict[str, list[str]]:
         """
@@ -1016,10 +1031,9 @@ class PipelineQueue:
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
         """
         records = PipelineQueue.dump_issues(
-            dandiset_directory=dandiset_directory,
             dandiset_id=dandiset_id,
             relative_path=dump_relative_path,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
 
@@ -1049,7 +1063,7 @@ class PipelineQueue:
             dandiset_id=dandiset_id,
             relative_path=relative_path,
             content=json.dumps(output_payload, indent=2, sort_keys=True) + "\n",
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
         return summary
@@ -1099,10 +1113,10 @@ class PipelineQueue:
         return cls(entries=entries)
 
     @classmethod
-    def _resolve_latest_pipeline_version(cls, *, pipeline_directory: pathlib.Path | None = None) -> str:
+    def _resolve_latest_pipeline_version(cls, *, base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY) -> str:
         """
         The latest version of a pipeline that ships inside this package, which is this
-        package's own version. *pipeline_directory* is unused for such a pipeline.
+        package's own version. *base_directory* is unused for such a pipeline.
         """
         latest_version = f"v{importlib.metadata.version('dandi-compute-code')}"
         return latest_version
@@ -1135,19 +1149,20 @@ class PipelineQueue:
         content_id: str,
         parameters_key: str,
         pipeline_version: str,
-        pipeline_directory: pathlib.Path | None,
+        base_directory: pathlib.Path,
         config_key: str,
         force_new_capsule: bool,
     ) -> pathlib.Path | None:
         """
         Form one job capsule and return its submission script, or ``None`` when a capsule
-        already exists on the archive. *pipeline_directory* and *config_key* are unused by
-        pipelines that ship inside this package.
+        already exists on the archive. *config_key* is unused by pipelines that ship inside
+        this package.
         """
         script_file_path = prepare_lfp_job(
             content_id=content_id,
             parameters_key=parameters_key,
             pipeline_version=pipeline_version,
+            base_directory=base_directory,
             force_new_capsule=force_new_capsule,
             silent=True,
         )

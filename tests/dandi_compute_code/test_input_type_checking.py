@@ -92,7 +92,7 @@ _CASES = [
     pytest.param(
         prepare_aind_ephys_job,
         (),
-        {"pipeline_version": "v1.0.1", "pipeline_directory": "/some/path"},
+        {"pipeline_version": "v1.0.1", "base_directory": "/some/path"},
         id="prepare_aind_ephys_job-str-directory",
     ),
     pytest.param(submit_job, (), {"script_file_path": "/some/submit.sh"}, id="submit_job-str-path"),
@@ -148,13 +148,13 @@ _CASES = [
     pytest.param(
         PipelineQueue.write_dandiset_jobs_table,
         (),
-        {"processing_directory": "/some/path"},
+        {"base_directory": "/some/path"},
         id="write_dandiset_jobs_table-str-directory",
     ),
     pytest.param(
         PipelineQueue.process_queue,
         (),
-        {"processing_directory": _PATH, "jitter_seconds": "0"},
+        {"base_directory": _PATH, "jitter_seconds": "0"},
         id="process_queue-str-jitter",
     ),
     pytest.param(PipelineQueue.create_job_capsules, (), {"content_ids": "abc"}, id="create_job_capsules-str-ids"),
@@ -183,16 +183,14 @@ _CASES = [
     ),
     pytest.param(CapsuleResources.from_submission_script, (123,), {}, id="from_submission_script-int"),
     pytest.param(read_capsule_resources, ("code/dir",), {}, id="read_capsule_resources-str-for-list"),
-    pytest.param(
-        clean_dispatch_directories, (), {"processing_directory": "/some/path"}, id="clean_dispatch_directories"
-    ),
+    pytest.param(clean_dispatch_directories, (), {"base_directory": "/some/path"}, id="clean_dispatch_directories"),
     pytest.param(
         dispatch_pipeline_jobs,
         (),
         {
             "pipeline": 1,
             "code_dir_paths": [],
-            "processing_directory": _PATH,
+            "base_directory": _PATH,
             "dispatch_config": DispatchConfig(pipeline="lfp"),
             "dandiset_id": "001697",
         },

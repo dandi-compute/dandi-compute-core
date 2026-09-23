@@ -32,10 +32,12 @@ def _initialize_repository_with_tags(directory: pathlib.Path, /, *, tags: list[s
 def test_resolve_latest_pipeline_version_from_repository_tags(
     tmp_path: pathlib.Path, tags: list[str], expected_version: str
 ) -> None:
-    """The latest AIND pipeline version is the highest release tag in the local checkout."""
-    _initialize_repository_with_tags(tmp_path, tags=tags)
+    """The latest AIND pipeline version is the highest release tag in the base directory's local checkout."""
+    pipeline_directory = tmp_path / "aind-ephys-pipeline"
+    pipeline_directory.mkdir()
+    _initialize_repository_with_tags(pipeline_directory, tags=tags)
 
-    latest_version = PipelineQueue.resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
+    latest_version = PipelineQueue.resolve_latest_pipeline_version(pipeline="aind+ephys", base_directory=tmp_path)
 
     assert latest_version == expected_version
 
@@ -43,10 +45,12 @@ def test_resolve_latest_pipeline_version_from_repository_tags(
 @pytest.mark.ai_generated
 def test_resolve_latest_pipeline_version_raises_without_tags(tmp_path: pathlib.Path) -> None:
     """A checkout with no release tags cannot name a latest version."""
-    _initialize_repository_with_tags(tmp_path, tags=[])
+    pipeline_directory = tmp_path / "aind-ephys-pipeline"
+    pipeline_directory.mkdir()
+    _initialize_repository_with_tags(pipeline_directory, tags=[])
 
     with pytest.raises(ValueError, match="No release tags found"):
-        PipelineQueue.resolve_latest_pipeline_version(pipeline="aind+ephys", pipeline_directory=tmp_path)
+        PipelineQueue.resolve_latest_pipeline_version(pipeline="aind+ephys", base_directory=tmp_path)
 
 
 @pytest.mark.ai_generated

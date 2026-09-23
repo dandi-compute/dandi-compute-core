@@ -15,13 +15,13 @@ _GROUP = "dandi_compute_code._cli._dandicompute_group"
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
-def test_cli_archive_by_status_fails_without_api_key(status: str) -> None:
+def test_cli_archive_by_status_fails_without_api_key(status: str, base_directory: pathlib.Path) -> None:
     """CLI errors immediately when DANDI_API_KEY is missing."""
     runner = CliRunner()
     env_without_key = {key: value for key, value in os.environ.items() if key != "DANDI_API_KEY"}
 
     with mock.patch.dict(os.environ, env_without_key, clear=True):
-        result = runner.invoke(_dandicompute_group, ["archive", "--status", status])
+        result = runner.invoke(_dandicompute_group, ["archive", "--status", status, "--base", str(base_directory)])
 
     assert result.exit_code != 0
     assert "DANDI_API_KEY" in result.output
@@ -40,12 +40,12 @@ def test_cli_archive_by_status_rejects_unknown_status() -> None:
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_by_status_fails_without_dandi_devel() -> None:
+def test_cli_archive_by_status_fails_without_dandi_devel(base_directory: pathlib.Path) -> None:
     """CLI errors when DANDI_DEVEL is missing, since archive_by_status relies on `dandi upload`'s devel-only flags."""
     runner = CliRunner()
 
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}, clear=True):
-        result = runner.invoke(_dandicompute_group, ["archive", "--status", "failed"])
+        result = runner.invoke(_dandicompute_group, ["archive", "--status", "failed", "--base", str(base_directory)])
 
     assert result.exit_code != 0
     assert "DANDI_DEVEL" in result.output
@@ -53,7 +53,9 @@ def test_cli_archive_by_status_fails_without_dandi_devel() -> None:
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
-def test_cli_archive_by_status_invokes_archive_by_status_with_defaults(status: str) -> None:
+def test_cli_archive_by_status_invokes_archive_by_status_with_defaults(
+    status: str, base_directory: pathlib.Path
+) -> None:
     """dandicompute archive --status calls PipelineQueue.archive_by_status with the default Dandiset IDs."""
     runner = CliRunner()
 
@@ -63,7 +65,7 @@ def test_cli_archive_by_status_invokes_archive_by_status_with_defaults(status: s
     ):
         mock_archive = mock_from_dandi.return_value.archive_by_status
         mock_archive.return_value = ["derivatives/example-capsule"]
-        result = runner.invoke(_dandicompute_group, ["archive", "--status", status])
+        result = runner.invoke(_dandicompute_group, ["archive", "--status", status, "--base", str(base_directory)])
 
     assert result.exit_code == 0, result.output
     assert f"Archived 1 {status} job capsule(s)" in result.output
@@ -73,17 +75,15 @@ def test_cli_archive_by_status_invokes_archive_by_status_with_defaults(status: s
         status=status,
         dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
-        processing_directory=None,
+        base_directory=base_directory,
         test=False,
     )
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_by_status_forwards_custom_dandiset_ids(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_by_status_forwards_custom_dandiset_ids(base_directory: pathlib.Path) -> None:
     """dandicompute archive --status forwards --dandiset-id/--archive-dandiset-id and other options."""
     runner = CliRunner()
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
 
     with (
         mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
@@ -101,8 +101,8 @@ def test_cli_archive_by_status_forwards_custom_dandiset_ids(tmp_path: pathlib.Pa
                 "000123",
                 "--archive-dandiset-id",
                 "000456",
-                "--processing",
-                str(processing_dir),
+                "--base",
+                str(base_directory),
                 "--test",
             ],
         )
@@ -113,14 +113,14 @@ def test_cli_archive_by_status_forwards_custom_dandiset_ids(tmp_path: pathlib.Pa
         status="failed",
         dandiset_id="000123",
         archive_dandiset_id="000456",
-        processing_directory=processing_dir,
+        base_directory=base_directory,
         test=True,
     )
 
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize("status", ["failed", "pending", "stalled"])
-def test_cli_archive_by_status_reports_nothing_to_archive(status: str) -> None:
+def test_cli_archive_by_status_reports_nothing_to_archive(status: str, base_directory: pathlib.Path) -> None:
     """dandicompute archive --status reports when there are no matching capsules to archive."""
     runner = CliRunner()
 
@@ -130,7 +130,7 @@ def test_cli_archive_by_status_reports_nothing_to_archive(status: str) -> None:
     ):
         mock_archive = mock_from_dandi.return_value.archive_by_status
         mock_archive.return_value = []
-        result = runner.invoke(_dandicompute_group, ["archive", "--status", status])
+        result = runner.invoke(_dandicompute_group, ["archive", "--status", status, "--base", str(base_directory)])
 
     assert result.exit_code == 0, result.output
     assert f"No {status} job capsules to archive" in result.output
@@ -138,6 +138,6 @@ def test_cli_archive_by_status_reports_nothing_to_archive(status: str) -> None:
         status=status,
         dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
-        processing_directory=None,
+        base_directory=base_directory,
         test=False,
     )

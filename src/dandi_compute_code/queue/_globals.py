@@ -29,7 +29,7 @@ _SBATCH_DIRECTIVE_RE = re.compile(r"^#SBATCH\s+--(?P<name>[A-Za-z-]+)(?:=|\s+)(?
 _DISPATCH_DIRECTORY_RE = re.compile(rf"^(?P<job_name>{_DISPATCH_JOB_NAME_PREFIX}-.+)-(?P<timestamp>\d{{8}}-\d{{6}})$")
 #: How the timestamp in a dispatch directory name is written.
 _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
-#: Directory under the processing directory that holds every dispatcher's logs, manifests and
+#: Directory under the base directory's ``processing/`` that holds every dispatcher's logs, manifests and
 #: scripts. It mirrors where the Dandiset keeps its other dispatch-level records, alongside
 #: ``derivatives/jobs.tsv``. Its name does not match a dispatch directory, so cleaning never
 #: removes it.
@@ -41,8 +41,6 @@ _PACKAGED_PIPELINE_CONFIGS_PATH = pathlib.Path(__file__).parent / "pipeline_conf
 _DURATION_PART_RE = re.compile(r"(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>ms|s|m|h|d)\b")
 #: Release tags of the form ``v1.2.3``, optionally with a pre-release or build suffix.
 _VERSION_TAG_RE = re.compile(r"v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]+)?")
-#: Local checkout of the AIND ephys pipeline repository on MIT Engaging.
-_DEFAULT_AIND_PIPELINE_DIRECTORY = pathlib.Path("/orcd/data/dandi/001/dandi-compute/aind-ephys-pipeline")
 TEST_QUEUE_CONTENT_ID = "048d1ee9-83b7-491f-8f02-1ca615b1d455"
 _QUALIFYING_AIND_CONTENT_IDS_URL = (
     "https://raw.githubusercontent.com/dandi-cache/qualifying-aind-content-ids/dist/"

@@ -34,7 +34,7 @@ def _cluster_calls(*, active_dispatcher_job_names: set[str] = frozenset()):
 
 
 @pytest.mark.ai_generated
-def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: pathlib.Path) -> None:
+def test_process_queue_dispatches_one_array_per_pipeline(base_directory: pathlib.Path) -> None:
     """Each pipeline's pending capsules go out as that pipeline's own single array job."""
     with (
         mock.patch(
@@ -43,7 +43,7 @@ def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: p
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
+        results = PipelineQueue.process_queue(base_directory=base_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "dispatched"
     assert results["aind+ephys"].task_count == 2
@@ -53,7 +53,7 @@ def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: p
 
 @pytest.mark.ai_generated
 def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """A pipeline whose dispatcher is still active is skipped, while the others still dispatch."""
     with (
@@ -66,7 +66,7 @@ def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
             side_effect=_cluster_calls(active_dispatcher_job_names={"dandicompute-dispatch-aind-ephys"}),
         ),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
+        results = PipelineQueue.process_queue(base_directory=base_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "dispatcher-active"
     assert results["lfp"].status == "dispatched"
@@ -74,7 +74,7 @@ def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
 
 @pytest.mark.ai_generated
 def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """A pipeline with nothing waiting gets no array of its own."""
     with (
@@ -84,7 +84,7 @@ def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
+        results = PipelineQueue.process_queue(base_directory=base_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "no-pending"
     assert results["lfp"].status == "dispatched"
@@ -92,7 +92,7 @@ def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
 
 @pytest.mark.ai_generated
 def test_process_queue_throttles_each_array_to_the_configured_limit(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
 ) -> None:
     """The configured per-pipeline limit reaches SLURM as the array's concurrency throttle."""
     configured_limit = PipelineQueue.load_pipeline_config()["pipelines"]["aind+ephys"]["dispatch"]["max_concurrent"]
@@ -104,7 +104,7 @@ def test_process_queue_throttles_each_array_to_the_configured_limit(
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
+        results = PipelineQueue.process_queue(base_directory=base_directory, jitter_seconds=0.0)
 
     script = results["aind+ephys"].arrays[0].script_file_path.read_text()
     assert f"#SBATCH --array=1-2%{configured_limit}" in script

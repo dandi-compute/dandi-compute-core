@@ -261,34 +261,34 @@ def test_move_job_capsule_strips_surrounding_slashes(tmp_path: pathlib.Path) -> 
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_job_fails_without_api_key(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_job_fails_without_api_key(base_directory: pathlib.Path) -> None:
     """CLI errors immediately when DANDI_API_KEY is missing."""
     runner = CliRunner()
     env_without_key = {k: v for k, v in os.environ.items() if k != "DANDI_API_KEY"}
     with mock.patch.dict(os.environ, env_without_key, clear=True):
         result = runner.invoke(
             _dandicompute_group,
-            ["archive", "--job", _EXAMPLE_CAPSULE_PATH],
+            ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--base", str(base_directory)],
         )
     assert result.exit_code != 0
     assert "DANDI_API_KEY" in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_job_fails_without_dandi_devel(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_job_fails_without_dandi_devel(base_directory: pathlib.Path) -> None:
     """CLI errors when DANDI_DEVEL is missing, since move_job_capsule relies on `dandi upload`'s devel-only flags."""
     runner = CliRunner()
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}, clear=True):
         result = runner.invoke(
             _dandicompute_group,
-            ["archive", "--job", _EXAMPLE_CAPSULE_PATH],
+            ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--base", str(base_directory)],
         )
     assert result.exit_code != 0
     assert "DANDI_DEVEL" in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_job_invokes_move(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_job_invokes_move(base_directory: pathlib.Path) -> None:
     """dandicompute archive --job calls move_job_capsule with the provided path."""
     runner = CliRunner()
     with (
@@ -297,7 +297,7 @@ def test_cli_archive_job_invokes_move(tmp_path: pathlib.Path) -> None:
     ):
         result = runner.invoke(
             _dandicompute_group,
-            ["archive", "--job", _EXAMPLE_CAPSULE_PATH],
+            ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--base", str(base_directory)],
         )
     assert result.exit_code == 0, result.output
     assert "Archived job capsule" in result.output
@@ -305,13 +305,13 @@ def test_cli_archive_job_invokes_move(tmp_path: pathlib.Path) -> None:
         capsule_path=_EXAMPLE_CAPSULE_PATH,
         source_dandiset_id=_SOURCE_DANDISET_ID,
         target_dandiset_id=_TARGET_DANDISET_ID,
-        processing_directory=None,
+        base_directory=base_directory,
         test=False,
     )
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_job_forwards_custom_dandiset_ids(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_job_forwards_custom_dandiset_ids(base_directory: pathlib.Path) -> None:
     """dandicompute archive --job forwards --dandiset-id/--archive-dandiset-id to move_job_capsule."""
     runner = CliRunner()
     with (
@@ -328,6 +328,8 @@ def test_cli_archive_job_forwards_custom_dandiset_ids(tmp_path: pathlib.Path) ->
                 "000123",
                 "--archive-dandiset-id",
                 "000456",
+                "--base",
+                str(base_directory),
             ],
         )
     assert result.exit_code == 0, result.output
@@ -335,29 +337,29 @@ def test_cli_archive_job_forwards_custom_dandiset_ids(tmp_path: pathlib.Path) ->
         capsule_path=_EXAMPLE_CAPSULE_PATH,
         source_dandiset_id="000123",
         target_dandiset_id="000456",
-        processing_directory=None,
+        base_directory=base_directory,
         test=False,
     )
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_rejects_both_job_and_status(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_rejects_both_job_and_status(base_directory: pathlib.Path) -> None:
     """dandicompute archive rejects --job and --status given together."""
     runner = CliRunner()
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}):
         result = runner.invoke(
             _dandicompute_group,
-            ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--status", "failed"],
+            ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--status", "failed", "--base", str(base_directory)],
         )
     assert result.exit_code != 0
     assert "exactly one of --status" in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_archive_rejects_neither_job_nor_status(tmp_path: pathlib.Path) -> None:
+def test_cli_archive_rejects_neither_job_nor_status(base_directory: pathlib.Path) -> None:
     """dandicompute archive rejects being called with neither --job nor --status."""
     runner = CliRunner()
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}):
-        result = runner.invoke(_dandicompute_group, ["archive"])
+        result = runner.invoke(_dandicompute_group, ["archive", "--base", str(base_directory)])
     assert result.exit_code != 0
     assert "exactly one of --status" in result.output

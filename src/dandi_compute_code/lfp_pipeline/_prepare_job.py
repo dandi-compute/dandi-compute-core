@@ -19,6 +19,7 @@ import dandi.upload
 
 from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE, _LFP_CONTAINER_NAME
 from ._handle_template import generate_lfp_submission_script
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _code_directory, _processing_directory
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
@@ -120,6 +121,7 @@ def prepare_lfp_job(
     dandiset_id: str | None = None,
     dandiset_path: str | None = None,
     parameters_key: str = "default",
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     force_new_capsule: bool = False,
     silent: bool = False,
 ) -> pathlib.Path | None:
@@ -144,6 +146,9 @@ def prepare_lfp_job(
         The asset path, used to look up the content ID if it is not provided.
     parameters_key : str, optional
         The registered LFP parameters key.
+    base_directory : pathlib.Path, optional
+        The structured base directory. This repository's checkout and the
+        processing directory are read from their fixed places under it.
     force_new_capsule : bool, optional
         Whether to form a new capsule even when one already exists for this job,
         under a job ID disambiguated with a counter when the existing one was
@@ -192,8 +197,7 @@ def prepare_lfp_job(
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
     output_dandi_path = dandiset_path.removesuffix(".nwb")
 
-    dandi_compute_dir = pathlib.Path("/orcd/data/dandi/001/dandi-compute")
-    dandi_compute_code_source_dir = dandi_compute_dir / "code"
+    dandi_compute_code_source_dir = _code_directory(base_directory)
     dandi_compute_code_commit_hash = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
         cwd=dandi_compute_code_source_dir,
@@ -236,7 +240,7 @@ def prepare_lfp_job(
     partition = "001" if ord(blob_head) - ord("0") <= 8 else "002"
     nwbfile_path = f"/orcd/data/dandi/{partition}/s3dandiarchive/blobs/{content_id[0:3]}/{content_id[3:6]}/{content_id}"
 
-    processing_directory = dandi_compute_dir / "processing"
+    processing_directory = _processing_directory(base_directory)
     temporary_processing_directory = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="prepare-job-"))
     dandi.download.download(
         urls=f"DANDI:{_JOB_CAPSULES_DANDISET_ID}",

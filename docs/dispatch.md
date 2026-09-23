@@ -89,13 +89,13 @@ Those two limits are the whole of what is configurable, per the section above. A
 ## Running a dispatch
 
 ```bash
-dandicompute queue process --processing ./processing/
+dandicompute queue process
 ```
 
 To skip the dispatch entirely when there is no queued work, gate it on `queue pending`, which exits 0 when at least one job awaits submission and 1 when nothing does:
 
 ```bash
-dandicompute queue pending --silent && dandicompute queue process --processing ./processing/
+dandicompute queue pending --silent && dandicompute queue process
 ```
 
 The output reports what each pipeline dispatched, with one line per array naming that group's size, its requests and its share of the limit:
@@ -115,7 +115,7 @@ lfp: dispatched 1 capsule as array job 902.
 To dispatch a single pipeline, optionally overriding its configured limit for that invocation:
 
 ```bash
-dandicompute queue process --processing ./processing/ --pipeline lfp --max 4
+dandicompute queue process --pipeline lfp --max 4
 ```
 
 The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once.
@@ -124,7 +124,7 @@ The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline
 
 ## The log directory
 
-`--processing` has no default. Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
+Dispatch works inside the `processing/` directory of the base directory given by `--base` (see the README for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
 
 Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}`. For resource group `n` it writes:
 
@@ -140,7 +140,7 @@ A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` d
 
 ## The dispatch directory
 
-Each dispatch also creates a working directory under `--processing`, named `dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}` with the same timestamp as its records. It holds only `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into. That tree is removed when the task finishes unless `--test` is passed.
+Each dispatch also creates a working directory under `processing/`, named `dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}` with the same timestamp as its records. It holds only `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into. That tree is removed when the task finishes unless `--test` is passed.
 
 It has to stay reachable from the compute nodes for as long as the arrays live, so nothing in it is cleaned up at submission time.
 
@@ -149,11 +149,11 @@ It has to stay reachable from the compute nodes for as long as the arrays live, 
 Finished dispatch directories are swept up by `clean`:
 
 ```bash
-dandicompute clean --dispatch ./processing/
+dandicompute clean --dispatch
 ```
 
 A dispatch directory is removed only once both guards pass: its pipeline has no dispatcher left on the cluster, and it is at least `--age` hours old (24 by default). The age floor covers the window between submitting an array and SLURM reporting it.
 
 Both matter, since removing the directory under a live array would pull the working tree out from under its running tasks. Anything in the processing directory that is not a dispatch directory is left alone. That includes the central `derivatives/logs/` directory, so the manifests, scripts and array output of a cleaned dispatch are kept.
 
-`clean` still takes `--directory` for a work directory, and the two can be given together.
+`clean --work` empties the base directory's `work/` instead, and the two flags can be given together.

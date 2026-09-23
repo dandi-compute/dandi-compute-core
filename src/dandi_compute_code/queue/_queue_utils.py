@@ -548,49 +548,51 @@ def _extract_nextflow_timeline_data(*, timeline_html: str) -> dict | None:
 
 
 @beartype.beartype
-def _extract_error_lines(*, log_file: pathlib.Path) -> list[str]:
-    """Return non-empty log lines containing 'error' (case-insensitive)."""
-    if not log_file.is_file():
-        return []
-
-    return [
-        line.strip()
-        for line in log_file.read_text(errors="replace").splitlines()
-        if line.strip() and "error" in line.lower()
-    ]
-
-
-@beartype.beartype
-def _list_capsule_log_directories(*, dandiset_directory: pathlib.Path) -> list[pathlib.Path]:
-    """Return sorted ``logs/`` directories that belong to job capsules."""
-    derivatives_root = dandiset_directory / "derivatives"
-    if not derivatives_root.is_dir():
-        return []
-
-    return sorted(
-        path
-        for path in derivatives_root.rglob("logs")
-        if path.is_dir() and _JOB_ID_RE.fullmatch(path.parent.name) is not None
-    )
-
-
-@beartype.beartype
-def _remove_empty_parents(*, start: pathlib.Path, stop: pathlib.Path) -> None:
-    """
-    Remove empty directories from ``start`` up to but not including ``stop``.
-
-    If ``stop`` is not an ancestor of ``start``, this function returns without
-    modifying the filesystem. Removal stops at the first non-empty directory.
-    """
-    if stop not in start.parents:
-        return
-
-    current = start
-    while current != stop:
-        if not current.exists() or not current.is_dir():
-            break
+def _read_asset_text(asset: dict[str, object], /) -> str | None:
+    """Download a small text asset from its DANDI blob URL."""
+    content_urls = asset.get("contentUrl")
+    for url in content_urls if isinstance(content_urls, list) else []:
+        if not isinstance(url, str) or "/blobs/" not in url:
+            continue
         try:
-            current.rmdir()
-        except OSError:
-            break
-        current = current.parent
+            with urllib.request.urlopen(url, timeout=30) as response:
+                return response.read().decode("utf-8", errors="replace")
+        except (urllib.error.URLError, TimeoutError, UnicodeDecodeError) as exception:
+            _log.warning("Unable to read a text asset from %s: %s", url, exception)
+    return None
+
+
+@beartype.beartype
+def _read_text_asset_at_path(*, metadata: AssetsJsonldMetadata, path: str) -> str | None:
+    """Download the text of the asset at *path*, or ``None`` when it is absent or unreadable."""
+    asset_metadata = metadata.path_to_asset_metadata.get(path)
+    if asset_metadata is None:
+        return None
+    asset = metadata.content_id_to_asset.get(asset_metadata.content_id)
+    if asset is None:
+        return None
+    text = _read_asset_text(asset)
+    return text
+
+
+@beartype.beartype
+def _extract_error_lines(text: str, /) -> list[str]:
+    """Return non-empty log lines containing 'error' (case-insensitive)."""
+    return [line.strip() for line in text.splitlines() if line.strip() and "error" in line.lower()]
+
+
+@beartype.beartype
+def _capsule_log_paths(asset_paths: Collection[str], /) -> dict[str, list[str]]:
+    """Map each job capsule path to the sorted paths of the files directly in its ``logs/`` directory."""
+    capsule_log_paths: collections.defaultdict[str, list[str]] = collections.defaultdict(list)
+    for path in asset_paths:
+        parts = pathlib.PurePosixPath(path).parts
+        if len(parts) < 4 or parts[0] != "derivatives" or parts[-2] != "logs":
+            continue
+        if _JOB_ID_RE.fullmatch(parts[-3]) is None:
+            continue
+        capsule_log_paths[pathlib.PurePosixPath(*parts[:-2]).as_posix()].append(path)
+    sorted_capsule_log_paths = {
+        capsule_path: sorted(log_paths) for capsule_path, log_paths in sorted(capsule_log_paths.items())
+    }
+    return sorted_capsule_log_paths

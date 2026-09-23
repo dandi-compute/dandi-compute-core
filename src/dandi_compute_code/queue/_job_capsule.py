@@ -232,31 +232,6 @@ class JobCapsule:
         )
         return pipeline_dir / self.job.job_id
 
-    def resolve_capsule_dir(self, base_dir: pathlib.Path, /) -> pathlib.Path:
-        """
-        Resolve the on-disk job capsule directory path for this entry.
-
-        Falls back to searching every ``pipeline-*`` directory in the Dandiset for this
-        entry's job ID, which covers a recorded ``dandi_path`` that does not match the
-        on-disk layout.
-        """
-        capsule_dir = self.capsule_dir(base_dir)
-        if capsule_dir.is_dir():
-            return capsule_dir
-
-        dandiset_root = (
-            base_dir / "derivatives" / pathlib.PurePosixPath(_dandiset_derivatives_relative_dir(self.job.dandiset_id))
-        )
-        if not dandiset_root.is_dir():
-            return capsule_dir
-
-        for pipeline_dir in sorted(dandiset_root.rglob(f"pipeline-{self.job.pipeline}")):
-            fallback_capsule_dir = pipeline_dir / self.job.job_id
-            if fallback_capsule_dir.is_dir():
-                return fallback_capsule_dir
-
-        return capsule_dir
-
     def capsule_path(self) -> str:
         """
         Return this job capsule's path relative to the Dandiset root (a POSIX string).
@@ -286,9 +261,9 @@ class JobCapsule:
         known set of remote asset paths, e.g. the keys of
         :attr:`~dandi_compute_code.dandiset.AssetsJsonldMetadata.path_to_asset_metadata`.
 
-        The remote-metadata counterpart of :meth:`resolve_capsule_dir`: the same fallback
-        search, but checked against *asset_paths* membership instead of the local
-        filesystem -- so this works purely from DANDI metadata, without a local Dandiset
+        Falls back to searching every ``pipeline-*`` directory in the Dandiset for this
+        entry's job ID, which covers a recorded ``dandi_path`` that does not match the
+        remote layout. This works purely from DANDI metadata, without a local Dandiset
         clone.
 
         Parameters
@@ -323,23 +298,6 @@ class JobCapsule:
                 return fallback_capsule_path
 
         return capsule_path
-
-    def resolve_unsubmitted_capsule_dir(self, base_dir: pathlib.Path, /) -> pathlib.Path | None:
-        """
-        Resolve the job capsule directory only if this entry is queued but unsubmitted.
-
-        Returns ``None`` when the entry's status is not ``"pending"``, or
-        when a submitted marker (``code/submitted`` or ``code/submitted_date-*``)
-        is present on disk.
-        """
-        if self.status != "pending":
-            return None
-
-        capsule_dir = self.resolve_capsule_dir(base_dir)
-        code_dir = capsule_dir / "code"
-        if (code_dir / "submitted").exists() or any(code_dir.glob("submitted_date-*")):
-            return None
-        return capsule_dir
 
     @classmethod
     def from_dict(cls, data: dict, /) -> JobCapsule:
