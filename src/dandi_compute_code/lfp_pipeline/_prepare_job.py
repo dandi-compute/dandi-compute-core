@@ -6,8 +6,6 @@ import json
 import logging
 import os
 import pathlib
-import re
-import subprocess
 import tempfile
 import urllib.request
 
@@ -19,7 +17,8 @@ import dandi.upload
 
 from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE, _LFP_CONTAINER_NAME
 from ._handle_template import generate_lfp_submission_script
-from .._base_directory import _DEFAULT_BASE_DIRECTORY, _code_directory, _processing_directory
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
+from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
@@ -197,15 +196,7 @@ def prepare_lfp_job(
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
     output_within_dandiset_path = dandiset_path.removesuffix(".nwb")
 
-    dandi_compute_code_source_dir = _code_directory(base_directory)
-    dandi_compute_code_commit_hash = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"],
-        cwd=dandi_compute_code_source_dir,
-        text=True,
-    ).strip()
-    if not re.match(r"^[0-9a-f]{40}$", dandi_compute_code_commit_hash):
-        message = f"Unexpected commit hash format: {dandi_compute_code_commit_hash}"
-        raise ValueError(message)
+    dandi_compute_code_commit_hash = _codebase_commit_hash()
 
     codebase_version = importlib.metadata.version("dandi-compute-code")
     bidsy_pipeline_version = pipeline_version.replace("-", "+")

@@ -21,10 +21,10 @@ from ._handle_template import generate_aind_ephys_submission_script
 from .._base_directory import (
     _DEFAULT_BASE_DIRECTORY,
     _aind_pipeline_directory,
-    _code_directory,
     _processing_directory,
     _work_directory,
 )
+from .._codebase_commit_hash import _codebase_commit_hash
 from ..dandiset._globals import (
     _JOB_CAPSULES_DANDISET_ID,
     _dandiset_derivatives_relative_dir,
@@ -279,7 +279,6 @@ def prepare_aind_ephys_job(
 
     pipeline_directory = _aind_pipeline_directory(base_directory).absolute()
     pipeline_file_path = pipeline_directory / "pipeline" / "main_multi_backend.nf"
-    dandi_compute_code_source_dir = _code_directory(base_directory)
 
     pipeline_commit_hash = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -290,14 +289,7 @@ def prepare_aind_ephys_job(
         message = f"Unexpected commit hash format: {pipeline_commit_hash}"
         raise ValueError(message)
 
-    dandi_compute_code_commit_hash = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"],
-        cwd=dandi_compute_code_source_dir,
-        text=True,
-    ).strip()
-    if not re.match(r"^[0-9a-f]{40}$", dandi_compute_code_commit_hash):
-        message = f"Unexpected commit hash format: {dandi_compute_code_commit_hash}"
-        raise ValueError(message)
+    dandi_compute_code_commit_hash = _codebase_commit_hash()
 
     codebase_version = importlib.metadata.version("dandi-compute-code")
     bidsy_pipeline_version = pipeline_version.replace("-", "+")

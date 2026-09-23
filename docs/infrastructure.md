@@ -45,7 +45,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 
 ```text
 /orcd/data/dandi/001/dandi-compute/
-├── code/                        # checkout of this repository, installed with pip -e
+├── dandi-compute-core/          # checkout of this repository, installed with pip -e (not read by path)
 ├── aind-ephys-pipeline/         # checkout of the AIND ephys pipeline, tags checked out per job
 ├── work/                        # Nextflow work directory
 │   └── apptainer_cache/         # container images, kept by `clean --work`
@@ -63,7 +63,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 
 | Path | Written by | Removed by |
 |---|---|---|
-| `code/` | Kept up to date by hand with `git pull` | Never |
+| `dandi-compute-core/` | Kept up to date by hand with `git pull` | Never |
 | `aind-ephys-pipeline/` | Kept up to date by hand. Each AIND job runs `git checkout {version}` in it before starting. | Never |
 | `work/` | Nextflow | `dandicompute clean --work` |
 | `processing/prepare-job-*` | `prepare aind`, `jobs create` | Nothing automatic |
