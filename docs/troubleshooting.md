@@ -9,7 +9,7 @@ flowchart TD
     P -- yes --> P1["Wait. New capsules join<br/>the next array."]
     P -- no --> P2["Run queue process and<br/>read its output."]
     S -- stalled --> T{"Is the array task<br/>still running?"}
-    T -- yes --> T1["Normal while running.<br/>Logs are published at the end."]
+    T -- yes --> T1["Normal while running.<br/>Logs are uploaded at the end."]
     T -- no --> T2["Read the array task log in<br/>processing/derivatives/logs/"]
     S -- failed --> F["Read the capsule's logs/,<br/>or run issues summarize"]
     F --> F1["Fix the cause, then<br/>archive --status failed<br/>and jobs create"]
@@ -21,7 +21,7 @@ flowchart TD
 |---|---|
 | What the dispatcher submitted | `processing/derivatives/logs/dandicompute-dispatch-{pipeline}/{timestamp}-manifest-{n}.txt` and `-dispatch-{n}.sh` |
 | What an array task did before the capsule ran | `processing/derivatives/logs/dandicompute-dispatch-{pipeline}/{timestamp}-dispatch-{n}-{job}_{task}.log` |
-| The capsule's own run | Its `logs/job-{id}_slurm.log`, in the preparation tree while it runs and on the archive once published |
+| The capsule's own run | Its `logs/job-{id}_slurm.log`, in the preparation tree while it runs and on the archive once uploaded |
 | Nextflow detail (AIND) | `logs/nextflow.log`, `logs/timeline.html`, and the Nextflow work directory under `work/` |
 | Resource usage (LFP) | `logs/duct_*` |
 | Error lines across every capsule | `derivatives/issues_summary.json` in `001697`, from `dandicompute issues summarize` |
@@ -46,7 +46,7 @@ Also check that the capsule's pipeline is still listed in `pipeline_configs.json
 
 ### A capsule is `stalled` long after its array task ended
 
-The task claimed the capsule but nothing was published afterwards. Common causes are the task being killed at its time limit or preempted (LFP runs on `mit_preemptable`), a crash in `submit.sh` before its final upload, or the preparation tree having been removed. Read the array task log first, then the capsule's SLURM log in its preparation tree.
+The task claimed the capsule but nothing was uploaded afterwards. Common causes are the task being killed at its time limit or preempted (LFP runs on `mit_preemptable`), a crash in `submit.sh` before its final upload, or the preparation tree having been removed. Read the array task log first, then the capsule's SLURM log in its preparation tree.
 
 To retry, move the capsule out and form a new one:
 
@@ -73,4 +73,4 @@ A dispatch directory is only removed when it is at least `--age` hours old (24 b
 
 ### `processing/` keeps growing
 
-Preparation trees (`prepare-job-*`) are never removed automatically, because capsules run inside them. Remove a tree only once its capsule has run and been published. `processing/done.txt` lists the trees whose script ran to completion. Temporary trees from other commands are left behind only when a step failed or `--test` was given.
+Preparation trees (`prepare-job-*`) are never removed automatically, because capsules run inside them. Remove a tree only once its capsule has run and been uploaded. `processing/done.txt` lists the trees whose script ran to completion. Temporary trees from other commands are left behind only when a step failed or `--test` was given.

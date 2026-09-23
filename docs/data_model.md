@@ -14,7 +14,7 @@ erDiagram
     JOB_CAPSULE }o--|| PIPELINE : "runs"
     JOB_CAPSULE }o--|| REGISTRY_ENTRY : "params and config, by MD5"
     JOB_CAPSULE }o--o| SOURCE_ASSET : "processes (content_id)"
-    JOB_CAPSULE ||--o{ PATH_ENTRY : "publishes"
+    JOB_CAPSULE ||--o{ PATH_ENTRY : "uploads"
     DISPATCH_RESULT ||--o{ DISPATCHED_ARRAY : "submits"
     DISPATCHED_ARRAY }o--|| CAPSULE_RESOURCES : "sized by"
     DISPATCHED_ARRAY ||--|{ JOB_CAPSULE : "runs (manifest)"
@@ -211,7 +211,7 @@ erDiagram
 
 `DispatchConfig` extends `CapsuleResources`. Its resource fields are read from the pipeline's packaged submission template, and only apply to a capsule whose own `submit.sh` cannot be read back. [Array dispatch](dispatch.md) covers how capsules are grouped and how the limit is shared across arrays.
 
-## Reports published to the archive
+## Reports uploaded to the archive
 
 Besides the two tables, three JSON reports are written into `001697`'s `derivatives/`. Each is rebuilt from scratch when its command runs.
 

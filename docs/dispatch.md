@@ -65,7 +65,7 @@ Running the capsule in the task keeps the throttle honest with no coordination o
 
 ### The one directive reproduced by hand
 
-`#SBATCH --output` points into the capsule's own `logs/` directory, which is where the capsule's closing `dandi upload` publishes its SLURM log from and where `dandicompute issues dump` globs it back as `logs/*slurm.log`.
+`#SBATCH --output` points into the capsule's own `logs/` directory, which is where the capsule's closing `dandi upload` uploads its SLURM log from and where `dandicompute issues dump` globs it back as `logs/*slurm.log`.
 
 The array task therefore parses that path out of the capsule script, expands the SLURM filename patterns, and tees the run into it. `pipefail` keeps a failing capsule a failing array task through that pipe.
 

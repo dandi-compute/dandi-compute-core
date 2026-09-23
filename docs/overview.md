@@ -1,6 +1,6 @@
 # Overview
 
-DANDI Compute runs processing pipelines over assets that already live on the DANDI Archive, and publishes the results back to the archive. This repository is its core. It decides which assets need work, packages each unit of work, hands it to the cluster, and reports on how it went.
+DANDI Compute runs processing pipelines over assets that already live on the DANDI Archive, and uploads the results back to the archive. This repository is its core. It decides which assets need work, packages each unit of work, hands it to the cluster, and reports on how it went.
 
 It does not contain the heavy science itself. The spike sorting comes from the separately versioned AIND ephys pipeline. The LFP extraction does ship here, but runs inside its own container.
 
@@ -62,7 +62,7 @@ Pipelines are listed in `src/dandi_compute_code/queue/pipeline_configs.json`, al
 | Dandiset | Role |
 |---|---|
 | Any source Dandiset | Holds the raw NWB assets. It is never written to. |
-| [`001697`](https://dandiarchive.org/dandiset/001697) | The job capsules Dandiset. Every capsule is published here, along with the `jobs.tsv` and `paths.tsv` tables and the queue reports. |
+| [`001697`](https://dandiarchive.org/dandiset/001697) | The job capsules Dandiset. Every capsule is uploaded here, along with the `jobs.tsv` and `paths.tsv` tables and the queue reports. |
 | [`001873`](https://dandiarchive.org/dandiset/001873) | The failed runs archive. Capsules that failed, stalled or were abandoned are moved here with their path intact, which keeps `001697` clean. |
 
 ## The main loop
@@ -91,7 +91,7 @@ sequenceDiagram
     SLURM->>DANDI: task downloads its capsule's code/
     SLURM->>DANDI: task uploads a submitted_date-* marker (claim)
     SLURM->>SLURM: task runs submit.sh
-    SLURM->>DANDI: submit.sh publishes outputs and logs (AIND runs dandi upload)
+    SLURM->>DANDI: submit.sh uploads outputs and logs (AIND runs dandi upload)
 
     Cron->>CLI: queue refresh
     CLI->>DANDI: rewrite derivatives/jobs.tsv and paths.tsv

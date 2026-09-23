@@ -1,6 +1,6 @@
 # Job capsules
 
-A job capsule is one run of one pipeline over one asset with one parameter set. It is a directory published to the job capsules Dandiset (`001697`), and it holds everything needed to run, inspect and account for that run.
+A job capsule is one run of one pipeline over one asset with one parameter set. It is a directory uploaded to the job capsules Dandiset (`001697`), and it holds everything needed to run, inspect and account for that run.
 
 ## Where a capsule lives
 
@@ -132,15 +132,15 @@ stateDiagram-v2
 | Status | Observed on the archive | Meaning |
 |---|---|---|
 | `pending` | `code/` but no submitted marker | Formed and waiting for a dispatcher. |
-| `stalled` | A `code/submitted*` marker, but no logs | Claimed by an array task, with no logs published yet. Logs are published when a run finishes, so a capsule sits here for its whole run. It also stays here if its task died before publishing anything. |
-| `failed` | Logs, but no `derivatives/` | Logs were published without outputs. A run that publishes its logs part way through reads the same, and nothing on the archive tells the two apart, so they share one status. |
-| `successful` | `derivatives/` | Outputs were published. |
+| `stalled` | A `code/submitted*` marker, but no logs | Claimed by an array task, with no logs uploaded yet. Logs are uploaded when a run finishes, so a capsule sits here for its whole run. It also stays here if its task died before uploading anything. |
+| `failed` | Logs, but no `derivatives/` | Logs were uploaded without outputs. A run that uploads its logs part way through reads the same, and nothing on the archive tells the two apart, so they share one status. |
+| `successful` | `derivatives/` | Outputs were uploaded. |
 | `unknown` | None of the above | Also the fallback for a status cell in `jobs.tsv` that is empty or unrecognised. |
 
 `archived` is not a status. An archived capsule has moved to `001873`, where it keeps whichever status it had.
 
 :::{note}
-Status is keyed on what has been published to the archive. The LFP submission script does not currently run `dandi upload`, and it writes its output to `nwb/` rather than `derivatives/`. Under the current rules an LFP capsule therefore reads as `stalled` after it has run, and could not reach `successful` even once published.
+Status is keyed on what has been uploaded to the archive. The LFP submission script does not currently run `dandi upload`, and it writes its output to `nwb/` rather than `derivatives/`. Under the current rules an LFP capsule therefore reads as `stalled` after it has run, and could not reach `successful` even once uploaded.
 :::
 
 ### Timestamps
@@ -183,7 +183,7 @@ sequenceDiagram
     Run->>Proc: append the tree's name to processing/done.txt
 ```
 
-The submission script refers to the preparation tree by absolute path. That tree, `processing/prepare-job-*/001697/{capsule}/`, is where the pipeline writes its intermediate results, logs and outputs, and where AIND's closing `dandi upload` publishes them from. The copy an array task downloads is used only to read `submit.sh` and to claim the capsule. Preparation trees therefore have to outlive the capsule's run, and nothing removes them automatically. `processing/done.txt` lists the ones whose script ran to completion.
+The submission script refers to the preparation tree by absolute path. That tree, `processing/prepare-job-*/001697/{capsule}/`, is where the pipeline writes its intermediate results, logs and outputs, and where AIND's closing `dandi upload` uploads them from. The copy an array task downloads is used only to read `submit.sh` and to claim the capsule. Preparation trees therefore have to outlive the capsule's run, and nothing removes them automatically. `processing/done.txt` lists the ones whose script ran to completion.
 
 ## Formation rules
 

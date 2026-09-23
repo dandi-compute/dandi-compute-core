@@ -74,7 +74,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | temporary trees from `queue refresh`, `queue stats`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
 
 :::{important}
-A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and AIND's closing `dandi upload` publishes from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.
+A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and AIND's closing `dandi upload` uploads from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.
 :::
 
 Because the AIND submission script checks out a tag in the shared `aind-ephys-pipeline/` checkout, two AIND capsules targeting different pipeline versions should not start at the same moment. In practice every new capsule targets the latest tag, so they agree.
@@ -167,4 +167,4 @@ Both are written as draft Dandisets with `dandi upload --allow-any-path`, since 
 | `Version Check` | Pull requests touching `src/` or `pyproject.toml` | Fails unless the package version was bumped |
 | `Build and upload LFP container image` | Manual | Builds and pushes the LFP container to GHCR |
 
-The documentation is published on Read the Docs from `.readthedocs.yaml`.
+The documentation is hosted on Read the Docs from `.readthedocs.yaml`.

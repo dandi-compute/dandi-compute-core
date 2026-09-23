@@ -139,7 +139,7 @@ dandicompute queue stats        # queue_stats.json
 dandicompute issues summarize   # issues_dump.json + issues_summary.json
 ```
 
-These publish into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md).
+These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md).
 
 ### Clear out failures
 
