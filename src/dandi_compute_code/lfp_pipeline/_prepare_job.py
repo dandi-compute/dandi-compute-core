@@ -257,13 +257,15 @@ def prepare_lfp_job(
     code_parameters_file_path = code_dir / parameters_file_path.name
     dataset_description_file_path = dandiset_output_dir / "dataset_description.json"
     log_directory = dandiset_output_dir / "logs"
-    output_nwb_directory = dandiset_output_dir / "nwb"
 
     code_dir.mkdir(parents=True)
     log_directory.mkdir()
-    output_nwb_directory.mkdir()
 
-    output_nwb_file_path = output_nwb_directory / f"{pathlib.Path(output_within_dandiset_path).name}_desc-lfp"
+    # Outputs go under derivatives/, which is what marks a capsule successful once uploaded. The
+    # directory is left for the submission script to create, so it only appears once the run does.
+    output_nwb_file_path = (
+        dandiset_output_dir / "derivatives" / "nwb" / f"{pathlib.Path(output_within_dandiset_path).name}_desc-lfp"
+    )
     container_image = _LFP_CONTAINER_IMAGE_TEMPLATE.format(version=pipeline_version)
     environment_directory = "/orcd/data/dandi/001/environments/name-lfp_environment"
     done_tracker_file_path = processing_directory / "done.txt"
