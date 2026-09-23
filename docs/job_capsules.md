@@ -7,7 +7,9 @@ A job capsule is one run of one pipeline over one asset with one parameter set. 
 ```text
 derivatives/
 ├── jobs.tsv                           # one row per capsule (see Data model)
+├── jobs.json                          # BIDS-style sidecar describing the jobs.tsv columns
 ├── paths.tsv                          # one row per asset path of each capsule
+├── paths.json                         # BIDS-style sidecar describing the paths.tsv columns
 ├── queue_stats.json
 ├── issues_dump.json
 ├── issues_summary.json
