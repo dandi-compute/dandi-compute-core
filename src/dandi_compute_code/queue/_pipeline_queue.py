@@ -51,12 +51,11 @@ from ._queue_utils import (
     _capsule_log_paths,
     _CapsuleProvenanceCache,
     _collect_job_capsules,
-    _duration_string_to_seconds,
     _extract_error_lines,
-    _extract_nextflow_timeline_data,
     _finalize_job_capsule_records,
     _load_pipeline_config,
     _order_content_ids_for_uniform_dandiset_sampling,
+    _read_process_wall_times,
     _read_text_asset_at_path,
     _sort_key,
     _UpstreamMetadataCache,
@@ -135,17 +134,6 @@ class PipelineQueue:
     def failed(self) -> list[JobCapsule]:
         """Entries with logs but no output."""
         return self.with_status("failed")
-
-    @property
-    def successful_asset_bytes_total(self) -> int:
-        """Total source-asset bytes across successful entries with a known size."""
-        return sum(
-            entry.asset_size_bytes
-            for entry in self.entries
-            if entry.status == "successful"
-            and isinstance(entry.asset_size_bytes, int)
-            and not isinstance(entry.asset_size_bytes, bool)
-        )
 
     def entry_for(self, *, within_dandiset_path: str, config: str | None = None) -> JobCapsule:
         """
@@ -449,6 +437,10 @@ class PipelineQueue:
         entries are uploaded the same way to a ``paths.tsv`` beside it, and each table is
         accompanied by its JSON sidecar (``jobs.json`` and ``paths.json``).
 
+        Unlike :meth:`from_dandi`, this also reads each capsule's Nextflow ``logs/timeline.html``
+        to fill in :attr:`~._job_capsule.JobCapsule.process_wall_time_seconds`. The reports are
+        only downloaded here, since the table is the one place the column is recorded.
+
         Intended to be called once for the job capsules ("source") Dandiset and once for the
         failed runs archive ("archived") Dandiset. There is no local queue directory or local
         state file involved -- the state is always rebuilt fresh from *dandiset_id*'s remote
@@ -475,7 +467,14 @@ class PipelineQueue:
         RuntimeError
             If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
         """
-        state = cls.from_dandi(dandiset_id=dandiset_id)
+        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
+        state = cls.from_metadata(metadata)
+        asset_paths = set(metadata.path_to_asset_metadata)
+        capsule_paths = [entry.resolve_capsule_path(asset_paths) for entry in state]
+        process_wall_times = _read_process_wall_times(metadata=metadata, capsule_paths=capsule_paths)
+        for entry, capsule_path in zip(state, capsule_paths):
+            entry.process_wall_time_seconds = process_wall_times.get(capsule_path)
+
         for table_relative_path, content in state._tables_by_relative_path(
             pathlib.PurePosixPath(relative_path)
         ).items():
@@ -486,103 +485,6 @@ class PipelineQueue:
                 base_directory=base_directory,
                 test=test,
             )
-
-    def aggregate_statistics(
-        self,
-        *,
-        dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-        relative_path: str = "derivatives/queue_stats.json",
-        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
-        test: bool = False,
-    ) -> dict:
-        """
-        Write aggregate queue statistics JSON into a Dandiset and return the computed payload.
-
-        Each capsule's Nextflow timeline report is read straight from *dandiset_id* on the
-        archive, located through its remote ``assets.jsonld``, so no local Dandiset clone is
-        involved. The resulting statistics are written to *relative_path* within *dandiset_id*
-        (default ``derivatives/queue_stats.json``) via
-        :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
-
-        Parameters
-        ----------
-        dandiset_id : str, optional
-            The Dandiset the Nextflow timeline reports are read from and the
-            statistics JSON is written into.
-        relative_path : str, optional
-            Path (relative to the Dandiset root) the statistics JSON is written
-            to.
-        base_directory : pathlib.Path, optional
-            The structured base directory. The temporary working tree used to
-            upload the statistics JSON is created in its ``processing/``
-            directory.
-        test : bool, optional
-            When ``True``, leave the temporary working tree on disk after a
-            successful upload for debugging.
-
-        Raises
-        ------
-        RuntimeError
-            If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
-        """
-        job_step_wall_time_seconds: collections.defaultdict[str, float] = collections.defaultdict(float)
-        timeline_files_processed = 0
-        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
-        asset_paths = set(metadata.path_to_asset_metadata)
-        for entry in self.entries:
-            capsule_path = entry.resolve_capsule_path(asset_paths)
-            timeline_html = _read_text_asset_at_path(metadata=metadata, path=f"{capsule_path}/logs/timeline.html")
-            if timeline_html is None:
-                continue
-
-            timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_html)
-            if timeline_data is None:
-                continue
-
-            processes = timeline_data.get("processes")
-            if not isinstance(processes, list):
-                continue
-            timeline_files_processed += 1
-
-            for process in processes:
-                if not isinstance(process, dict):
-                    continue
-                process_label = process.get("label")
-                if not isinstance(process_label, str):
-                    continue
-                step_name = process_label.split(" (", 1)[0]
-                times = process.get("times")
-                if not isinstance(times, list):
-                    continue
-                for step in times:
-                    if not isinstance(step, dict):
-                        continue
-                    duration_label = step.get("label")
-                    if not isinstance(duration_label, str):
-                        continue
-                    duration_string = duration_label.split("/", 1)[0].strip()
-                    duration_seconds = _duration_string_to_seconds(duration_string)
-                    if duration_seconds > 0:
-                        job_step_wall_time_seconds[step_name] += duration_seconds
-
-        statistics = {
-            "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "state_entry_count": len(self.entries),
-            "successful_asset_bytes_total": self.successful_asset_bytes_total,
-            "timeline_files_processed": timeline_files_processed,
-            "job_step_wall_time_seconds": {
-                key: value for key, value in sorted(job_step_wall_time_seconds.items(), key=lambda item: item[0])
-            },
-        }
-
-        write_dandiset_file(
-            dandiset_id=dandiset_id,
-            relative_path=relative_path,
-            content=json.dumps(statistics, indent=2, sort_keys=True) + "\n",
-            base_directory=base_directory,
-            test=test,
-        )
-        return statistics
 
     def clean_unsubmitted_capsules(self, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> list[str]:
         """
@@ -716,7 +618,7 @@ class PipelineQueue:
         return archived
 
     @classmethod
-    def process_queue(
+    def dispatch_jobs(
         cls,
         *,
         base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
@@ -788,7 +690,7 @@ class PipelineQueue:
 
         if jitter_seconds > 0:
             delay = random.uniform(0, jitter_seconds)
-            _log.info("Sleeping %.2f seconds (jitter) before processing queue", delay)
+            _log.info("Sleeping %.2f seconds (jitter) before dispatching jobs", delay)
             time.sleep(delay)
 
         code_dir_paths = cls.pending_code_dirs()

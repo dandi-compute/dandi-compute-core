@@ -576,6 +576,60 @@ def _read_text_asset_at_path(*, metadata: AssetsJsonldMetadata, path: str) -> st
 
 
 @beartype.beartype
+def _timeline_process_wall_time_seconds(timeline_html: str, /) -> int | None:
+    """
+    Whole seconds summed over every process duration in a Nextflow ``timeline.html`` report.
+
+    ``None`` when the report carries no readable process list.
+    """
+    timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_html)
+    processes = timeline_data.get("processes") if timeline_data is not None else None
+    if not isinstance(processes, list):
+        return None
+
+    total_seconds = 0.0
+    for process in processes:
+        times = process.get("times") if isinstance(process, dict) else None
+        for step in times if isinstance(times, list) else []:
+            duration_label = step.get("label") if isinstance(step, dict) else None
+            if not isinstance(duration_label, str):
+                continue
+            total_seconds += _duration_string_to_seconds(duration_label.split("/", 1)[0].strip())
+    wall_time_seconds = round(total_seconds)
+    return wall_time_seconds
+
+
+@beartype.beartype
+def _read_process_wall_times(
+    *, metadata: AssetsJsonldMetadata, capsule_paths: Collection[str], max_workers: int = 8
+) -> dict[str, int]:
+    """
+    Read the summed Nextflow process wall time of every capsule that has a ``logs/timeline.html``.
+
+    The reports are downloaded concurrently, since each one costs an HTTP request. A capsule
+    whose report is missing or unreadable is left out of the returned mapping.
+    """
+    timeline_paths = {
+        capsule_path: f"{capsule_path}/logs/timeline.html"
+        for capsule_path in capsule_paths
+        if f"{capsule_path}/logs/timeline.html" in metadata.path_to_asset_metadata
+    }
+    if not timeline_paths:
+        return {}
+
+    def _load(timeline_path: str) -> int | None:
+        timeline_html = _read_text_asset_at_path(metadata=metadata, path=timeline_path)
+        return _timeline_process_wall_time_seconds(timeline_html) if timeline_html is not None else None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(max_workers, len(timeline_paths))) as executor:
+        wall_times = dict(zip(timeline_paths, executor.map(_load, timeline_paths.values())))
+    process_wall_times = {
+        capsule_path: wall_time for capsule_path, wall_time in wall_times.items() if wall_time is not None
+    }
+    return process_wall_times
+
+
+@beartype.beartype
 def _extract_error_lines(text: str, /) -> list[str]:
     """Return non-empty log lines containing 'error' (case-insensitive)."""
     return [line.strip() for line in text.splitlines() if line.strip() and "error" in line.lower()]

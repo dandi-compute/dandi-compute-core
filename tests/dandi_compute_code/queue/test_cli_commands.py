@@ -154,8 +154,8 @@ def test_cli_aind_prepare_passes_config_key(base_directory: pathlib.Path) -> Non
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_clean_calls_helper() -> None:
-    """dandicompute queue clean delegates to PipelineQueue and reports removed paths."""
+def test_cli_clean_unsubmitted_calls_helper(base_directory: pathlib.Path) -> None:
+    """dandicompute clean --unsubmitted delegates to PipelineQueue and reports removed paths."""
     fake_removed = ["derivatives/dandisets-000/dandiset-000001/sub-mouse01/pipeline-test/job-240101aa0001"]
     mock_state = mock.Mock()
     mock_state.clean_unsubmitted_capsules.return_value = fake_removed
@@ -164,7 +164,7 @@ def test_cli_queue_clean_calls_helper() -> None:
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "clean"],
+            ["clean", "--unsubmitted", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key"},
         )
 
@@ -175,8 +175,23 @@ def test_cli_queue_clean_calls_helper() -> None:
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_clean_reports_nothing_found() -> None:
-    """dandicompute queue clean reports when no unsubmitted capsules are found."""
+def test_cli_clean_unsubmitted_requires_dandi_api_key(base_directory: pathlib.Path) -> None:
+    """dandicompute clean --unsubmitted fails before reading the queue when DANDI_API_KEY is unset."""
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi:
+        result = runner.invoke(
+            _dandicompute_group, ["clean", "--unsubmitted", "--base", str(base_directory)], env={"DANDI_API_KEY": ""}
+        )
+
+    assert result.exit_code != 0
+    assert "DANDI_API_KEY" in result.output
+    mock_from_dandi.assert_not_called()
+
+
+@pytest.mark.ai_generated
+def test_cli_clean_unsubmitted_reports_nothing_found(base_directory: pathlib.Path) -> None:
+    """dandicompute clean --unsubmitted reports when no unsubmitted capsules are found."""
     mock_state = mock.Mock()
     mock_state.clean_unsubmitted_capsules.return_value = []
     runner = CliRunner()
@@ -184,53 +199,12 @@ def test_cli_queue_clean_reports_nothing_found() -> None:
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "clean"],
+            ["clean", "--unsubmitted", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key"},
         )
 
     assert result.exit_code == 0, result.output
     assert "No unsubmitted capsules found" in result.output
-
-
-@pytest.mark.ai_generated
-def test_cli_queue_stats_calls_helper_and_reports_output(base_directory: pathlib.Path) -> None:
-    """dandicompute queue stats delegates to PipelineQueue.aggregate_statistics."""
-    mock_state = mock.Mock()
-    mock_state.aggregate_statistics.return_value = {"successful_asset_bytes_total": 0}
-    runner = CliRunner()
-
-    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
-        result = runner.invoke(
-            _dandicompute_group,
-            ["queue", "stats", "--base", str(base_directory)],
-        )
-
-    assert result.exit_code == 0, result.output
-    mock_from_dandi.assert_called_once_with(dandiset_id="001697")
-    mock_state.aggregate_statistics.assert_called_once_with(
-        dandiset_id="001697",
-        base_directory=base_directory,
-        test=False,
-    )
-    assert "Wrote derivatives/queue_stats.json" in result.output
-
-
-@pytest.mark.ai_generated
-def test_cli_queue_stats_forwards_custom_dandiset_id(base_directory: pathlib.Path) -> None:
-    """dandicompute queue stats forwards --dandiset-id to PipelineQueue.from_dandi/aggregate_statistics."""
-    mock_state = mock.Mock()
-    mock_state.aggregate_statistics.return_value = {}
-    runner = CliRunner()
-
-    with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
-        result = runner.invoke(
-            _dandicompute_group,
-            ["queue", "stats", "--base", str(base_directory), "--dandiset-id", "000123"],
-        )
-
-    assert result.exit_code == 0, result.output
-    mock_from_dandi.assert_called_once_with(dandiset_id="000123")
-    assert mock_state.aggregate_statistics.call_args.kwargs["dandiset_id"] == "000123"
 
 
 @pytest.mark.ai_generated
@@ -272,17 +246,17 @@ def test_cli_issues_summarize_calls_helper(base_directory: pathlib.Path) -> None
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_rejects_a_missing_base_directory(tmp_path: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Path) -> None:
     """Queue process command rejects a --base that does not exist."""
     runner = CliRunner()
     with (
         mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
-        mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process,
+        mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch,
     ):
-        result = runner.invoke(_dandicompute_group, ["queue", "process", "--base", str(tmp_path / "missing")])
+        result = runner.invoke(_dandicompute_group, ["jobs", "dispatch", "--base", str(tmp_path / "missing")])
     assert result.exit_code != 0
     assert "Invalid value for '--base'" in result.output
-    mock_process.assert_not_called()
+    mock_dispatch.assert_not_called()
 
 
 @pytest.mark.ai_generated
@@ -301,21 +275,21 @@ def test_cli_queue_process_rejects_a_missing_base_directory(tmp_path: pathlib.Pa
         pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
     ],
 )
-def test_cli_queue_process_forwards_its_options(
+def test_cli_jobs_dispatch_forwards_its_options(
     base_directory: pathlib.Path, extra_arguments: list[str], expected_keyword_arguments: dict
 ) -> None:
-    """dandicompute queue process forwards each of its options to PipelineQueue.process_queue."""
+    """dandicompute jobs dispatch forwards each of its options to PipelineQueue.dispatch_jobs."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch:
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--base", str(base_directory), *extra_arguments],
+            ["jobs", "dispatch", "--base", str(base_directory), *extra_arguments],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
     assert result.exit_code == 0, result.output
-    mock_process.assert_called_once_with(
+    mock_dispatch.assert_called_once_with(
         **{
             "base_directory": base_directory,
             "only_pipeline": None,
@@ -328,8 +302,8 @@ def test_cli_queue_process_forwards_its_options(
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(base_directory: pathlib.Path) -> None:
-    """dandicompute queue process prints one summary line per configured pipeline."""
+def test_cli_jobs_dispatch_reports_each_pipelines_dispatch_outcome(base_directory: pathlib.Path) -> None:
+    """dandicompute jobs dispatch prints one summary line per configured pipeline."""
     runner = CliRunner()
 
     results = {
@@ -362,10 +336,10 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(base_director
         "lfp": DispatchResult(pipeline="lfp", status="no-pending"),
     }
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -375,16 +349,16 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(base_director
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_reports_a_dispatcher_that_is_still_working(base_directory: pathlib.Path) -> None:
     """A pipeline left alone because its array is still live is reported as such."""
     runner = CliRunner()
 
     results = {"lfp": DispatchResult(pipeline="lfp", status="dispatcher-active", active_job_ids=("9001",))}
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value=results):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value=results):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -393,13 +367,13 @@ def test_cli_queue_process_reports_a_dispatcher_that_is_still_working(base_direc
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_requires_dandi_devel(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_requires_dandi_devel(base_directory: pathlib.Path) -> None:
     """Queue process command exits non-zero when DANDI_DEVEL is not set."""
     runner = CliRunner()
 
     result = runner.invoke(
         _dandicompute_group,
-        ["queue", "process", "--base", str(base_directory)],
+        ["jobs", "dispatch", "--base", str(base_directory)],
         env={"DANDI_API_KEY": "test-key"},
     )
 
@@ -415,14 +389,14 @@ def test_cli_queue_process_requires_dandi_devel(base_directory: pathlib.Path) ->
         pytest.param(False, 1, "false", id="not-pending-exits-one"),
     ],
 )
-def test_cli_queue_pending_reports_and_sets_exit_code(
+def test_cli_jobs_pending_reports_and_sets_exit_code(
     pending: bool, expected_exit_code: int, expected_output: str
 ) -> None:
-    """dandicompute queue pending prints the boolean and exits 0 when pending, 1 otherwise."""
+    """dandicompute jobs pending prints the boolean and exits 0 when pending, 1 otherwise."""
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.has_pending_jobs", return_value=pending) as mock_has_pending:
-        result = runner.invoke(_dandicompute_group, ["queue", "pending"])
+        result = runner.invoke(_dandicompute_group, ["jobs", "pending"])
 
     assert result.exit_code == expected_exit_code, result.output
     mock_has_pending.assert_called_once_with()
@@ -430,26 +404,26 @@ def test_cli_queue_pending_reports_and_sets_exit_code(
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_pending_silent_suppresses_output(tmp_path: pathlib.Path) -> None:
-    """dandicompute queue pending --silent still sets the exit code but prints nothing."""
+def test_cli_jobs_pending_silent_suppresses_output(tmp_path: pathlib.Path) -> None:
+    """dandicompute jobs pending --silent still sets the exit code but prints nothing."""
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.has_pending_jobs", return_value=False):
-        result = runner.invoke(_dandicompute_group, ["queue", "pending", "--silent"])
+        result = runner.invoke(_dandicompute_group, ["jobs", "pending", "--silent"])
 
     assert result.exit_code == 1, result.output
     assert "false" not in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_reports_when_no_pipelines_are_configured(base_directory: pathlib.Path) -> None:
-    """dandicompute queue process says so rather than staying silent with nothing to dispatch."""
+def test_cli_jobs_dispatch_reports_when_no_pipelines_are_configured(base_directory: pathlib.Path) -> None:
+    """dandicompute jobs dispatch says so rather than staying silent with nothing to dispatch."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}):
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--base", str(base_directory)],
+            ["jobs", "dispatch", "--base", str(base_directory)],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
@@ -458,20 +432,20 @@ def test_cli_queue_process_reports_when_no_pipelines_are_configured(base_directo
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_process_rejects_max_without_pipeline(base_directory: pathlib.Path) -> None:
+def test_cli_jobs_dispatch_rejects_max_without_pipeline(base_directory: pathlib.Path) -> None:
     """--max overrides a per-pipeline setting, so it may not be given for every pipeline at once."""
     runner = CliRunner()
 
-    with mock.patch(f"{_GROUP}.PipelineQueue.process_queue", return_value={}) as mock_process:
+    with mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value={}) as mock_dispatch:
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "process", "--base", str(base_directory), "--max", "4"],
+            ["jobs", "dispatch", "--base", str(base_directory), "--max", "4"],
             env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
         )
 
     assert result.exit_code != 0
     assert "requires --pipeline" in result.output
-    mock_process.assert_not_called()
+    mock_dispatch.assert_not_called()
 
 
 @pytest.mark.ai_generated

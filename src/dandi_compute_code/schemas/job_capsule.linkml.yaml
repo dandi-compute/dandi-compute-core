@@ -208,6 +208,19 @@ classes:
         minimum_value: 0
         required: false
 
+      process_wall_time_seconds:
+        description: >-
+          Whole seconds summed over the duration of every process in the capsule's Nextflow
+          `logs/timeline.html`. Processes can run side by side, so this is compute time rather
+          than elapsed time. Read only when the jobs table is refreshed, and null for a capsule
+          with no readable timeline, such as one that has not run or a pipeline without Nextflow.
+        range: integer
+        unit:
+          symbol: s
+          ucum_code: s
+        minimum_value: 0
+        required: false
+
   JobsTable:
     description: >-
       A whole `jobs.tsv` table, as the list of job capsule records it holds. The table is

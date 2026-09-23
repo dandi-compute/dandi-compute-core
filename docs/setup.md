@@ -78,25 +78,24 @@ dandicompute jobs create --limit 20          # at most 20 new capsules
 ### Run the queue
 
 ```bash
-dandicompute queue pending --silent && dandicompute queue process
+dandicompute jobs pending --silent && dandicompute jobs dispatch
 ```
 
-`queue process` is safe to run repeatedly. A pipeline whose dispatcher is still on the cluster is skipped, so overlapping invocations never stack arrays. [Array dispatch](dispatch.md) explains the mechanism in full, including how array resources are sized.
+`jobs dispatch` is safe to run repeatedly. A pipeline whose dispatcher is still on the cluster is skipped, so overlapping invocations never stack arrays. [Array dispatch](dispatch.md) explains the mechanism in full, including how array resources are sized.
 
 ```bash
-dandicompute queue process --pipeline lfp --max 4   # one pipeline, overriding its limit
-dandicompute queue process --jitter 0               # no random start delay
+dandicompute jobs dispatch --pipeline lfp --max 4   # one pipeline, overriding its limit
+dandicompute jobs dispatch --jitter 0               # no random start delay
 ```
 
 ### Report on the queue
 
 ```bash
-dandicompute queue refresh      # jobs.tsv + paths.tsv in 001697 and 001873
-dandicompute queue stats        # queue_stats.json
+dandicompute jobs refresh       # jobs.tsv + paths.tsv in 001697 and 001873
 dandicompute issues summarize   # issues_dump.json + issues_summary.json
 ```
 
-These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md).
+These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md). Aggregate figures, such as the number of capsules, the bytes processed or the total compute time, are sums over the columns of `jobs.tsv`.
 
 ### Clear out failures
 
@@ -111,7 +110,7 @@ Archiving preserves each capsule's path exactly and deletes it from the source o
 To throw away capsules that were never claimed, for example after changing a parameter set, delete them instead of archiving:
 
 ```bash
-dandicompute queue clean
+dandicompute clean --unsubmitted
 ```
 
 ### Tidy the cluster
@@ -134,7 +133,7 @@ print(len(state), "capsules")
 for capsule in state.failed:
     print(capsule.job.job_id, capsule.job.within_dandiset_path)
 
-queue.PipelineQueue.has_pending_jobs()       # same check as `queue pending`
+queue.PipelineQueue.has_pending_jobs()       # same check as `jobs pending`
 ```
 
 See the [API reference](api/index.rst) for every public function and class.

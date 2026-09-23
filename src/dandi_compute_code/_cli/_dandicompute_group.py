@@ -56,7 +56,7 @@ def _require_dandi_devel() -> None:
 # dandicompute
 @click.group(name="dandicompute")
 def _dandicompute_group():
-    """Run compute workflows and queue management tasks for DANDI assets."""
+    """Run compute workflows and job management tasks for DANDI assets."""
     pass
 
 
@@ -75,6 +75,14 @@ def _dandicompute_group():
     "--dispatch",
     "dispatch",
     help="Remove finished dispatch directories from the base directory's processing/.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "--unsubmitted",
+    "unsubmitted",
+    help="Delete job capsules that were prepared but never submitted from the job capsules Dandiset.",
     required=False,
     is_flag=True,
     default=False,
@@ -99,14 +107,17 @@ def _clean_command(
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     work: bool = False,
     dispatch: bool = False,
+    unsubmitted: bool = False,
     minimum_age_hours: float = 24.0,
     silent: bool = False,
 ) -> None:
-    """Clean the work directory, finished dispatch directories, or both."""
-    if not work and not dispatch:
-        raise click.UsageError("Nothing to clean. Pass --work, --dispatch, or both.")
+    """Clean work, finished dispatch directories or unsubmitted capsules."""
+    if not work and not dispatch and not unsubmitted:
+        raise click.UsageError("Nothing to clean. Pass any combination of --work, --dispatch and --unsubmitted.")
 
     _configure_logging(silent=silent)
+    if unsubmitted:
+        _require_dandi_api_key()
 
     if work:
         clean_work_directory(base_directory)
@@ -114,17 +125,25 @@ def _clean_command(
             _styled_echo(text="\nWork directory cleaned!", color="green")
 
     if dispatch:
-        removed = clean_dispatch_directories(
+        removed_directories = clean_dispatch_directories(
             base_directory=base_directory,
             minimum_age_hours=minimum_age_hours,
         )
-        if silent:
-            return
-        if removed:
-            noun = "directory" if len(removed) == 1 else "directories"
-            _styled_echo(text=f"\nRemoved {len(removed)} finished dispatch {noun}.", color="green")
-        else:
+        if not silent and removed_directories:
+            noun = "directory" if len(removed_directories) == 1 else "directories"
+            _styled_echo(text=f"\nRemoved {len(removed_directories)} finished dispatch {noun}.", color="green")
+        elif not silent:
             _styled_echo(text="\nNo dispatch directories were ready to be removed.", color="yellow")
+
+    if unsubmitted:
+        removed_capsules = PipelineQueue.from_dandi().clean_unsubmitted_capsules()
+        if not silent and removed_capsules:
+            for capsule_path in removed_capsules:
+                _styled_echo(text=f"  Removed: {capsule_path}", color="yellow")
+            noun = "capsule" if len(removed_capsules) == 1 else "capsules"
+            _styled_echo(text=f"\nCleaned {len(removed_capsules)} unsubmitted {noun}.", color="green")
+        elif not silent:
+            _styled_echo(text="\nNo unsubmitted capsules found.", color="yellow")
 
 
 # dandicompute submit [OPTIONS]
@@ -294,7 +313,7 @@ def _prepare_aind_command(
 # dandicompute jobs
 @_dandicompute_group.group(name="jobs")
 def _jobs_group() -> None:
-    """Create new job capsules for qualifying assets."""
+    """Create, dispatch and report on job capsules."""
     pass
 
 
@@ -366,15 +385,8 @@ def _jobs_create_command(
         _styled_echo(text=f"\nCreated {created_count} {noun}.", color="green" if created_count else "yellow")
 
 
-# dandicompute queue
-@_dandicompute_group.group(name="queue")
-def _queue_group() -> None:
-    """Manage queue ordering, inspection, and execution."""
-    pass
-
-
-# dandicompute queue refresh [OPTIONS]
-@_queue_group.command(name="refresh")
+# dandicompute jobs refresh [OPTIONS]
+@_jobs_group.command(name="refresh")
 @click.option(
     "--dandiset-id",
     "dandiset_id",
@@ -412,7 +424,7 @@ def _queue_group() -> None:
     is_flag=True,
     default=False,
 )
-def _queue_refresh_command(
+def _jobs_refresh_command(
     dandiset_id: str,
     archive_dandiset_id: str,
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
@@ -448,80 +460,8 @@ def _queue_refresh_command(
             )
 
 
-# dandicompute queue clean [OPTIONS]
-@_queue_group.command(name="clean")
-@click.option(
-    "--silent",
-    help="Suppress informational log output.",
-    required=False,
-    is_flag=True,
-    default=False,
-)
-def _queue_clean_command(silent: bool = False) -> None:
-    """Delete unsubmitted capsules that are no longer present in the queue."""
-    _configure_logging(silent=silent)
-    _require_dandi_api_key()
-
-    state = PipelineQueue.from_dandi()
-    removed = state.clean_unsubmitted_capsules()
-    if removed:
-        if not silent:
-            for path in removed:
-                _styled_echo(text=f"  Removed: {path}", color="yellow")
-            noun = "capsule" if len(removed) == 1 else "capsules"
-            _styled_echo(text=f"\nCleaned {len(removed)} unsubmitted {noun}.", color="green")
-    elif not silent:
-        _styled_echo(text="\nNo unsubmitted capsules found.", color="yellow")
-
-
-# dandicompute queue stats [OPTIONS]
-@_queue_group.command(name="stats")
-@click.option(
-    "--dandiset-id",
-    "dandiset_id",
-    help="Dandiset ID the aggregate statistics JSON is written into.",
-    required=False,
-    type=str,
-    default=_JOB_CAPSULES_DANDISET_ID,
-    show_default=True,
-)
-@_base_option
-@click.option(
-    "--test",
-    "test",
-    help="Preserve the temporary working tree used to write the statistics JSON instead of cleaning it up.",
-    required=False,
-    is_flag=True,
-    default=False,
-)
-@click.option(
-    "--silent",
-    help="Suppress informational log output.",
-    required=False,
-    is_flag=True,
-    default=False,
-)
-def _queue_stats_command(
-    dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
-    test: bool = False,
-    silent: bool = False,
-) -> None:
-    """Write aggregate queue statistics from the live queue state."""
-    _configure_logging(silent=silent)
-
-    state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
-    state.aggregate_statistics(
-        dandiset_id=dandiset_id,
-        base_directory=base_directory,
-        test=test,
-    )
-    if not silent:
-        _styled_echo(text=f"\nWrote derivatives/queue_stats.json to Dandiset {dandiset_id}.", color="green")
-
-
-# dandicompute queue pending [OPTIONS]
-@_queue_group.command(name="pending")
+# dandicompute jobs pending [OPTIONS]
+@_jobs_group.command(name="pending")
 @click.option(
     "--silent",
     help="Suppress informational log output and the printed result.",
@@ -530,14 +470,14 @@ def _queue_stats_command(
     default=False,
 )
 @click.pass_context
-def _queue_pending_command(context: click.Context, silent: bool = False) -> None:
+def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
     """Report whether any queued jobs are awaiting submission.
 
     Prints ``true`` and exits with code 0 when at least one job is pending.
     Prints ``false`` and exits with code 1 when nothing is pending. This lets a
     crontab skip the dispatch entirely when there is no work, for example:
 
-        dandicompute queue pending --silent && dandicompute queue process ...
+        dandicompute jobs pending --silent && dandicompute jobs dispatch ...
     """
     _configure_logging(silent=silent)
     pending = PipelineQueue.has_pending_jobs()
@@ -546,8 +486,8 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
     context.exit(0 if pending else 1)
 
 
-# dandicompute queue process [OPTIONS]
-@_queue_group.command(name="process")
+# dandicompute jobs dispatch [OPTIONS]
+@_jobs_group.command(name="dispatch")
 @_base_option
 @click.option(
     "--pipeline",
@@ -589,7 +529,7 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
     default=30.0,
     show_default=True,
 )
-def _queue_process_command(
+def _jobs_dispatch_command(
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
     max_concurrent: int | None = None,
@@ -607,7 +547,7 @@ def _queue_process_command(
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    results = PipelineQueue.process_queue(
+    results = PipelineQueue.dispatch_jobs(
         base_directory=base_directory,
         only_pipeline=only_pipeline,
         max_concurrent=max_concurrent,

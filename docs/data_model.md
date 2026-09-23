@@ -25,7 +25,7 @@ Read it in three layers.
 
 - **Configuration** is packaged with the code. `pipeline_configs.json` names the pipelines and their parameter sets, and each pipeline's registries pin those names to checksummed files.
 - **Job state** lives on the archive. Each capsule is a `jobs.tsv` row and a set of `paths.tsv` rows, rebuilt from `assets.jsonld` on demand.
-- **Dispatch records** are produced by `queue process` and kept under the base directory's `processing/derivatives/logs/`.
+- **Dispatch records** are produced by `jobs dispatch` and kept under the base directory's `processing/derivatives/logs/`.
 
 ## Configuration
 
@@ -95,6 +95,7 @@ erDiagram
         datetime job_completion_time
         int queue_wait_seconds "derived"
         int run_duration_seconds "derived"
+        int process_wall_time_seconds "summed from logs/timeline.html"
     }
     PATH_ENTRY {
         string job_id FK
@@ -130,8 +131,8 @@ Each table is accompanied by a BIDS-style JSON sidecar, `derivatives/jobs.json` 
 `jobs.tsv`:
 
 ```text
-job_id              dandiset_id  within_dandiset_path                  pipeline    version  params   config   codebase  content_id                            asset_size_bytes  status      created_at            job_submission_time   job_completion_time   queue_wait_seconds  run_duration_seconds
-job-260916a1b2c3    000409       sub-mouse01/sub-mouse01_ecephys.nwb   aind+ephys  v1.2.4   4e89ec7  7940dfd  v0.8.2    048d1ee9-83b7-491f-8f02-1ca615b1d455  1073741824        successful  2026-09-16T10:02:11Z  2026-09-16T10:15:40Z  2026-09-16T14:48:02Z  809                 16342
+job_id              dandiset_id  within_dandiset_path                  pipeline    version  params   config   codebase  content_id                            asset_size_bytes  status      created_at            job_submission_time   job_completion_time   queue_wait_seconds  run_duration_seconds  process_wall_time_seconds
+job-260916a1b2c3    000409       sub-mouse01/sub-mouse01_ecephys.nwb   aind+ephys  v1.2.4   4e89ec7  7940dfd  v0.8.2    048d1ee9-83b7-491f-8f02-1ca615b1d455  1073741824        successful  2026-09-16T10:02:11Z  2026-09-16T10:15:40Z  2026-09-16T14:48:02Z  809                 16342                 51234
 ```
 
 `paths.tsv`:
@@ -215,25 +216,9 @@ erDiagram
 
 ## Reports uploaded to the archive
 
-Besides the two tables, three JSON reports are written into `001697`'s `derivatives/`. Each is rebuilt from scratch when its command runs.
+Besides the two tables, two JSON reports are written into `001697`'s `derivatives/`. Each is rebuilt from scratch when its command runs.
 
-`queue_stats.json`, from `dandicompute queue stats`:
-
-```json
-{
-  "generated_at": "2026-09-23T03:00:12+00:00",
-  "state_entry_count": 1834,
-  "successful_asset_bytes_total": 51234567890,
-  "timeline_files_processed": 902,
-  "job_step_wall_time_seconds": {
-    "curation": 10234.5,
-    "postprocessing": 90123.0,
-    "spikesort_kilosort4": 450012.2
-  }
-}
-```
-
-`job_step_wall_time_seconds` sums the durations from every capsule's Nextflow `logs/timeline.html`, keyed by process name.
+There is no separate statistics report. Every aggregate is a sum or count over `jobs.tsv`. The number of capsules is its row count, the bytes processed are the `asset_size_bytes` of its `successful` rows, and the total compute time is the sum of `process_wall_time_seconds`.
 
 `issues_dump.json`, from `dandicompute issues dump`:
 

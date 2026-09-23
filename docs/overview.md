@@ -82,7 +82,7 @@ sequenceDiagram
     CLI->>DANDI: read assets.jsonld (existing capsules)
     CLI->>DANDI: upload new capsules (code/, logs/, dataset_description.json)
 
-    Note over CLI: queue pending && queue process
+    Note over CLI: jobs pending && jobs dispatch
     CLI->>DANDI: read assets.jsonld (capsules with no submitted marker)
     CLI->>DANDI: read each pending code/submit.sh (resource requests)
     CLI->>SLURM: sbatch one array per pipeline and resource group
@@ -92,7 +92,7 @@ sequenceDiagram
     SLURM->>SLURM: task runs submit.sh
     SLURM->>DANDI: submit.sh uploads outputs and logs
 
-    Note over CLI: queue refresh
+    Note over CLI: jobs refresh
     CLI->>DANDI: rewrite derivatives/jobs.tsv and paths.tsv
 ```
 
