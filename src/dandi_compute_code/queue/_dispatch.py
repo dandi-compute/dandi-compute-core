@@ -9,6 +9,11 @@ concurrency limit, and each array task runs one capsule.
 
 A dispatcher is identified on the cluster by its job name, so a pipeline whose array is
 still working through its tasks is left alone rather than dispatched a second time.
+
+Every dispatcher keeps its record in one central log directory per pipeline, under the
+processing directory's ``derivatives/logs/``. The minted manifests, the generated array scripts and the
+array tasks' own output all land there and outlive the dispatch directory, which only holds
+the tasks' working trees and is removed once the array is finished with it.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ from ._globals import (
     _ACTIVE_SLURM_JOB_STATES,
     _DISPATCH_DIRECTORY_RE,
     _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT,
+    _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH,
     _SBATCH_JOB_ID_RE,
 )
 from ._handle_template import generate_array_dispatch_script
@@ -36,9 +42,11 @@ from ._handle_template import generate_array_dispatch_script
 _log = logging.getLogger(__name__)
 
 #: Name of the manifest listing the capsules one array covers, one per line.
-_MANIFEST_FILE_NAME_TEMPLATE = "manifest-{index}.txt"
+_MANIFEST_FILE_NAME_TEMPLATE = "{timestamp}-manifest-{index}.txt"
 #: Name of one generated array dispatch script.
-_DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "dispatch-{index}.sh"
+_DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}.sh"
+#: Name of one array task's output, with SLURM filling in the array job and task IDs.
+_DISPATCH_LOG_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}-%A_%a.log"
 
 DispatchStatus = Literal["dispatched", "no-pending", "dispatcher-active"]
 
@@ -52,6 +60,8 @@ class DispatchedArray:
     task_count: int
     resources: CapsuleResources
     max_concurrent: int
+    manifest_file_path: pathlib.Path
+    script_file_path: pathlib.Path
 
     def summary(self) -> str:
         """This array's size, throttle and requests on one line."""
@@ -73,6 +83,7 @@ class DispatchResult:
     arrays: tuple[DispatchedArray, ...] = ()
     active_job_ids: tuple[str, ...] = ()
     dispatch_directory: pathlib.Path | None = None
+    log_directory: pathlib.Path | None = None
 
     @property
     def task_count(self) -> int:
@@ -103,6 +114,8 @@ class DispatchResult:
         """
         lines = [self.summary()]
         lines.extend(f"  {array.summary()}" for array in self.arrays)
+        if self.log_directory is not None:
+            lines.append(f"  logs, manifests and scripts: {self.log_directory}")
         return lines
 
 
@@ -115,14 +128,15 @@ def clean_dispatch_directories(
     """
     Remove dispatch directories whose arrays are finished with them.
 
-    A dispatch directory holds the manifest its array tasks read at startup, so removing one
-    while its array is still working would strand every task that had not started yet. Two
+    A dispatch directory holds the working trees of its array tasks, so removing one while its
+    array is still working would pull the ground out from under every task still running. Two
     things guard against that. A directory is kept while its pipeline still has a dispatcher
     on the cluster, and it is kept until it is at least *minimum_age_hours* old, which covers
     the window between submitting an array and SLURM reporting it.
 
     Only directories named like a dispatch directory are considered, so anything else sharing
-    *processing_directory* is left alone.
+    *processing_directory* is left alone. That includes the central ``derivatives/logs/`` directory, which
+    keeps every dispatcher's manifests, scripts and output after its dispatch directory is gone.
 
     Parameters
     ----------
@@ -300,6 +314,11 @@ def dispatch_pipeline_jobs(
     is one array per pipeline in practice. Each array task reads its capsule out of its
     manifest by task index, downloads it, claims it with a submitted marker, and runs it.
 
+    The manifests, the array scripts and the array tasks' output are written to the
+    pipeline's central log directory, ``derivatives/logs/<job name>/`` under *processing_directory*,
+    and are named by when the dispatch was formed. They are kept as the record of what
+    each dispatch covered. The per-dispatch directory holds only the tasks' working trees.
+
     The configured concurrency limit is what the pipeline may run at once in total, so it is
     shared out across the arrays rather than applied to each of them.
 
@@ -317,8 +336,9 @@ def dispatch_pipeline_jobs(
         awaiting submission, across all pipelines. See
         :meth:`~dandi_compute_code.queue.PipelineQueue.pending_code_dirs`.
     processing_directory : pathlib.Path
-        Directory the dispatch directory is created in. It holds the manifest,
-        the dispatch script, and the array's logs, so it has to remain readable
+        Directory the dispatch directory and the central log directory are
+        created in. The array tasks read their manifest from the log directory
+        and work in the dispatch directory, so both have to remain reachable
         from the compute nodes for as long as the array lives.
     dispatch_config : DispatchConfig
         This pipeline's dispatcher settings.
@@ -377,6 +397,8 @@ def dispatch_pipeline_jobs(
     timestamp = f"{now.year:04d}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}"
     dispatch_directory = processing_directory / f"{job_name}-{timestamp}"
     dispatch_directory.mkdir(parents=True, exist_ok=True)
+    log_directory = processing_directory / _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / job_name
+    log_directory.mkdir(parents=True, exist_ok=True)
 
     dispatched_arrays: list[DispatchedArray] = []
     for group_index, (resources, group_code_dir_paths) in enumerate(groups.items(), start=1):
@@ -389,13 +411,17 @@ def dispatch_pipeline_jobs(
                 dispatch_config.max_array_tasks,
             )
 
-        manifest_file_path = dispatch_directory / _MANIFEST_FILE_NAME_TEMPLATE.format(index=group_index)
+        manifest_file_path = log_directory / _MANIFEST_FILE_NAME_TEMPLATE.format(timestamp=timestamp, index=group_index)
         manifest_file_path.write_text("".join(f"{code_dir_path}\n" for code_dir_path in dispatched_code_dir_paths))
 
-        script_file_path = dispatch_directory / _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE.format(index=group_index)
+        script_file_path = log_directory / _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE.format(
+            timestamp=timestamp, index=group_index
+        )
+        log_file_path = log_directory / _DISPATCH_LOG_FILE_NAME_TEMPLATE.format(timestamp=timestamp, index=group_index)
         generate_array_dispatch_script(
             script_file_path=script_file_path,
             job_name=job_name,
+            log_file_path=str(log_file_path.absolute()),
             dispatch_directory=str(dispatch_directory.absolute()),
             memory=resources.memory,
             cpus_per_task=resources.cpus_per_task,
@@ -427,6 +453,8 @@ def dispatch_pipeline_jobs(
                 task_count=len(dispatched_code_dir_paths),
                 resources=resources,
                 max_concurrent=max_concurrent_per_group,
+                manifest_file_path=manifest_file_path,
+                script_file_path=script_file_path,
             )
         )
 
@@ -435,5 +463,6 @@ def dispatch_pipeline_jobs(
         status="dispatched",
         arrays=tuple(dispatched_arrays),
         dispatch_directory=dispatch_directory,
+        log_directory=log_directory,
     )
     return result

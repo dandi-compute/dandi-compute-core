@@ -106,5 +106,5 @@ def test_process_queue_throttles_each_array_to_the_configured_limit(
     ):
         results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
-    script = (results["aind+ephys"].dispatch_directory / "dispatch-1.sh").read_text()
+    script = results["aind+ephys"].arrays[0].script_file_path.read_text()
     assert f"#SBATCH --array=1-2%{configured_limit}" in script
