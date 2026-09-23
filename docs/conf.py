@@ -69,3 +69,7 @@ html_theme_options = {
 }
 
 html_static_path = ["_static"]
+
+# The narrative pages sit at the top level with no subpages, so the primary sidebar would only
+# show an empty "Section Navigation". It is kept for the API reference, which has subpages.
+html_sidebars = {"*": []}
