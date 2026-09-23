@@ -78,4 +78,5 @@ html_sidebars = {
     "job_capsules": ["sidebar-nav-bs"],
     "infrastructure": ["sidebar-nav-bs"],
     "dispatch": ["sidebar-nav-bs"],
+    "setup": ["sidebar-nav-bs"],
 }

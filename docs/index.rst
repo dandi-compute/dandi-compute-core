@@ -13,7 +13,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
    :caption: Getting started
 
    overview
-   setup
 
 .. toctree::
    :maxdepth: 2

@@ -170,5 +170,6 @@ The documentation is hosted on Read the Docs from `.readthedocs.yaml`.
 ```{toctree}
 :hidden:
 
+setup
 dispatch
 ```

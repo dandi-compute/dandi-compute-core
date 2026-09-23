@@ -1,4 +1,4 @@
-# Set up
+# Setup
 
 DANDI Compute runs passively. Once it is installed and running, it finds qualifying assets, forms and dispatches job capsules, and reports on them without anyone driving it. This page covers installing it, and the commands for stepping in by hand when something needs attention.
 
