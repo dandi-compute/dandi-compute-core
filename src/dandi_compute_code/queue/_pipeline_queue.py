@@ -32,6 +32,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
+import beartype
+
 from ._capsule_resources import read_capsule_resources
 from ._dispatch import DispatchResult, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
@@ -84,6 +86,7 @@ _JOBS_TSV_RELATIVE_PATH = "derivatives/jobs.tsv"
 _PATHS_TSV_FILE_NAME = "paths.tsv"
 
 
+@beartype.beartype
 @dataclass
 class PipelineQueue:
     """
@@ -658,13 +661,7 @@ class PipelineQueue:
             If ``DANDI_API_KEY`` is unset or blank, or if archiving any
             individual capsule fails (see :func:`move_job_capsule`). A failure
             leaves entries processed so far archived and stops before the rest.
-        ValueError
-            If *status* is not ``"failed"``, ``"pending"``, or ``"stalled"``.
         """
-        if status not in ("failed", "pending", "stalled"):
-            message = f"Unknown status {status!r}; expected 'failed', 'pending', or 'stalled'."
-            raise ValueError(message)
-
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)

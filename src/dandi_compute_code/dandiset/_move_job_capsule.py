@@ -5,11 +5,14 @@ import shutil
 import subprocess
 import tempfile
 
+import beartype
+
 from ._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
 
 _log = logging.getLogger(__name__)
 
 
+@beartype.beartype
 def move_job_capsule(
     *,
     capsule_path: str,

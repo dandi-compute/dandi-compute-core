@@ -9,7 +9,7 @@ packages = ["src/dandi_compute_code"]
 
 [project]
 name = "dandi-compute-code"
-version = "0.7.11"
+version = "0.7.12"
 authors = [
   { name="Cody Baker", email="cody.c.baker.phd@gmail.com" },
 ]
@@ -18,6 +18,7 @@ readme = "README.md"
 license = {file = "LICENSE.txt"}
 requires-python = ">=3.10"
 dependencies = [
+    "beartype",
     "jinja2",
     "click",  # rich-click did not work well on Engaging
     "dandi",

@@ -1,5 +1,6 @@
 import logging
 
+import beartype
 import numpy
 import spikeinterface.full
 
@@ -9,6 +10,7 @@ from ._resolve import resolve_filter_kwargs, resolve_reference_spec
 _log = logging.getLogger(__name__)
 
 
+@beartype.beartype
 def _shank_groups(recording, /) -> list[list]:
     """Group channel ids by their SpikeInterface channel group (one group per shank)."""
     channel_groups = recording.get_channel_groups()
@@ -20,6 +22,7 @@ def _shank_groups(recording, /) -> list[list]:
     return ordered_groups
 
 
+@beartype.beartype
 def _decimate_channel_ids(recording, *, factor: int) -> list:
     """Select every ``factor``-th channel id ordered by increasing depth."""
     locations = recording.get_channel_locations()
@@ -29,6 +32,7 @@ def _decimate_channel_ids(recording, *, factor: int) -> list:
     return kept_channel_ids
 
 
+@beartype.beartype
 def extract_lfp(*, recording, parameters: dict | None = None):
     """
     Extract an LFP recording from a raw SpikeInterface recording.

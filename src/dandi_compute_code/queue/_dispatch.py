@@ -21,6 +21,8 @@ import shutil
 import subprocess
 from typing import Literal
 
+import beartype
+
 from ._capsule_resources import CapsuleResources
 from ._dispatch_config import DispatchConfig
 from ._globals import (
@@ -41,6 +43,7 @@ _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "dispatch-{index}.sh"
 DispatchStatus = Literal["dispatched", "no-pending", "dispatcher-active"]
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class DispatchedArray:
     """One array job, covering the capsules of a pipeline that request the same resources."""
@@ -60,6 +63,7 @@ class DispatchedArray:
         return line
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class DispatchResult:
     """The outcome of one pipeline's dispatch attempt."""
@@ -102,6 +106,7 @@ class DispatchResult:
         return lines
 
 
+@beartype.beartype
 def clean_dispatch_directories(
     *,
     processing_directory: pathlib.Path,
@@ -176,6 +181,7 @@ def clean_dispatch_directories(
     return removed
 
 
+@beartype.beartype
 def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str]) -> list[str]:
     """
     Select the capsule ``code`` directories belonging to *pipeline*.
@@ -188,6 +194,7 @@ def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str])
     return selected
 
 
+@beartype.beartype
 def _group_by_requested_resources(
     *,
     code_dir_paths: list[str],
@@ -211,6 +218,7 @@ def _group_by_requested_resources(
     return groups
 
 
+@beartype.beartype
 def _active_dispatcher_job_ids(job_name: str, /) -> list[str]:
     """
     The IDs of this user's active SLURM jobs carrying *job_name*.
@@ -245,6 +253,7 @@ def _active_dispatcher_job_ids(job_name: str, /) -> list[str]:
     return job_ids
 
 
+@beartype.beartype
 def _submit_array_job(script_file_path: pathlib.Path, /) -> str:
     """
     Submit a dispatch script with ``sbatch`` and return the array job ID it reports.
@@ -270,6 +279,7 @@ def _submit_array_job(script_file_path: pathlib.Path, /) -> str:
     return array_job_id
 
 
+@beartype.beartype
 def dispatch_pipeline_jobs(
     *,
     pipeline: str,

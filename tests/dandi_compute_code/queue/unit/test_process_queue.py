@@ -3,7 +3,12 @@ from unittest import mock
 
 import pytest
 
-from dandi_compute_code.queue import PipelineQueue
+from dandi_compute_code.queue import DispatchResult, PipelineQueue
+
+
+def _no_pending(*, pipeline: str, **_: object) -> DispatchResult:
+    """A dispatch_pipeline_jobs stand-in reporting nothing to dispatch, typed as the real one is."""
+    return DispatchResult(pipeline=pipeline, status="no-pending")
 
 
 @pytest.mark.ai_generated
@@ -12,7 +17,7 @@ def test_process_queue_reports_no_pending_for_every_configured_pipeline(
 ) -> None:
     """With nothing pending, every configured pipeline reports back rather than dispatching."""
     with mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     assert set(results) == set(PipelineQueue.load_pipeline_config()["pipelines"])
     assert {result.status for result in results.values()} == {"no-pending"}
@@ -23,12 +28,14 @@ def test_process_queue_dispatches_only_the_requested_pipeline(processing_directo
     """--pipeline narrows dispatch to a single pipeline's array."""
     with (
         mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
-        mock.patch("dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs") as mock_dispatch,
+        mock.patch(
+            "dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs", side_effect=_no_pending
+        ) as mock_dispatch,
     ):
         PipelineQueue.process_queue(
             processing_directory=processing_directory,
             only_pipeline="lfp",
-            jitter_seconds=0,
+            jitter_seconds=0.0,
         )
 
     assert mock_dispatch.call_count == 1
@@ -42,13 +49,15 @@ def test_process_queue_forwards_the_concurrency_override_to_the_dispatcher(
     """An explicit max_concurrent replaces each dispatched pipeline's configured limit."""
     with (
         mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
-        mock.patch("dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs") as mock_dispatch,
+        mock.patch(
+            "dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs", side_effect=_no_pending
+        ) as mock_dispatch,
     ):
         PipelineQueue.process_queue(
             processing_directory=processing_directory,
             only_pipeline="lfp",
             max_concurrent=7,
-            jitter_seconds=0,
+            jitter_seconds=0.0,
         )
 
     assert mock_dispatch.call_args.kwargs["dispatch_config"].max_concurrent == 7
@@ -65,9 +74,11 @@ def test_process_queue_reads_the_pending_capsules_once_for_all_pipelines(
             "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
             return_value=code_dir_paths,
         ) as mock_pending,
-        mock.patch("dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs") as mock_dispatch,
+        mock.patch(
+            "dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs", side_effect=_no_pending
+        ) as mock_dispatch,
     ):
-        PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     mock_pending.assert_called_once_with()
     assert mock_dispatch.call_count == len(PipelineQueue.load_pipeline_config()["pipelines"])
@@ -80,12 +91,14 @@ def test_process_queue_forwards_test_flag(processing_directory: pathlib.Path) ->
     """Test mode reaches the dispatcher so array tasks keep their working trees."""
     with (
         mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
-        mock.patch("dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs") as mock_dispatch,
+        mock.patch(
+            "dandi_compute_code.queue._pipeline_queue.dispatch_pipeline_jobs", side_effect=_no_pending
+        ) as mock_dispatch,
     ):
         PipelineQueue.process_queue(
             processing_directory=processing_directory,
             only_pipeline="lfp",
-            jitter_seconds=0,
+            jitter_seconds=0.0,
             test=True,
         )
 
@@ -99,7 +112,7 @@ def test_process_queue_rejects_non_positive_max_concurrent(processing_directory:
         PipelineQueue.process_queue(
             processing_directory=processing_directory,
             max_concurrent=0,
-            jitter_seconds=0,
+            jitter_seconds=0.0,
         )
 
 
@@ -110,7 +123,7 @@ def test_process_queue_rejects_an_unconfigured_pipeline(processing_directory: pa
         PipelineQueue.process_queue(
             processing_directory=processing_directory,
             only_pipeline="nope",
-            jitter_seconds=0,
+            jitter_seconds=0.0,
         )
 
 
@@ -131,7 +144,7 @@ def test_process_queue_skips_sleep_when_jitter_is_zero(processing_directory: pat
         mock.patch("dandi_compute_code.queue._pipeline_queue.time.sleep") as mock_sleep,
         mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
     ):
-        PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     mock_sleep.assert_not_called()
 

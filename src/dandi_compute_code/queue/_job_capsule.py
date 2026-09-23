@@ -16,6 +16,8 @@ from collections.abc import Collection
 from dataclasses import dataclass, field
 from typing import Literal
 
+import beartype
+
 from ._job_info import JobInfo
 from ..dandiset._globals import _dandiset_derivatives_relative_dir
 
@@ -55,6 +57,7 @@ _PATH_FIELD_NAMES = ("dataset_description_path", "output_paths", "log_paths")
 _PATHS_TSV_FIELD_NAMES = ["job_id", "path", "content_id"]
 
 
+@beartype.beartype
 def _path_field_name(*, job_id: str, path: str) -> str | None:
     """
     The ``JobCapsule`` mapping field an asset path of the capsule *job_id* belongs in.
@@ -76,6 +79,7 @@ def _path_field_name(*, job_id: str, path: str) -> str | None:
     return None
 
 
+@beartype.beartype
 def _coerce_status(value: object, /) -> JobStatus:
     """Accept a status read back from a table or dict, falling back to ``"unknown"``."""
     for status in JOB_STATUSES:
@@ -84,6 +88,7 @@ def _coerce_status(value: object, /) -> JobStatus:
     return "unknown"
 
 
+@beartype.beartype
 def _derive_job_status(*, has_code: bool, has_been_submitted: bool, has_logs: bool, has_output: bool) -> JobStatus:
     """
     Collapse the observed presence of a capsule's directories into a single status.
@@ -117,6 +122,7 @@ def _derive_job_status(*, has_code: bool, has_been_submitted: bool, has_logs: bo
     return "unknown"
 
 
+@beartype.beartype
 def _parse_timestamp(value: str | None, /) -> datetime.datetime | None:
     """Parse an ISO 8601 timestamp cell, treating a naive timestamp as UTC."""
     if not value:
@@ -130,6 +136,7 @@ def _parse_timestamp(value: str | None, /) -> datetime.datetime | None:
     return timestamp
 
 
+@beartype.beartype
 def _elapsed_seconds(*, start: str | None, end: str | None) -> int | None:
     """Whole seconds between two ISO 8601 timestamps, or ``None`` if either is missing or malformed."""
     start_timestamp = _parse_timestamp(start)
@@ -139,6 +146,7 @@ def _elapsed_seconds(*, start: str | None, end: str | None) -> int | None:
     return round((end_timestamp - start_timestamp).total_seconds())
 
 
+@beartype.beartype
 @dataclass
 class JobCapsule:
     """

@@ -12,6 +12,8 @@ import pathlib
 from dataclasses import dataclass
 from typing import ClassVar
 
+import beartype
+
 from ._fetch_qualifying_aind_content_ids import _fetch_qualifying_aind_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _DEFAULT_AIND_PIPELINE_DIRECTORY
 
@@ -23,6 +25,7 @@ from ._queue_utils import _latest_repository_version_tag
 from ..aind_ephys_pipeline import prepare_aind_ephys_job
 
 
+@beartype.beartype
 @dataclass
 class AindEphysPipelineQueue(PipelineQueue):
     """Queue behaviour for the AIND ephys pipeline."""

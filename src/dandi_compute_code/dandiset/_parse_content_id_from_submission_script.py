@@ -1,6 +1,9 @@
 import pathlib
 
+import beartype
 
+
+@beartype.beartype
 def _parse_content_id_from_submission_script(capsule_dir: pathlib.Path, /) -> str:
     """
     Read a content ID from ``code/submit.sh``.

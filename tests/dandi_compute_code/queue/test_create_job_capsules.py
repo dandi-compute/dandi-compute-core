@@ -11,6 +11,10 @@ from dandi_compute_code.queue import JobCapsule, JobInfo, PipelineQueue
 _MODULE = "dandi_compute_code.queue._pipeline_queue"
 _AIND_MODULE = "dandi_compute_code.queue._aind_ephys_pipeline_queue"
 
+#: What a mocked job builder hands back for a capsule it formed. The queue's hooks are typed to
+#: return a script path or ``None``, so a bare mock would be rejected as the return value.
+_SCRIPT_FILE_PATH = pathlib.Path("submit.sh")
+
 
 @pytest.fixture(autouse=True)
 def mock_latest_pipeline_version() -> Iterator[mock.MagicMock]:
@@ -67,7 +71,7 @@ def test_creates_a_capsule_for_each_qualifying_asset() -> None:
             "dandi_compute_code.queue._queue_utils._load_content_id_to_usage_dandiset_path",
             return_value={},
         ),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         mock_urlopen.return_value = _mock_urlopen_response(["asset-bbb", "asset-ccc"])
         created_count = PipelineQueue.create_job_capsules()
@@ -82,7 +86,7 @@ def test_forms_capsules_against_the_latest_pipeline_version(mock_latest_pipeline
     """The version handed to the job builder is the latest one available locally."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         PipelineQueue.create_job_capsules(content_ids=["asset-bbb"])
 
@@ -99,7 +103,7 @@ def test_skips_an_asset_that_already_has_a_capsule(mock_latest_pipeline_version:
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
         mock.patch(f"{_MODULE}.PipelineQueue.from_dandi", return_value=state),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-bbb", "asset-zzz"])
 
@@ -116,7 +120,7 @@ def test_skips_an_existing_capsule_formed_against_an_older_version() -> None:
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
         mock.patch(f"{_MODULE}.PipelineQueue.from_dandi", return_value=state),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-bbb"])
 
@@ -136,7 +140,7 @@ def test_creates_a_capsule_for_different_params_on_the_same_asset(
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
         mock.patch(f"{_MODULE}.PipelineQueue.from_dandi", return_value=state),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-bbb"])
 
@@ -154,7 +158,7 @@ def test_latest_versions_forms_a_capsule_even_where_one_exists(mock_latest_pipel
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
         mock.patch(f"{_MODULE}.PipelineQueue.from_dandi", return_value=state) as mock_from_dandi,
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-bbb"], force_latest_versions=True)
 
@@ -168,7 +172,7 @@ def test_does_not_force_a_new_capsule_by_default() -> None:
     """Without --latest the job builder keeps its own skip-if-it-exists behaviour."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         PipelineQueue.create_job_capsules(content_ids=["asset-bbb"])
 
@@ -180,7 +184,7 @@ def test_limit_stops_after_n_assets() -> None:
     """Creation stops after exactly limit capsules when a limit is set."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=2)
 
@@ -193,7 +197,7 @@ def test_no_limit_creates_every_capsule() -> None:
     """A limit of None means every qualifying asset without a capsule gets one."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         created_count = PipelineQueue.create_job_capsules(
             content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=None
@@ -208,7 +212,7 @@ def test_capsule_that_already_existed_is_not_counted_or_limited() -> None:
     """A None from the job builder (capsule already on the archive) is not counted against the limit."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         mock_prepare.side_effect = [None, pathlib.Path("submit.sh"), None]
         created_count = PipelineQueue.create_job_capsules(content_ids=["asset-bbb", "asset-ccc", "asset-ddd"], limit=1)
@@ -234,7 +238,7 @@ def test_limit_samples_uniformly_over_dandisets() -> None:
             return_value=content_id_mapping,
         ),
         mock.patch("dandi_compute_code.queue._queue_utils.random.shuffle", side_effect=lambda items: None),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         mock_urlopen.return_value = _mock_urlopen_response(["asset-a1", "asset-a2", "asset-b1"])
         PipelineQueue.create_job_capsules(limit=2)
@@ -261,7 +265,7 @@ def test_excludes_non_qualifying_content_ids() -> None:
             "dandi_compute_code.queue._queue_utils._load_content_id_to_usage_dandiset_path",
             return_value={},
         ),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         PipelineQueue.create_job_capsules()
 
@@ -275,7 +279,7 @@ def test_explicit_content_ids_skip_the_network_fetch() -> None:
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
         mock.patch("urllib.request.urlopen") as mock_urlopen,
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         PipelineQueue.create_job_capsules(content_ids=["explicit-asset-001"])
 
@@ -292,7 +296,7 @@ def test_passes_optional_args_through(tmp_path: pathlib.Path) -> None:
 
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_AIND_PIPELINE_CONFIG),
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_prepare,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
     ):
         PipelineQueue.create_job_capsules(
             content_ids=["asset-bbb"],
@@ -310,8 +314,8 @@ def test_dispatches_lfp_to_the_lfp_job_builder(mock_latest_pipeline_version: moc
     """The 'lfp' pipeline is routed to prepare_lfp_job, not the AIND builder."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_LFP_PIPELINE_CONFIG),
-        mock.patch(f"{_MODULE}.prepare_lfp_job") as mock_lfp,
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_aind,
+        mock.patch(f"{_MODULE}.prepare_lfp_job", return_value=_SCRIPT_FILE_PATH) as mock_lfp,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_aind,
     ):
         PipelineQueue.create_job_capsules(content_ids=["asset-1", "asset-2"])
 
@@ -340,8 +344,8 @@ def test_only_pipeline_creates_just_that_pipeline() -> None:
     """only_pipeline restricts creation to the named pipeline."""
     with (
         mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_MULTI_PIPELINE_CONFIG),
-        mock.patch(f"{_MODULE}.prepare_lfp_job") as mock_lfp,
-        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job") as mock_aind,
+        mock.patch(f"{_MODULE}.prepare_lfp_job", return_value=_SCRIPT_FILE_PATH) as mock_lfp,
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_aind,
     ):
         PipelineQueue.create_job_capsules(content_ids=["asset-1"], only_pipeline="lfp")
 

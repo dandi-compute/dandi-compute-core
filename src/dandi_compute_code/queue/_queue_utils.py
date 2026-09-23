@@ -21,6 +21,8 @@ import urllib.request
 from collections.abc import Collection
 from dataclasses import dataclass
 
+import beartype
+
 from ._globals import (
     _DURATION_PART_RE,
     _PACKAGED_PIPELINE_CONFIGS_PATH,
@@ -43,6 +45,7 @@ _log = logging.getLogger(__name__)
 _UPSTREAM_JSONLD_URL_TEMPLATE = "https://dandiarchive.s3.amazonaws.com/dandisets/{dandiset_id}/draft/assets.jsonld"
 
 
+@beartype.beartype
 def _find_segment_index(parts: tuple[str, ...], prefix: str, start: int = 0) -> int | None:
     """Return the index of the first part starting with ``prefix`` at or after ``start``."""
     for index in range(start, len(parts)):
@@ -51,6 +54,7 @@ def _find_segment_index(parts: tuple[str, ...], prefix: str, start: int = 0) -> 
     return None
 
 
+@beartype.beartype
 @dataclass(frozen=True)
 class _CapsuleLocation:
     """Where one job capsule sits in a Dandiset."""
@@ -62,6 +66,7 @@ class _CapsuleLocation:
     job_id: str
 
 
+@beartype.beartype
 def _parse_capsule_location(asset_path: str, /) -> tuple[_CapsuleLocation, str] | None:
     """
     Parse an asset path of the form
@@ -104,11 +109,13 @@ def _parse_capsule_location(asset_path: str, /) -> tuple[_CapsuleLocation, str] 
     return location, subpath
 
 
+@beartype.beartype
 def _subpath_is_under(subpath: str, directory: str) -> bool:
     """True if ``subpath`` equals ``directory`` or lives inside it."""
     return subpath == directory or subpath.startswith(f"{directory}/")
 
 
+@beartype.beartype
 def _load_upstream_assets_jsonld_metadata(dandiset_id: str) -> AssetsJsonldMetadata:
     """Fetch and index ``assets.jsonld`` for another dandiset by id."""
     url = _UPSTREAM_JSONLD_URL_TEMPLATE.format(dandiset_id=dandiset_id)
@@ -149,6 +156,7 @@ def _load_upstream_assets_jsonld_metadata(dandiset_id: str) -> AssetsJsonldMetad
     )
 
 
+@beartype.beartype
 class _UpstreamMetadataCache:
     """Per-call cache of upstream ``assets.jsonld`` lookups, keyed by dandiset id."""
 
@@ -161,6 +169,7 @@ class _UpstreamMetadataCache:
         return self._cache[dandiset_id]
 
 
+@beartype.beartype
 def _read_asset_json(asset: dict[str, object], /) -> dict:
     """Download and parse a small JSON asset from its DANDI blob URL."""
     content_urls = asset.get("contentUrl")
@@ -178,6 +187,7 @@ def _read_asset_json(asset: dict[str, object], /) -> dict:
     return {}
 
 
+@beartype.beartype
 class _CapsuleProvenanceCache:
     """
     Per-call cache of job provenance read from each capsule's ``dataset_description.json``.
@@ -217,6 +227,7 @@ class _CapsuleProvenanceCache:
         return provenance if isinstance(provenance, dict) else {}
 
 
+@beartype.beartype
 def _resolve_job_info(*, location: _CapsuleLocation, provenance_cache: _CapsuleProvenanceCache) -> JobInfo:
     """Build the full job identity for a capsule from its provenance."""
     fields = provenance_cache.get(location.capsule_path)
@@ -253,6 +264,7 @@ def _new_capsule_record() -> dict[str, object]:
     }
 
 
+@beartype.beartype
 @dataclass
 class _JobCapsuleCollection:
     """Bookkeeping accumulated while walking ``assets.jsonld`` once, keyed by capsule path."""
@@ -264,6 +276,7 @@ class _JobCapsuleCollection:
     submitted_marker_timestamps_by_capsule: dict[str, list[str]]
 
 
+@beartype.beartype
 def _collect_job_capsules(local_metadata: AssetsJsonldMetadata, /) -> _JobCapsuleCollection:
     """
     Walk every asset path, group by job capsule directory, record presence flags, and
@@ -315,6 +328,7 @@ def _collect_job_capsules(local_metadata: AssetsJsonldMetadata, /) -> _JobCapsul
     )
 
 
+@beartype.beartype
 def _finalize_job_capsule_records(
     *,
     collection: _JobCapsuleCollection,
@@ -372,6 +386,7 @@ def _finalize_job_capsule_records(
     return finalized
 
 
+@beartype.beartype
 def _sort_key(record: dict[str, object]) -> tuple[str, str, str, str]:
     # content_id may be None for capsules whose upstream source wasn't resolvable;
     # coerce to "" so sorting stays total.
@@ -383,11 +398,13 @@ def _sort_key(record: dict[str, object]) -> tuple[str, str, str, str]:
     )
 
 
+@beartype.beartype
 def _validate_pipeline_config(*, pipeline_config: dict) -> None:
     """Validate the pipeline config (top-level ``pipelines`` mapping) against the LinkML schema."""
     validate_against_schema(pipeline_config, schema="pipeline_config", description="pipeline configuration")
 
 
+@beartype.beartype
 def _latest_repository_version_tag(pipeline_directory: pathlib.Path, /) -> str:
     """
     The highest release tag in a local pipeline repository checkout.
@@ -433,6 +450,7 @@ def _load_pipeline_config() -> dict:
     return pipeline_config
 
 
+@beartype.beartype
 def _order_content_ids_for_uniform_dandiset_sampling(*, content_ids: list[str]) -> list[str]:
     """Return content IDs ordered by randomized round-robin across source Dandisets."""
     content_id_to_dandiset_path = _load_content_id_to_usage_dandiset_path()
@@ -463,6 +481,7 @@ def _order_content_ids_for_uniform_dandiset_sampling(*, content_ids: list[str]) 
     return ordered_content_ids
 
 
+@beartype.beartype
 def _duration_string_to_seconds(duration_string: str) -> float:
     """Parse a Nextflow duration string (for example ``1m 5s``) into seconds."""
     total_seconds = 0.0
@@ -482,6 +501,7 @@ def _duration_string_to_seconds(duration_string: str) -> float:
     return total_seconds
 
 
+@beartype.beartype
 def _extract_nextflow_timeline_data(*, timeline_html: str) -> dict | None:
     """Extract the ``window.data`` JSON payload from a Nextflow timeline HTML report."""
     marker = "window.data ="
@@ -527,6 +547,7 @@ def _extract_nextflow_timeline_data(*, timeline_html: str) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+@beartype.beartype
 def _extract_error_lines(*, log_file: pathlib.Path) -> list[str]:
     """Return non-empty log lines containing 'error' (case-insensitive)."""
     if not log_file.is_file():
@@ -539,6 +560,7 @@ def _extract_error_lines(*, log_file: pathlib.Path) -> list[str]:
     ]
 
 
+@beartype.beartype
 def _list_capsule_log_directories(*, dandiset_directory: pathlib.Path) -> list[pathlib.Path]:
     """Return sorted ``logs/`` directories that belong to job capsules."""
     derivatives_root = dandiset_directory / "derivatives"
@@ -552,6 +574,7 @@ def _list_capsule_log_directories(*, dandiset_directory: pathlib.Path) -> list[p
     )
 
 
+@beartype.beartype
 def _remove_empty_parents(*, start: pathlib.Path, stop: pathlib.Path) -> None:
     """
     Remove empty directories from ``start`` up to but not including ``stop``.

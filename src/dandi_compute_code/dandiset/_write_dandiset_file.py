@@ -5,9 +5,12 @@ import shutil
 import subprocess
 import tempfile
 
+import beartype
+
 _log = logging.getLogger(__name__)
 
 
+@beartype.beartype
 def write_dandiset_file(
     *,
     dandiset_id: str,

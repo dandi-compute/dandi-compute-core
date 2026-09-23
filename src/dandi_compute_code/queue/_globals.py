@@ -2,6 +2,8 @@ import json
 import pathlib
 import re
 
+import beartype
+
 _AIND_EPHYS_PARAMS_REGISTRY_PATH = (
     pathlib.Path(__file__).parent.parent / "aind_ephys_pipeline" / "registries" / "registered_params.json"
 )
@@ -47,6 +49,7 @@ _QUALIFYING_LFP_CONTENT_IDS_URL = (
 )
 
 
+@beartype.beartype
 def _load_registry(registry_path: pathlib.Path, /) -> dict:
     """Read a packaged registry file, falling back to an empty registry when it is unreadable."""
     try:

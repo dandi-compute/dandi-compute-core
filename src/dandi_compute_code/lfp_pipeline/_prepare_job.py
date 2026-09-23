@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 import urllib.request
 
+import beartype
 import dandi
 import dandi.dandiapi
 import dandi.download
@@ -35,6 +36,7 @@ _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL = (
 )
 
 
+@beartype.beartype
 def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
     """
     Build the path of the LFP pipeline directory that holds an asset's job capsules.
@@ -48,6 +50,7 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
     return pipeline_path
 
 
+@beartype.beartype
 def build_lfp_job_hash(
     *,
     dandiset_id: str,
@@ -80,6 +83,7 @@ def build_lfp_job_hash(
     return job_hash
 
 
+@beartype.beartype
 def _resolve_parameters_file(parameters_key: str, /) -> tuple[pathlib.Path, str]:
     """Resolve a registered parameters key to its file path and short MD5 identifier."""
     params_registry_path = pathlib.Path(__file__).parent / "registries" / "registered_params.json"
@@ -108,6 +112,7 @@ def _resolve_parameters_file(parameters_key: str, /) -> tuple[pathlib.Path, str]
     return parameters_file_path, actual_md5[0:7]
 
 
+@beartype.beartype
 def prepare_lfp_job(
     *,
     pipeline_version: str,

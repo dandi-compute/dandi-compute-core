@@ -11,11 +11,11 @@ import subprocess
 import tempfile
 import urllib.request
 
+import beartype
 import dandi
 import dandi.dandiapi
 import dandi.download
 import dandi.upload
-import pydantic
 
 from ._handle_template import generate_aind_ephys_submission_script
 from ..dandiset._globals import (
@@ -38,6 +38,7 @@ class UnmappedContentIDError(ValueError):
     """Raised when a content ID cannot be resolved to a unique Dandiset path."""
 
 
+@beartype.beartype
 def _parse_pipeline_version(version: str, *, label: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"v?(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:[-+][0-9A-Za-z.+-]+)?", version)
     if match is None:
@@ -46,7 +47,7 @@ def _parse_pipeline_version(version: str, *, label: str) -> tuple[int, int, int]
     return int(match["major"]), int(match["minor"]), int(match["patch"])
 
 
-@pydantic.validate_call
+@beartype.beartype
 def prepare_aind_ephys_job(
     pipeline_version: str,
     content_id: str | None = None,

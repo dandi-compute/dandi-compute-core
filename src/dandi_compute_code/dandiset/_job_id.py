@@ -25,6 +25,8 @@ import hashlib
 import re
 from collections.abc import Collection, Iterable
 
+import beartype
+
 #: Job capsule directory name, e.g. ``job-260916a1b2c3``, or ``job-260916a1b2c3-2`` for the
 #: second capsule of one job on one day.
 _JOB_ID_RE = re.compile(r"job-(?P<job_date>\d{6})(?P<job_hash>[0-9a-f]{6})(?:-(?P<job_index>[2-9]|\d{2,}))?")
@@ -33,6 +35,7 @@ _JOB_ID_RE = re.compile(r"job-(?P<job_date>\d{6})(?P<job_hash>[0-9a-f]{6})(?:-(?
 _PROVENANCE_KEY = "DandiCompute"
 
 
+@beartype.beartype
 def _compute_job_hash(
     *,
     dandiset_id: str,
@@ -55,6 +58,7 @@ def _compute_job_hash(
     return job_hash
 
 
+@beartype.beartype
 def _format_job_id(*, job_hash: str, date: datetime.date | None = None, index: int = 1) -> str:
     """
     Build the ``job-{YYMMDD}{hash}`` directory name, defaulting to today's date.
@@ -72,6 +76,7 @@ def _format_job_id(*, job_hash: str, date: datetime.date | None = None, index: i
     return job_id
 
 
+@beartype.beartype
 def _parse_job_hash(job_id: str, /) -> str | None:
     """
     Return the hash portion of a job ID, or ``None`` when *job_id* is not a job ID.
@@ -83,6 +88,7 @@ def _parse_job_hash(job_id: str, /) -> str | None:
     return job_hash
 
 
+@beartype.beartype
 def _capsule_names_from_asset_paths(*, asset_paths: Iterable[str], pipeline_dandiset_path: str) -> set[str]:
     """
     The distinct job capsule directory names sitting directly under *pipeline_dandiset_path*.
@@ -98,6 +104,7 @@ def _capsule_names_from_asset_paths(*, asset_paths: Iterable[str], pipeline_dand
     return capsule_names
 
 
+@beartype.beartype
 def _find_existing_capsule_path(
     *,
     capsule_names: Collection[str],
@@ -122,6 +129,7 @@ def _find_existing_capsule_path(
     return None
 
 
+@beartype.beartype
 def _next_available_job_id(*, job_hash: str, taken_job_ids: Collection[str], date: datetime.date | None = None) -> str:
     """
     The ``job-{YYMMDD}{hash}`` name for *date* that no existing capsule already carries.

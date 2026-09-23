@@ -43,7 +43,7 @@ def test_process_queue_dispatches_one_array_per_pipeline(processing_directory: p
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "dispatched"
     assert results["aind+ephys"].task_count == 2
@@ -66,7 +66,7 @@ def test_process_queue_leaves_a_live_dispatcher_to_exhaust_its_array(
             side_effect=_cluster_calls(active_dispatcher_job_names={"dandicompute-dispatch-aind-ephys"}),
         ),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "dispatcher-active"
     assert results["lfp"].status == "dispatched"
@@ -84,7 +84,7 @@ def test_process_queue_does_not_dispatch_a_pipeline_without_pending_capsules(
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     assert results["aind+ephys"].status == "no-pending"
     assert results["lfp"].status == "dispatched"
@@ -104,7 +104,7 @@ def test_process_queue_throttles_each_array_to_the_configured_limit(
         ),
         mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_cluster_calls()),
     ):
-        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0)
+        results = PipelineQueue.process_queue(processing_directory=processing_directory, jitter_seconds=0.0)
 
     script = (results["aind+ephys"].dispatch_directory / "dispatch-1.sh").read_text()
     assert f"#SBATCH --array=1-2%{configured_limit}" in script

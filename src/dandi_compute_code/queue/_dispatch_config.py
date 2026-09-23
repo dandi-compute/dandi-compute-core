@@ -17,6 +17,8 @@ import dataclasses
 import logging
 import pathlib
 
+import beartype
+
 from ._capsule_resources import CapsuleResources
 from ._globals import _DISPATCH_JOB_NAME_PREFIX, _DISPATCH_JOB_NAME_SANITIZE_RE, _SBATCH_DIRECTIVE_RE
 from ..aind_ephys_pipeline._globals import _RAW_TEMPLATE_FILE_PATH as _AIND_TEMPLATE_FILE_PATH
@@ -43,6 +45,7 @@ _PIPELINE_TEMPLATE_FILE_PATHS: dict[str, pathlib.Path] = {
 }
 
 
+@beartype.beartype
 def _read_template_resources(pipeline: str, /) -> dict[str, str]:
     """
     The ``#SBATCH`` resource directives written into *pipeline*'s submission template.
@@ -74,6 +77,7 @@ def _read_template_resources(pipeline: str, /) -> dict[str, str]:
     return resources
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class DispatchConfig:
     """

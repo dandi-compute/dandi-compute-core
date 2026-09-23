@@ -4,12 +4,12 @@ import os
 import pathlib
 import subprocess
 
-import pydantic
+import beartype
 
 _log = logging.getLogger(__name__)
 
 
-@pydantic.validate_call
+@beartype.beartype
 def submit_job(script_file_path: pathlib.Path) -> None:
     """
     Submit a pipeline script via sbatch.

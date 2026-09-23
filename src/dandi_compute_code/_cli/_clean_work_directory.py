@@ -1,10 +1,10 @@
 import pathlib
 import shutil
 
-import pydantic
+import beartype
 
 
-@pydantic.validate_call
+@beartype.beartype
 def clean_work_directory(directory: pathlib.Path) -> None:
     """
     Clean all contents of a directory except the 'apptainer_cache' subdirectory.

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import beartype
 
+
+@beartype.beartype
 @dataclass(frozen=True)
 class JobInfo:
     """Immutable identity of one job capsule."""
