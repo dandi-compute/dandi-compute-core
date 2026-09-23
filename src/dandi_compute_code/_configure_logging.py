@@ -1,6 +1,9 @@
 import logging
 
+import beartype
 
+
+@beartype.beartype
 def _configure_logging(*, silent: bool) -> None:
     """Configure root logger level based on the *silent* flag.
 

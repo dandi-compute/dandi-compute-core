@@ -1,8 +1,8 @@
+import beartype
 import click
-import pydantic
 
 
-@pydantic.validate_call
+@beartype.beartype
 def _styled_echo(text: str, color: str) -> None:
     """
     Style a message for Click output.

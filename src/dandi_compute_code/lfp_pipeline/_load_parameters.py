@@ -1,13 +1,15 @@
 import hashlib
 import json
 
+import beartype
 import jsonschema
 
 from ._globals import _PARAMETER_SCHEMA_FILE_PATH, _PARAMS_DIR, _PARAMS_REGISTRY_FILE_PATH
 from ..schemas import validate_registry
 
 
-def validate_lfp_parameters(parameters, /) -> dict:
+@beartype.beartype
+def validate_lfp_parameters(parameters: dict, /) -> dict:
     """
     Validate a set of LFP parameters against the pipeline JSON schema.
 
@@ -31,6 +33,7 @@ def validate_lfp_parameters(parameters, /) -> dict:
     return parameters
 
 
+@beartype.beartype
 def load_lfp_parameters(parameters_key: str = "default", /) -> dict:
     """
     Resolve a registered parameters key to a validated set of LFP parameters.

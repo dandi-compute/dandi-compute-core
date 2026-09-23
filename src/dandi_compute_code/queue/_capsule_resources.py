@@ -20,6 +20,8 @@ import logging
 import urllib.error
 import urllib.request
 
+import beartype
+
 from ._globals import _SBATCH_DIRECTIVE_RE
 from ..dandiset._load_assets_jsonld_metadata import AssetsJsonldMetadata, load_assets_jsonld_metadata
 
@@ -29,6 +31,7 @@ _log = logging.getLogger(__name__)
 _MAX_READ_WORKERS = 8
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class CapsuleResources:
     """
@@ -81,6 +84,7 @@ class CapsuleResources:
         return resources
 
 
+@beartype.beartype
 def _read_asset_text(asset: dict[str, object], /) -> str | None:
     """Download a small text asset from its DANDI blob URL."""
     content_urls = asset.get("contentUrl")
@@ -95,6 +99,7 @@ def _read_asset_text(asset: dict[str, object], /) -> str | None:
     return None
 
 
+@beartype.beartype
 def _read_one(*, code_dir_path: str, metadata: AssetsJsonldMetadata) -> CapsuleResources | None:
     """Read one capsule's requested resources out of its ``submit.sh`` asset."""
     asset_metadata = metadata.path_to_asset_metadata.get(f"{code_dir_path}/submit.sh")
@@ -109,6 +114,7 @@ def _read_one(*, code_dir_path: str, metadata: AssetsJsonldMetadata) -> CapsuleR
     return CapsuleResources.from_submission_script(script)
 
 
+@beartype.beartype
 def read_capsule_resources(
     code_dir_paths: list[str],
     /,

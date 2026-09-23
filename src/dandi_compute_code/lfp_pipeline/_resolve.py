@@ -1,7 +1,10 @@
+import beartype
+
 _DIRECTION_TO_SPIKEINTERFACE = {"causal": "forward", "zero-phase": "forward-backward"}
 
 
-def resolve_filter_kwargs(parameters, /) -> dict:
+@beartype.beartype
+def resolve_filter_kwargs(parameters: dict, /) -> dict:
     """
     Translate the filter parameters into keyword arguments for ``spikeinterface.bandpass_filter``.
 
@@ -26,7 +29,8 @@ def resolve_filter_kwargs(parameters, /) -> dict:
     return filter_kwargs
 
 
-def resolve_reference_spec(parameters, /) -> dict:
+@beartype.beartype
+def resolve_reference_spec(parameters: dict, /) -> dict:
     """
     Translate the reference scheme into a specification for ``spikeinterface.common_reference``.
 

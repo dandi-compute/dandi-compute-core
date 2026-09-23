@@ -1,5 +1,7 @@
 import logging
+import pathlib
 
+import beartype
 import neuroconv.tools.spikeinterface
 import pynwb
 
@@ -8,6 +10,7 @@ from ._extract_lfp import extract_lfp
 _log = logging.getLogger(__name__)
 
 
+@beartype.beartype
 def add_lfp_to_nwbfile(*, recording, nwbfile):
     """
     Add an LFP recording to an NWBFile as an ``ElectricalSeries`` under the processing group.
@@ -33,7 +36,14 @@ def add_lfp_to_nwbfile(*, recording, nwbfile):
     return nwbfile
 
 
-def run_lfp_pipeline(*, recording, nwbfile, parameters: dict | None = None, nwbfile_path=None):
+@beartype.beartype
+def run_lfp_pipeline(
+    *,
+    recording,
+    nwbfile,
+    parameters: dict | None = None,
+    nwbfile_path: str | pathlib.Path | None = None,
+):
     """
     Run the LFP pipeline and produce an NWBFile containing the LFP under the processing group.
 
@@ -50,7 +60,7 @@ def run_lfp_pipeline(*, recording, nwbfile, parameters: dict | None = None, nwbf
     parameters : dict, optional
         The validated LFP parameters. Defaults to the registered ``default``
         parameters.
-    nwbfile_path
+    nwbfile_path : str or pathlib.Path, optional
         Where to write the resulting NWB file. When ``None`` the NWBFile is only
         augmented in memory and not written to disk.
 

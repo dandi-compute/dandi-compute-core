@@ -1,10 +1,12 @@
 import pathlib
 
+import beartype
 import jinja2
 
 from ._globals import _RAW_TEMPLATE_FILE_PATH
 
 
+@beartype.beartype
 def generate_lfp_submission_script(
     *,
     script_file_path: pathlib.Path,

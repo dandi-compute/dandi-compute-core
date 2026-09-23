@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import pathlib
 
+import beartype
 import linkml_runtime.processing.referencevalidator
 import linkml_runtime.utils.schemaview
 
@@ -12,6 +13,7 @@ from ._globals import SCHEMA_PATHS, SCHEMA_TREE_ROOTS
 
 
 @functools.lru_cache(maxsize=None)
+@beartype.beartype
 def _validator_for(schema_path: pathlib.Path, /) -> linkml_runtime.processing.referencevalidator.ReferenceValidator:
     """Build (once per schema) the validator for a packaged schema file."""
     schema_view = linkml_runtime.utils.schemaview.SchemaView(str(schema_path))
@@ -19,6 +21,7 @@ def _validator_for(schema_path: pathlib.Path, /) -> linkml_runtime.processing.re
     return validator
 
 
+@beartype.beartype
 def resolve_schema_path(schema: str, /) -> pathlib.Path:
     """
     Resolve a schema's short name to its packaged file path.
@@ -45,6 +48,7 @@ def resolve_schema_path(schema: str, /) -> pathlib.Path:
     return SCHEMA_PATHS[schema]
 
 
+@beartype.beartype
 def validate_against_schema(instance: dict, /, *, schema: str, description: str = "instance") -> dict:
     """
     Validate a structure against one of the packaged LinkML schemas.
@@ -82,6 +86,7 @@ def validate_against_schema(instance: dict, /, *, schema: str, description: str 
     return instance
 
 
+@beartype.beartype
 def validate_registry(registry: dict, /, *, description: str = "registry") -> dict:
     """
     Validate a loaded registry file against the packaged registry schema.

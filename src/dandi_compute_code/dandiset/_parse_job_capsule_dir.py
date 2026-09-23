@@ -2,11 +2,14 @@ import datetime
 import json
 import pathlib
 
+import beartype
+
 from ._job_id import _JOB_ID_RE, _PROVENANCE_KEY
 from ._parse_content_id_from_submission_script import _parse_content_id_from_submission_script
 from ..queue._job_capsule import _derive_job_status
 
 
+@beartype.beartype
 def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
     """
     Parse a single job capsule directory into a flat record dict.
@@ -83,6 +86,7 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
     return record
 
 
+@beartype.beartype
 def _read_capsule_provenance(capsule_dir: pathlib.Path, /) -> dict:
     """Read the job provenance block from a capsule's local ``dataset_description.json``."""
     dataset_description_file = capsule_dir / "dataset_description.json"

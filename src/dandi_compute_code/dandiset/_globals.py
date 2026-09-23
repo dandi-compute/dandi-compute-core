@@ -1,3 +1,5 @@
+import beartype
+
 _JOB_CAPSULES_DANDISET_ID = "001697"
 _FAILED_RUNS_ARCHIVE_DANDISET_ID = "001873"
 _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL = (
@@ -8,6 +10,7 @@ _ASSETS_JSONLD_URL_TEMPLATE = "https://dandiarchive.s3.amazonaws.com/dandisets/{
 _ASSETS_JSONLD_URL = _ASSETS_JSONLD_URL_TEMPLATE.format(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
 
 
+@beartype.beartype
 def _dandiset_derivatives_relative_dir(dandiset_id: str) -> str:
     """
     Return the ``dandisets-{first three digits}/dandiset-{dandiset_id}`` path segment

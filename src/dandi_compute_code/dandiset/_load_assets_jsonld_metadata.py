@@ -4,11 +4,14 @@ import json
 import logging
 import urllib.request
 
+import beartype
+
 from ._globals import _ASSETS_JSONLD_URL_TEMPLATE, _JOB_CAPSULES_DANDISET_ID
 
 _log = logging.getLogger(__name__)
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class AssetMetadata:
     """Minimal indexed metadata for one asset path."""
@@ -19,6 +22,7 @@ class AssetMetadata:
     content_id: str
 
 
+@beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class AssetsJsonldMetadata:
     """Indexed metadata loaded from DANDI ``assets.jsonld``."""
@@ -27,6 +31,7 @@ class AssetsJsonldMetadata:
     path_to_asset_metadata: dict[str, AssetMetadata]
 
 
+@beartype.beartype
 def _build_asset_metadata(asset: dict[str, object]) -> tuple[str, AssetMetadata]:
     """Validate and extract metadata for a single asset; raises ValueError on missing fields."""
     content_size = asset.get("contentSize")
@@ -65,6 +70,7 @@ def _build_asset_metadata(asset: dict[str, object]) -> tuple[str, AssetMetadata]
 
 
 @functools.lru_cache(maxsize=None)
+@beartype.beartype
 def load_assets_jsonld_metadata(dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> AssetsJsonldMetadata:
     """
     Load content-id and path metadata from a DANDI draft ``assets.jsonld`` stream.

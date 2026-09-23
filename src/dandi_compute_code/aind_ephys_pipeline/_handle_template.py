@@ -1,12 +1,12 @@
 import pathlib
 
+import beartype
 import jinja2
-import pydantic
 
 from ._globals import _RAW_TEMPLATE_FILE_PATH
 
 
-@pydantic.validate_call
+@beartype.beartype
 def generate_aind_ephys_submission_script(
     script_file_path: pathlib.Path,
     log_directory: str,

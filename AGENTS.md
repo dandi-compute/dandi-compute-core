@@ -14,6 +14,7 @@
 ## Code style
 
 - Require keyword-only arguments `(*, ...)` for multi-input functions. For any function with exactly one caller-supplied parameter (excluding `self` and `cls`), require positional-only usage with the `/` designator.
+- Validate function inputs at runtime with `beartype`. Decorate every function that takes arguments, and every class (above `@dataclass`), with `@beartype.beartype`. Do not hand-write `isinstance` checks on parameters and do not use `pydantic.validate_call`. Click command callbacks are the one exception, since Click already converts and checks their options.
 - Always add new imports at the top of the file. The only exception is when a local import is needed to avoid a circular dependency.
 - For external dependencies, use the full module import style (e.g., `import xyz; xyz.abc`) rather than `from xyz import abc`.
 - For internal imports, always use relative style (e.g., `from .foo import bar`).
@@ -30,6 +31,7 @@
 - Use `pytest.mark.parametrize` wherever appropriate to reduce duplication in test cases.
 - Avoid importing private API (names with a leading underscore) in tests. Always import from what is publicly exposed through `__init__.py` files.
 - When monkeypatching internal imports in tests, target the importing module's binding (e.g., `foo.baz`), not the original definition module (e.g., `foo._bar.baz`).
+- `beartype` checks return values as well as arguments, so a mock standing in for a callee must return a value of the annotated type (for example a `pathlib.Path`, not a bare `MagicMock`).
 
 ## Module and API conventions
 

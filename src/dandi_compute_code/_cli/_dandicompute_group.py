@@ -227,7 +227,7 @@ def _prepare_aind_command(
     pipeline_version: str | None = None,
     content_id: str | None = None,
     dandiset_id: str | None = None,
-    dandiset_path: pathlib.Path | None = None,
+    dandiset_path: str | None = None,
     config_key: str = "default",
     pipeline_directory: pathlib.Path | None = None,
     parameters_key: str = "default",

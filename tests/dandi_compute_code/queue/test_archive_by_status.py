@@ -2,6 +2,7 @@ import os
 import pathlib
 from unittest import mock
 
+import beartype.roar
 import pytest
 
 from dandi_compute_code.dandiset import AssetMetadata, AssetsJsonldMetadata
@@ -45,8 +46,8 @@ def test_archive_by_status_raises_without_dandi_api_key(status: str) -> None:
 
 @pytest.mark.ai_generated
 def test_archive_by_status_raises_on_unknown_status(dandi_api_key: None) -> None:
-    """archive_by_status raises ValueError for a status other than 'failed'/'pending'/'stalled'."""
-    with pytest.raises(ValueError, match="Unknown status"):
+    """archive_by_status rejects a status other than 'failed'/'pending'/'stalled' before doing anything."""
+    with pytest.raises(beartype.roar.BeartypeCallHintParamViolation):
         PipelineQueue(entries=[]).archive_by_status(status="successful")
 
 
