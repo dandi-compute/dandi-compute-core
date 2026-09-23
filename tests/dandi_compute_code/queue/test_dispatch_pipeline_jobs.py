@@ -516,7 +516,7 @@ def test_dispatch_records_manifests_and_scripts_in_the_central_log_directory(
         capsule_resources=capsule_resources,
     )
 
-    expected_log_directory = processing_directory / "logs" / "dandicompute-dispatch-aind-ephys"
+    expected_log_directory = processing_directory / "derivatives" / "logs" / "dandicompute-dispatch-aind-ephys"
     assert result.log_directory == expected_log_directory
     timestamp = result.dispatch_directory.name.removeprefix("dandicompute-dispatch-aind-ephys-")
     recorded_file_names = sorted(path.name for path in expected_log_directory.iterdir())

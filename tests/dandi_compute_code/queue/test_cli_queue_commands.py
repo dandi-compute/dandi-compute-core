@@ -360,8 +360,8 @@ def test_cli_queue_process_reports_each_pipelines_dispatch_outcome(tmp_path: pat
                         memory="1GB", cpus_per_task=1, partition="mit_normal", time_limit="12:00:00"
                     ),
                     max_concurrent=2,
-                    manifest_file_path=processing_dir / "logs" / "dispatch" / "manifest-1.txt",
-                    script_file_path=processing_dir / "logs" / "dispatch" / "dispatch-1.sh",
+                    manifest_file_path=processing_dir / "derivatives" / "logs" / "dispatch" / "manifest-1.txt",
+                    script_file_path=processing_dir / "derivatives" / "logs" / "dispatch" / "dispatch-1.sh",
                 ),
             ),
         ),

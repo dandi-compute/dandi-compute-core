@@ -11,7 +11,7 @@ A dispatcher is identified on the cluster by its job name, so a pipeline whose a
 still working through its tasks is left alone rather than dispatched a second time.
 
 Every dispatcher keeps its record in one central log directory per pipeline, under the
-processing directory's ``logs/``. The minted manifests, the generated array scripts and the
+processing directory's ``derivatives/logs/``. The minted manifests, the generated array scripts and the
 array tasks' own output all land there and outlive the dispatch directory, which only holds
 the tasks' working trees and is removed once the array is finished with it.
 """
@@ -34,7 +34,7 @@ from ._globals import (
     _ACTIVE_SLURM_JOB_STATES,
     _DISPATCH_DIRECTORY_RE,
     _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT,
-    _DISPATCH_LOG_DIRECTORY_NAME,
+    _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH,
     _SBATCH_JOB_ID_RE,
 )
 from ._handle_template import generate_array_dispatch_script
@@ -135,7 +135,7 @@ def clean_dispatch_directories(
     the window between submitting an array and SLURM reporting it.
 
     Only directories named like a dispatch directory are considered, so anything else sharing
-    *processing_directory* is left alone. That includes the central ``logs/`` directory, which
+    *processing_directory* is left alone. That includes the central ``derivatives/logs/`` directory, which
     keeps every dispatcher's manifests, scripts and output after its dispatch directory is gone.
 
     Parameters
@@ -315,7 +315,7 @@ def dispatch_pipeline_jobs(
     manifest by task index, downloads it, claims it with a submitted marker, and runs it.
 
     The manifests, the array scripts and the array tasks' output are written to the
-    pipeline's central log directory, ``logs/<job name>/`` under *processing_directory*,
+    pipeline's central log directory, ``derivatives/logs/<job name>/`` under *processing_directory*,
     and are named by when the dispatch was formed. They are kept as the record of what
     each dispatch covered. The per-dispatch directory holds only the tasks' working trees.
 
@@ -397,7 +397,7 @@ def dispatch_pipeline_jobs(
     timestamp = f"{now.year:04d}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}"
     dispatch_directory = processing_directory / f"{job_name}-{timestamp}"
     dispatch_directory.mkdir(parents=True, exist_ok=True)
-    log_directory = processing_directory / _DISPATCH_LOG_DIRECTORY_NAME / job_name
+    log_directory = processing_directory / _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / job_name
     log_directory.mkdir(parents=True, exist_ok=True)
 
     dispatched_arrays: list[DispatchedArray] = []

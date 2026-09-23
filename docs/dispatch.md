@@ -105,11 +105,11 @@ aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requ
   array 900: 12 capsules requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time
   array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
 
-  logs, manifests and scripts: processing/logs/dandicompute-dispatch-aind-ephys
+  logs, manifests and scripts: processing/derivatives/logs/dandicompute-dispatch-aind-ephys
 
 lfp: dispatched 1 capsule as array job 902.
   array 902: 1 capsule requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 4 at a time
-  logs, manifests and scripts: processing/logs/dandicompute-dispatch-lfp
+  logs, manifests and scripts: processing/derivatives/logs/dandicompute-dispatch-lfp
 ```
 
 To dispatch a single pipeline, optionally overriding its configured limit for that invocation:
@@ -124,7 +124,7 @@ The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline
 
 ## The log directory
 
-`--processing` has no default. Every dispatcher keeps its record in one central place under it, `logs/{job name}/`. So `aind+ephys` records into `logs/dandicompute-dispatch-aind-ephys/`.
+`--processing` has no default. Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
 
 Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}`. For resource group `n` it writes:
 
@@ -154,6 +154,6 @@ dandicompute clean --dispatch ./processing/
 
 A dispatch directory is removed only once both guards pass: its pipeline has no dispatcher left on the cluster, and it is at least `--age` hours old (24 by default). The age floor covers the window between submitting an array and SLURM reporting it.
 
-Both matter, since removing the directory under a live array would pull the working tree out from under its running tasks. Anything in the processing directory that is not a dispatch directory is left alone. That includes the central `logs/` directory, so the manifests, scripts and array output of a cleaned dispatch are kept.
+Both matter, since removing the directory under a live array would pull the working tree out from under its running tasks. Anything in the processing directory that is not a dispatch directory is left alone. That includes the central `derivatives/logs/` directory, so the manifests, scripts and array output of a cleaned dispatch are kept.
 
 `clean` still takes `--directory` for a work directory, and the two can be given together.

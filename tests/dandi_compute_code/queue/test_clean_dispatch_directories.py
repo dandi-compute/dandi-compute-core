@@ -150,7 +150,7 @@ def test_clean_raises_for_a_missing_processing_directory(tmp_path: pathlib.Path)
 def test_clean_keeps_the_central_log_directory(processing_directory: pathlib.Path) -> None:
     """Manifests, scripts and array output are the record of past dispatches, so they outlive cleaning."""
     directory = _make_dispatch_directory(processing_directory=processing_directory)
-    pipeline_log_directory = processing_directory / "logs" / "dandicompute-dispatch-lfp"
+    pipeline_log_directory = processing_directory / "derivatives" / "logs" / "dandicompute-dispatch-lfp"
     pipeline_log_directory.mkdir(parents=True)
     manifest_file_path = (
         pipeline_log_directory / f"{directory.name.removeprefix('dandicompute-dispatch-lfp-')}-manifest-1.txt"
