@@ -24,15 +24,32 @@ if ! datalad containers-list | awk '{print $1}' | grep -qx "{{ container_name }}
         --call-fmt 'apptainer exec --cleanenv {img} {cmd}'
 fi
 
+mkdir -p "$(dirname "{{ output_nwb_file_path }}")"
+
 # Run the LFP pipeline inside the container on a local NWB file (the input path
 # is a valid NWB file even though it has no .nwb suffix). The call is wrapped
 # with duct to capture resource usage.
+run_status=0
 duct --output-prefix "{{ log_directory }}/duct_" \
     datalad containers-run \
         --container-name "{{ container_name }}" \
         --message "LFP pipeline on {{ nwb_file_path }}" \
         --input "{{ nwb_file_path }}" \
         --output "{{ output_nwb_file_path }}" \
-        "python -m dandi_compute_code.lfp_pipeline --input '{{ nwb_file_path }}' --output '{{ output_nwb_file_path }}' --params '{{ parameters_key }}'"
+        "python -m dandi_compute_code.lfp_pipeline --input '{{ nwb_file_path }}' --output '{{ output_nwb_file_path }}' --params '{{ parameters_key }}'" \
+    || run_status=$?
+
+# A failed run must not leave a partial output behind, since any file under the capsule's
+# derivatives/ marks it successful. Its logs are uploaded either way, which marks it failed.
+if [ "$run_status" -ne 0 ]; then
+    rm -f "{{ output_nwb_file_path }}"
+fi
+
+cd "{{ dataset_directory }}"
+dandi upload --allow-any-path --validation skip
+
+if [ "$run_status" -ne 0 ]; then
+    exit "$run_status"
+fi
 
 echo "{{ temp_name }}" >> {{ done_tracker_file_path }}
