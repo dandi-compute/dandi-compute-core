@@ -10,10 +10,10 @@ The orchestration side is a light install. It needs Python 3.10 or newer.
 pip install git+https://github.com/dandi-compute/dandi-compute-core
 ```
 
-On the cluster the package is installed from the `code/` checkout inside the base directory (`{base}` below, see [Infrastructure](infrastructure.md)), so that the commit recorded in each capsule's provenance matches what is on disk:
+On the cluster the package is installed from the `dandi-compute-core/` checkout inside the base directory (`{base}` below, see [Infrastructure](infrastructure.md)), so that the commit recorded in each capsule's provenance matches what is on disk:
 
 ```bash
-cd {base}/code
+cd {base}/dandi-compute-core
 git pull
 pip install -e .
 ```

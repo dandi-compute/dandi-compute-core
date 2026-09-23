@@ -4,7 +4,7 @@ The structured base directory every command and API entry point operates on.
 The base directory holds everything this package reads from or writes to on the cluster, under
 a fixed layout.
 
-- ``code/`` is the checkout of this repository.
+- ``dandi-compute-core/`` is the checkout of this repository.
 - ``processing/`` holds temporary working trees, dispatch directories and dispatch records.
 - ``work/`` is the Nextflow work directory.
 - ``aind-ephys-pipeline/`` is the checkout of the AIND ephys pipeline repository.
@@ -21,7 +21,7 @@ _DEFAULT_BASE_DIRECTORY = pathlib.Path("/orcd/data/dandi/001/dandi-compute")
 @beartype.beartype
 def _code_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
     """The checkout of this repository under *base_directory*."""
-    return base_directory / "code"
+    return base_directory / "dandi-compute-core"
 
 
 @beartype.beartype
