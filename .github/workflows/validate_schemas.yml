@@ -10,8 +10,10 @@ on:
 permissions:
   contents: read
 
+# When called via workflow_call, github.workflow resolves to the caller's name, so the
+# suffix keeps this group distinct from the caller's own group (identical groups deadlock).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-validate-schemas-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
