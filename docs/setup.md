@@ -30,10 +30,6 @@ For development, the `dev`, `docs` and `schemas` dependency groups are available
 pip install -e . --group all
 ```
 
-## Credentials
-
-Every command that writes to the archive needs `DANDI_API_KEY`, which authenticates uploads, deletions and moves on the DANDI Archive. A command that needs it and finds it unset exits with an error before touching anything.
-
 ## The command line
 
 Everything is driven by the `dandicompute` command. Each command is a thin wrapper around a function in the public API, so see the [API reference](api/index.rst) for what each one does, and run any command with `--help` for its options.

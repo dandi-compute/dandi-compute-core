@@ -55,22 +55,16 @@ LFP capsules are currently formed one level shallower, under `derivatives/dandis
 The directory name is the job ID, `job-{YYMMDD}{hash}`.
 
 - `YYMMDD` is the UTC date the capsule was prepared. It makes the name readable and separates re-attempts of one job across days.
-- `hash` is the first six hex characters of an MD5 over the fields that identify the job.
+- `hash` is the first six hex characters of an MD5 over the fields that identify the job. Those are the Dandiset ID, the asset's path and content ID, the pipeline and its version, and the parameters and config IDs.
 
-```mermaid
-flowchart LR
-    D["dandiset_id"] --> J
-    P["within_dandiset_path"] --> J
-    PL["pipeline"] --> J
-    V["pipeline version"] --> J
-    PA["params ID<br/>(MD5[:7] of the file)"] --> J
-    C["config ID<br/>(MD5[:7], empty for LFP)"] --> J
-    CID["content_id"] --> J
-    J["'|'.join(...)"] --> M["md5(...)[:6]"]
-    DATE["today (UTC)"] --> ID
-    M --> ID["job-YYMMDD + hash"]
-    CB["codebase version"] -. "deliberately excluded" .-x J
-```
+For example:
+
+| Job ID | What it is |
+|---|---|
+| `job-260916a1b2c3` | A job first prepared on 16 September 2026 |
+| `job-260920a1b2c3` | The same job prepared again on 20 September, after the first capsule was archived |
+| `job-260916a1b2c3-2` | The same job prepared a second time on 16 September |
+| `job-2609167f04d9` | A different job prepared the same day, for example the same asset with other parameters |
 
 The codebase version is left out on purpose. A job is the same logical job whichever release of this package formed it. That is how the queue decides a capsule already exists and must not be formed again.
 
