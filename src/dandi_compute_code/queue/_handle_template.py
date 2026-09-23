@@ -10,6 +10,7 @@ from ._globals import _RAW_ARRAY_DISPATCH_TEMPLATE_FILE_PATH
 def generate_array_dispatch_script(
     script_file_path: pathlib.Path,
     job_name: str,
+    log_file_path: str,
     dispatch_directory: str,
     memory: str,
     cpus_per_task: int,
@@ -31,9 +32,11 @@ def generate_array_dispatch_script(
         Where to write the dispatch script.
     job_name : str
         The SLURM job name identifying this pipeline's dispatcher.
+    log_file_path : str
+        The ``--output`` path of each array task, in the pipeline's central log
+        directory. It carries the ``%A_%a`` patterns SLURM fills in per task.
     dispatch_directory : str
-        Directory holding the manifest, the array logs, and each task's working
-        tree.
+        Directory holding each task's working tree.
     memory : str
         Memory requested per array task, taken from the pipeline's submission
         template so that it matches what the capsule asks for.
@@ -58,6 +61,7 @@ def generate_array_dispatch_script(
     template = jinja2.Template(source=raw_template)
     script = template.render(
         job_name=job_name,
+        log_file_path=log_file_path,
         dispatch_directory=dispatch_directory,
         memory=memory,
         cpus_per_task=cpus_per_task,

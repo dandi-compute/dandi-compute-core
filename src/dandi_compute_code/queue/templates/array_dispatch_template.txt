@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name={{ job_name }}
-#SBATCH --output={{ dispatch_directory }}/dispatch-%A_%a.log
+#SBATCH --output={{ log_file_path }}
 #SBATCH --mem={{ memory }}
 #SBATCH --cpus-per-task={{ cpus_per_task }}
 #SBATCH --partition={{ partition }}

@@ -58,12 +58,12 @@ def _dispatch(
 
 def _script(result, index: int = 1) -> str:
     """The generated dispatch script for one resource group."""
-    return (result.dispatch_directory / f"dispatch-{index}.sh").read_text()
+    return result.arrays[index - 1].script_file_path.read_text()
 
 
 def _manifest(result, index: int = 1) -> list[str]:
     """The manifest lines for one resource group."""
-    return (result.dispatch_directory / f"manifest-{index}.txt").read_text().splitlines()
+    return result.arrays[index - 1].manifest_file_path.read_text().splitlines()
 
 
 @pytest.mark.ai_generated
@@ -216,7 +216,7 @@ def test_dispatch_submits_the_generated_script_with_sbatch(processing_directory:
         )
 
     sbatch_command = mock_run.call_args_list[-1].args[0]
-    assert sbatch_command == ["sbatch", str((result.dispatch_directory / "dispatch-1.sh").absolute())]
+    assert sbatch_command == ["sbatch", str(result.arrays[0].script_file_path.absolute())]
 
 
 @pytest.mark.ai_generated
@@ -491,6 +491,7 @@ def test_dispatch_summary_lines_name_each_arrays_group(processing_directory: pat
     assert lines[2] == (
         "  array 4242: 1 capsule requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time"
     )
+    assert lines[3] == f"  logs, manifests and scripts: {result.log_directory}"
 
 
 @pytest.mark.ai_generated
@@ -500,3 +501,52 @@ def test_dispatch_summary_lines_are_a_single_line_when_nothing_was_dispatched(st
     result = DispatchResult(pipeline="lfp", status=status)
 
     assert len(result.summary_lines()) == 1
+
+
+@pytest.mark.ai_generated
+def test_dispatch_records_manifests_and_scripts_in_the_central_log_directory(
+    processing_directory: pathlib.Path,
+) -> None:
+    """Every minted manifest and generated script is kept under the pipeline's central log directory."""
+    capsule_resources = {_AIND_CODE_DIR_PATHS[0]: _LIGHT, _AIND_CODE_DIR_PATHS[1]: _HEAVY}
+
+    result = _dispatch(
+        processing_directory=processing_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS[:2],
+        capsule_resources=capsule_resources,
+    )
+
+    expected_log_directory = processing_directory / "logs" / "dandicompute-dispatch-aind-ephys"
+    assert result.log_directory == expected_log_directory
+    timestamp = result.dispatch_directory.name.removeprefix("dandicompute-dispatch-aind-ephys-")
+    recorded_file_names = sorted(path.name for path in expected_log_directory.iterdir())
+    assert recorded_file_names == [
+        f"{timestamp}-dispatch-1.sh",
+        f"{timestamp}-dispatch-2.sh",
+        f"{timestamp}-manifest-1.txt",
+        f"{timestamp}-manifest-2.txt",
+    ]
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_writes_its_output_to_the_central_log_directory(
+    processing_directory: pathlib.Path,
+) -> None:
+    """Array task output goes to the central log directory, named after the dispatch and its group."""
+    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    timestamp = result.dispatch_directory.name.removeprefix("dandicompute-dispatch-aind-ephys-")
+    expected_log_file_path = result.log_directory.absolute() / f"{timestamp}-dispatch-1-%A_%a.log"
+    script = _script(result)
+    assert f"#SBATCH --output={expected_log_file_path}" in script
+    assert f'MANIFEST_FILE_PATH="{result.arrays[0].manifest_file_path.absolute()}"' in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_leaves_only_working_trees_to_the_dispatch_directory(processing_directory: pathlib.Path) -> None:
+    """Nothing worth keeping is written to the dispatch directory, since cleaning removes it."""
+    result = _dispatch(processing_directory=processing_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    assert list(result.dispatch_directory.iterdir()) == []
+    script = _script(result)
+    assert f'TASK_DIRECTORY="{result.dispatch_directory.absolute()}/task-' in script

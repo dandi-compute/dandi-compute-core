@@ -6,8 +6,8 @@ import pytest
 
 from dandi_compute_code.queue import clean_dispatch_directories
 
-# A dispatch directory holds the manifest its array tasks read at startup, so removing one
-# while its array is still working would strand every task that had not started yet. The
+# A dispatch directory holds the working trees of its array tasks, so removing one while its
+# array is still working would pull them out from under every running task. The
 # `squeue` call that rules that out cannot run in CI and is mocked here.
 
 
@@ -21,7 +21,6 @@ def _make_dispatch_directory(
     formed_at = datetime.datetime.now() - datetime.timedelta(hours=age_hours)
     directory = processing_directory / f"{job_name}-{formed_at.strftime('%Y%m%d-%H%M%S')}"
     (directory / "task-1-1").mkdir(parents=True)
-    (directory / "manifest-1.txt").write_text("some/capsule/code\n")
     return directory
 
 
@@ -145,3 +144,21 @@ def test_clean_raises_for_a_missing_processing_directory(tmp_path: pathlib.Path)
     """A processing directory that is not there is an error rather than a silent no-op."""
     with pytest.raises(NotADirectoryError, match="does not exist or is not a directory"):
         clean_dispatch_directories(processing_directory=tmp_path / "nope")
+
+
+@pytest.mark.ai_generated
+def test_clean_keeps_the_central_log_directory(processing_directory: pathlib.Path) -> None:
+    """Manifests, scripts and array output are the record of past dispatches, so they outlive cleaning."""
+    directory = _make_dispatch_directory(processing_directory=processing_directory)
+    pipeline_log_directory = processing_directory / "logs" / "dandicompute-dispatch-lfp"
+    pipeline_log_directory.mkdir(parents=True)
+    manifest_file_path = (
+        pipeline_log_directory / f"{directory.name.removeprefix('dandicompute-dispatch-lfp-')}-manifest-1.txt"
+    )
+    manifest_file_path.write_text("some/capsule/code\n")
+
+    with mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_mock_squeue()):
+        removed = clean_dispatch_directories(processing_directory=processing_directory)
+
+    assert removed == [directory]
+    assert manifest_file_path.read_text() == "some/capsule/code\n"

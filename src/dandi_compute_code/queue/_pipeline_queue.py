@@ -712,10 +712,10 @@ class PipelineQueue:
         Parameters
         ----------
         processing_directory : pathlib.Path
-            Directory the per-pipeline dispatch directories are created in. Each
-            holds a manifest, a dispatch script and the array's logs, so it has
-            to stay readable from the compute nodes for as long as the array
-            lives.
+            Directory the per-pipeline dispatch directories are created in,
+            along with the central ``logs/`` directory that keeps each
+            dispatcher's manifests, scripts and output. Both have to stay
+            readable from the compute nodes for as long as an array lives.
         only_pipeline : str, optional
             Dispatch only this pipeline instead of every configured one.
         max_concurrent : int, optional

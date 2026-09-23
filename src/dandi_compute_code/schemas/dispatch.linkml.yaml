@@ -124,6 +124,20 @@ classes:
         minimum_value: 1
         required: true
 
+      manifest_file_path:
+        description: >-
+          The manifest minted for this array, listing one capsule per line, as recorded in
+          the pipeline's central log directory.
+        range: string
+        required: true
+
+      script_file_path:
+        description: >-
+          The array script generated for this array and handed to `sbatch`, as recorded in
+          the pipeline's central log directory.
+        range: string
+        required: true
+
   DispatchResult:
     description: The outcome of one pipeline's dispatch attempt.
     attributes:
@@ -158,7 +172,14 @@ classes:
 
       dispatch_directory:
         description: >-
-          Where this dispatch's manifest and generated scripts were written. Null when
+          The working directory holding this dispatch's array task working trees. Null when
           nothing was submitted.
+        range: string
+        required: false
+
+      log_directory:
+        description: >-
+          The pipeline's central log directory, where this dispatch's manifests, generated
+          scripts and array task output were recorded. Null when nothing was submitted.
         range: string
         required: false

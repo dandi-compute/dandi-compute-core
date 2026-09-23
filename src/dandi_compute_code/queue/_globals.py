@@ -29,6 +29,9 @@ _SBATCH_DIRECTIVE_RE = re.compile(r"^#SBATCH\s+--(?P<name>[A-Za-z-]+)(?:=|\s+)(?
 _DISPATCH_DIRECTORY_RE = re.compile(rf"^(?P<job_name>{_DISPATCH_JOB_NAME_PREFIX}-.+)-(?P<timestamp>\d{{8}}-\d{{6}})$")
 #: How the timestamp in a dispatch directory name is written.
 _DISPATCH_DIRECTORY_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
+#: Directory under the processing directory that holds every dispatcher's logs, manifests and
+#: scripts. Its name does not match a dispatch directory, so cleaning never removes it.
+_DISPATCH_LOG_DIRECTORY_NAME = "logs"
 # Packaged pipeline configuration, committed directly to this repo. This is the canonical
 # source of truth for the queue's pipeline definitions. There is no local override for this
 # file; see ``_load_pipeline_config``.
