@@ -30,7 +30,7 @@ flowchart TD
 
 ### "`DANDI_API_KEY` environment variable is not set"
 
-The command writes to the archive and needs credentials. Export `DANDI_API_KEY` before running, and set them explicitly in any crontab, since `cron` does not source a login profile.
+The command writes to the archive and needs credentials. Export `DANDI_API_KEY` before running.
 
 ### `queue process` reports `dispatcher-active`
 

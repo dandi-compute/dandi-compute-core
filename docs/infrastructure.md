@@ -7,7 +7,6 @@ DANDI Compute runs on [MIT Engaging](https://orcd-docs.mit.edu), the MIT Office 
 ```mermaid
 flowchart TB
     subgraph login["Login node"]
-        CRON["cron"]
         CLI["dandicompute"]
     end
 
@@ -33,7 +32,6 @@ flowchart TB
         BLOB2["002/s3dandiarchive/blobs"]
     end
 
-    CRON --> CLI
     CLI -- "sbatch --array" --> AARR & LARR
     AARR -- "nextflow run" --> NF & KS
     AARR & LARR & NF & KS --- storage

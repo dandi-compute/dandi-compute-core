@@ -1,6 +1,6 @@
 # Set up
 
-DANDI Compute runs passively. Once it is installed and scheduled, it finds qualifying assets, forms and dispatches job capsules, and reports on them without anyone driving it. This page covers getting it to that point, and the commands for stepping in by hand when something needs attention.
+DANDI Compute runs passively. Once it is installed and running, it finds qualifying assets, forms and dispatches job capsules, and reports on them without anyone driving it. This page covers installing it, and the commands for stepping in by hand when something needs attention.
 
 ## Installation
 
@@ -34,66 +34,13 @@ pip install -e . --group all
 
 Every command that writes to the archive needs `DANDI_API_KEY`, which authenticates uploads, deletions and moves on the DANDI Archive. A command that needs it and finds it unset exits with an error before touching anything.
 
-## Running on a schedule
-
-This is the whole of normal operation. A handful of `dandicompute` commands run from `cron` on a login node, and everything else follows from them. The schedule below is an example of how the commands fit together, not a copy of the live crontab.
-
-```text
-# m    h  dom mon dow  command
-*/15   *  *   *   *    dandicompute queue pending --silent && dandicompute queue process --silent
-0      */6 *  *   *    dandicompute jobs create --limit 50 --silent
-30     *  *   *   *    dandicompute queue refresh --silent
-0      3  *   *   *    dandicompute queue stats --silent && dandicompute issues summarize --silent
-0      4  *   *   *    dandicompute clean --dispatch --silent
-```
-
-`cron` does not read a login shell's profile, so `DANDI_API_KEY` and the environment holding `dandicompute` have to be set up in the crontab itself or in a wrapper script.
-
 ## The command line
 
-Everything is driven by the `dandicompute` command. Every command that reads or writes the cluster's working tree takes `--base`, which defaults to `/orcd/data/dandi/001/dandi-compute` (see [Infrastructure](infrastructure.md)). Most commands take `--silent` to suppress log output and `--test` to keep their temporary working trees on disk for debugging.
-
-```mermaid
-flowchart TD
-    root["dandicompute"]
-    root --> prepare["prepare"]
-    prepare --> paind["aind"]
-    root --> submit["submit"]
-    root --> jobs["jobs"]
-    jobs --> jcreate["create"]
-    root --> queue["queue"]
-    queue --> qpending["pending"]
-    queue --> qprocess["process"]
-    queue --> qrefresh["refresh"]
-    queue --> qstats["stats"]
-    queue --> qclean["clean"]
-    root --> issues["issues"]
-    issues --> idump["dump"]
-    issues --> isum["summarize"]
-    root --> archive["archive"]
-    root --> clean["clean"]
-```
-
-| Command | What it does | Writes to |
-|---|---|---|
-| `prepare aind` | Forms one AIND ephys capsule for one asset, optionally submitting it at once. | `001697` |
-| `submit --script PATH` | Submits a prepared capsule's `submit.sh` directly with `sbatch`, bypassing the queue. | SLURM |
-| `jobs create` | Forms a capsule for every qualifying asset and configured parameter set that does not have one yet. | `001697` |
-| `queue pending` | Exits 0 when any capsule awaits submission and 1 when none does. | Nothing |
-| `queue process` | Hands every pending capsule to its pipeline's SLURM array dispatcher. | SLURM, `processing/` |
-| `queue refresh` | Rebuilds `derivatives/jobs.tsv` and `derivatives/paths.tsv` in both the capsules and archive Dandisets. | `001697`, `001873` |
-| `queue stats` | Aggregates wall time per Nextflow step across all capsules into `derivatives/queue_stats.json`. | `001697` |
-| `queue clean` | Deletes every capsule that was prepared but never claimed by a dispatcher. | `001697` |
-| `issues dump` | Scans every capsule's Nextflow and SLURM logs for error lines into `derivatives/issues_dump.json`. | `001697` |
-| `issues summarize` | Runs `issues dump`, then ranks the error lines by frequency into `derivatives/issues_summary.json`. | `001697` |
-| `archive` | Moves one capsule (`--job`) or every capsule with a status (`--status`) to the failed runs archive. | `001697`, `001873` |
-| `clean` | Empties `work/` (`--work`), removes finished dispatch directories (`--dispatch`), or both. | Base directory |
-
-Run any command with `--help` for its full list of options.
+Everything is driven by the `dandicompute` command. Each command is a thin wrapper around a function in the public API, so see the [API reference](api/index.rst) for what each one does, and run any command with `--help` for its options.
 
 ## Stepping in by hand
 
-The schedule keeps everything moving on its own. These commands are for debugging a single asset, rolling out a change, or cleaning up after failures.
+Normal operation needs none of these. These commands are for debugging a single asset, rolling out a change, or cleaning up after failures.
 
 ### Process one asset by hand
 

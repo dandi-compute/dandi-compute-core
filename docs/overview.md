@@ -17,7 +17,7 @@ flowchart TB
 
     subgraph engaging["MIT Engaging"]
         direction LR
-        CLI["dandicompute<br/>login node, cron"]
+        CLI["dandicompute<br/>login node"]
         ARR["Array dispatcher<br/>one per pipeline"]
         TASK["Array task<br/>runs a capsule's submit.sh"]
         BLOBS[("Local blob mirror<br/>/orcd/data/dandi/00X")]
@@ -67,23 +67,22 @@ Pipelines are listed in `src/dandi_compute_code/queue/pipeline_configs.json`, al
 
 ## The main loop
 
-Automated operation is a small number of commands run on a schedule.
+Normal operation comes down to a few `dandicompute` commands, each doing one part of the loop.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Cron as cron (login node)
-    participant CLI as dandicompute
+    participant CLI as dandicompute (login node)
     participant Cache as dandi-cache
     participant DANDI as DANDI Archive (001697)
     participant SLURM
 
-    Cron->>CLI: jobs create
+    Note over CLI: jobs create
     CLI->>Cache: fetch qualifying content IDs
     CLI->>DANDI: read assets.jsonld (existing capsules)
     CLI->>DANDI: upload new capsules (code/, logs/, dataset_description.json)
 
-    Cron->>CLI: queue pending && queue process
+    Note over CLI: queue pending && queue process
     CLI->>DANDI: read assets.jsonld (capsules with no submitted marker)
     CLI->>DANDI: read each pending code/submit.sh (resource requests)
     CLI->>SLURM: sbatch one array per pipeline and resource group
@@ -93,7 +92,7 @@ sequenceDiagram
     SLURM->>SLURM: task runs submit.sh
     SLURM->>DANDI: submit.sh uploads outputs and logs (AIND runs dandi upload)
 
-    Cron->>CLI: queue refresh
+    Note over CLI: queue refresh
     CLI->>DANDI: rewrite derivatives/jobs.tsv and paths.tsv
 ```
 
