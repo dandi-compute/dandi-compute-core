@@ -4,7 +4,7 @@ from datetime import datetime
 from unittest import mock
 
 import pytest
-from testing_utilities import create_job_capsule_directory
+from testing_utilities import job_capsule_files, serve_remote_dandiset
 
 from dandi_compute_code.queue import PipelineQueue
 
@@ -29,15 +29,15 @@ def test_aggregate_queue_statistics_writes_queue_stats_json(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, timeline_two_steps: str
 ) -> None:
     """aggregate_statistics writes queue_stats.json with byte and timeline aggregates."""
-    dandiset_dir = base_directory / "dandi" / _JOB_CAPSULES_DANDISET_ID
-
     # sub-successful is the only entry with both output and a known source-asset size.
-    capsule_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-successful"), with_logs=True
-    )
-    (capsule_dir / "logs" / "timeline.html").write_text(timeline_two_steps)
+    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    files = job_capsule_files(entry=entry, with_logs=True)
+    files[f"{entry.capsule_path()}/logs/timeline.html"] = timeline_two_steps
 
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
+    with (
+        serve_remote_dandiset(files),
+        mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file,
+    ):
         stats = example_pipeline_queue.aggregate_statistics(base_directory=base_directory)
 
     assert stats["state_entry_count"] == len(example_pipeline_queue)
@@ -59,14 +59,11 @@ def test_aggregate_queue_statistics_skips_invalid_timeline_html(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path
 ) -> None:
     """aggregate_statistics ignores timeline files with malformed embedded JSON."""
-    dandiset_dir = base_directory / "dandi" / _JOB_CAPSULES_DANDISET_ID
+    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    files = job_capsule_files(entry=entry, with_logs=True)
+    files[f"{entry.capsule_path()}/logs/timeline.html"] = "<script>window.data = {invalid json};</script>"
 
-    capsule_dir = create_job_capsule_directory(
-        base_dir=dandiset_dir, entry=example_pipeline_queue.entry_for(dandi_path="sub-successful"), with_logs=True
-    )
-    (capsule_dir / "logs" / "timeline.html").write_text("<script>window.data = {invalid json};</script>")
-
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file"):
+    with serve_remote_dandiset(files), mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file"):
         stats = example_pipeline_queue.aggregate_statistics(base_directory=base_directory)
 
     assert stats["timeline_files_processed"] == 0
@@ -77,25 +74,13 @@ def test_aggregate_queue_statistics_skips_invalid_timeline_html(
 def test_aggregate_queue_statistics_found_timeline_via_fallback_capsule_resolution(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, timeline_one_step: str
 ) -> None:
-    """aggregate_statistics finds timeline files when state dandi_path differs from the on-disk path."""
-    dandiset_dir = base_directory / "dandi" / _JOB_CAPSULES_DANDISET_ID
-
-    # The "sourcedata" entry's on-disk capsule lives under sub-mouse01, so its timeline
+    """aggregate_statistics finds timeline files when state dandi_path differs from the remote path."""
+    # The "sourcedata" entry's remote capsule lives under sub-mouse01, so its timeline
     # must be located via fallback resolution rather than the recorded dandi_path.
-    capsule_dir = (
-        dandiset_dir
-        / "derivatives"
-        / "dandisets-001"
-        / "dandiset-001849"
-        / "sub-mouse01"
-        / "pipeline-aind+ephys"
-        / "job-240101aa0009"
-    )
-    logs_dir = capsule_dir / "logs"
-    logs_dir.mkdir(parents=True)
-    (logs_dir / "timeline.html").write_text(timeline_one_step)
+    capsule_path = "derivatives/dandisets-001/dandiset-001849/sub-mouse01/pipeline-aind+ephys/job-240101aa0009"
+    files = {f"{capsule_path}/logs/timeline.html": timeline_one_step}
 
-    with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file"):
+    with serve_remote_dandiset(files), mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file"):
         stats = example_pipeline_queue.aggregate_statistics(base_directory=base_directory)
 
     assert stats["timeline_files_processed"] == 1

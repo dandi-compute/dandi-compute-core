@@ -8,7 +8,6 @@ a fixed layout.
 - ``processing/`` holds temporary working trees, dispatch directories and dispatch records.
 - ``work/`` is the Nextflow work directory.
 - ``aind-ephys-pipeline/`` is the checkout of the AIND ephys pipeline repository.
-- ``dandi/{dandiset id}/`` is a local clone of a Dandiset, for the few operations that still walk one.
 """
 
 import pathlib
@@ -41,9 +40,3 @@ def _work_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
 def _aind_pipeline_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
     """The checkout of the AIND ephys pipeline repository under *base_directory*."""
     return base_directory / "aind-ephys-pipeline"
-
-
-@beartype.beartype
-def _dandiset_directory(*, base_directory: pathlib.Path, dandiset_id: str) -> pathlib.Path:
-    """The local clone of Dandiset *dandiset_id* under *base_directory*."""
-    return base_directory / "dandi" / dandiset_id

@@ -29,13 +29,12 @@ The job ID is the only capsule layout this package understands. Capsules prepare
 
 ## The base directory
 
-Every command operates on one structured base directory, passed as `--base`. It defaults to `/orcd/data/dandi/001/dandi-compute` on MIT Engaging. The layout under it is fixed.
+Every command operates on one structured base directory, passed as `--base`. It defaults to `/orcd/data/dandi/001/dandi-compute` on MIT Engaging. The layout under it is fixed. No command reads a local Dandiset clone. Dandisets are always addressed by ID and read from or written to the archive directly.
 
 - `code/` is the checkout of this repository.
 - `processing/` holds temporary working trees, dispatch directories and dispatch records.
 - `work/` is the Nextflow work directory.
 - `aind-ephys-pipeline/` is the checkout of the AIND ephys pipeline repository.
-- `dandi/{dandiset id}/` is a local clone of a Dandiset. Only `queue clean`, `queue stats` and `issues dump`/`summarize` still read one.
 
 ## Manual dispatch commands on MIT Engaging
 

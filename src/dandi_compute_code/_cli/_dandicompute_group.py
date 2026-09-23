@@ -18,8 +18,7 @@ logging.basicConfig(level=logging.INFO)
 _base_option = click.option(
     "--base",
     "base_directory",
-    help="Path to the structured base directory, which holds code/, processing/, work/, "
-    "aind-ephys-pipeline/ and dandi/{dandiset id}/.",
+    help="Path to the structured base directory, which holds code/, processing/, work/ and aind-ephys-pipeline/.",
     required=False,
     type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
     default=_DEFAULT_BASE_DIRECTORY,
@@ -185,7 +184,8 @@ def _prepare_group() -> None:
 @click.option(
     "--dandipath",
     "dandiset_path",
-    help="The local path to the Dandiset data to be processed. Required if --id is not provided (ignored with --test).",
+    help="The path of the asset within its Dandiset on the archive (e.g., 'sub-01/sub-01_ecephys.nwb'). "
+    "Required if --id is not provided (ignored with --test).",
     required=False,
     type=str,
     default=None,
@@ -443,7 +443,6 @@ def _queue_refresh_command(
 
 # dandicompute queue clean [OPTIONS]
 @_queue_group.command(name="clean")
-@_base_option
 @click.option(
     "--silent",
     help="Suppress informational log output.",
@@ -451,16 +450,13 @@ def _queue_refresh_command(
     is_flag=True,
     default=False,
 )
-def _queue_clean_command(
-    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
-    silent: bool = False,
-) -> None:
+def _queue_clean_command(silent: bool = False) -> None:
     """Delete unsubmitted capsules that are no longer present in the queue."""
     _configure_logging(silent=silent)
     _require_dandi_api_key()
 
     state = PipelineQueue.from_dandi()
-    removed = state.clean_unsubmitted_capsules(base_directory=base_directory)
+    removed = state.clean_unsubmitted_capsules()
     if removed:
         if not silent:
             for path in removed:

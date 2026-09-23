@@ -84,7 +84,7 @@ def prepare_aind_ephys_job(
         The Dandiset ID for the data to be processed. Required if `content_id`
         is not provided and will be used to look up the content ID if `content_id` is not provided.
     dandiset_path : str, optional
-        The local path to the Dandiset data to be processed. Required if `content_id
+        The path of the asset within its Dandiset on the archive. Required if `content_id
         is not provided and will be used to look up the content ID if `content_id` is not provided.
     config_key : str
         The short name of the configuration to use.

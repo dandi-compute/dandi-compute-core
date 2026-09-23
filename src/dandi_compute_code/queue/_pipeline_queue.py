@@ -25,7 +25,6 @@ import logging
 import os
 import pathlib
 import random
-import shutil
 import subprocess
 import time
 from collections.abc import Iterator
@@ -47,20 +46,20 @@ from ._job_capsule import (
     _path_field_name,
 )
 from ._queue_utils import (
+    _capsule_log_paths,
     _CapsuleProvenanceCache,
     _collect_job_capsules,
     _duration_string_to_seconds,
     _extract_error_lines,
     _extract_nextflow_timeline_data,
     _finalize_job_capsule_records,
-    _list_capsule_log_directories,
     _load_pipeline_config,
     _order_content_ids_for_uniform_dandiset_sampling,
-    _remove_empty_parents,
+    _read_text_asset_at_path,
     _sort_key,
     _UpstreamMetadataCache,
 )
-from .._base_directory import _DEFAULT_BASE_DIRECTORY, _dandiset_directory
+from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset import move_job_capsule, write_dandiset_file
 from ..dandiset._globals import (
@@ -474,24 +473,24 @@ class PipelineQueue:
         """
         Write aggregate queue statistics JSON into a Dandiset and return the computed payload.
 
-        Nextflow timeline reports are still located by walking the local clone of
-        *dandiset_id* at ``dandi/{dandiset_id}/`` under *base_directory*. The resulting statistics are written to
-        *relative_path* within *dandiset_id* (default ``derivatives/queue_stats.json``) via
-        :func:`~dandi_compute_code.dandiset.write_dandiset_file`, rather than written to local
-        disk.
+        Each capsule's Nextflow timeline report is read straight from *dandiset_id* on the
+        archive, located through its remote ``assets.jsonld``, so no local Dandiset clone is
+        involved. The resulting statistics are written to *relative_path* within *dandiset_id*
+        (default ``derivatives/queue_stats.json``) via
+        :func:`~dandi_compute_code.dandiset.write_dandiset_file`.
 
         Parameters
         ----------
         dandiset_id : str, optional
-            The Dandiset the statistics JSON is written into, whose local clone
-            is walked for Nextflow timeline reports.
+            The Dandiset the Nextflow timeline reports are read from and the
+            statistics JSON is written into.
         relative_path : str, optional
             Path (relative to the Dandiset root) the statistics JSON is written
             to.
         base_directory : pathlib.Path, optional
-            The structured base directory. The Dandiset clone is read from its
-            ``dandi/`` directory and the temporary working tree used to upload
-            the statistics JSON is created in its ``processing/`` directory.
+            The structured base directory. The temporary working tree used to
+            upload the statistics JSON is created in its ``processing/``
+            directory.
         test : bool, optional
             When ``True``, leave the temporary working tree on disk after a
             successful upload for debugging.
@@ -503,14 +502,15 @@ class PipelineQueue:
         """
         job_step_wall_time_seconds: collections.defaultdict[str, float] = collections.defaultdict(float)
         timeline_files_processed = 0
-        dandiset_directory = _dandiset_directory(base_directory=base_directory, dandiset_id=dandiset_id)
+        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
+        asset_paths = set(metadata.path_to_asset_metadata)
         for entry in self.entries:
-            capsule_dir = entry.resolve_capsule_dir(dandiset_directory)
-            timeline_file = capsule_dir / "logs" / "timeline.html"
-            if not timeline_file.is_file():
+            capsule_path = entry.resolve_capsule_path(asset_paths)
+            timeline_html = _read_text_asset_at_path(metadata=metadata, path=f"{capsule_path}/logs/timeline.html")
+            if timeline_html is None:
                 continue
 
-            timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_file.read_text())
+            timeline_data = _extract_nextflow_timeline_data(timeline_html=timeline_html)
             if timeline_data is None:
                 continue
 
@@ -559,62 +559,58 @@ class PipelineQueue:
         )
         return statistics
 
-    def clean_unsubmitted_capsules(
-        self,
-        *,
-        dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-        base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
-    ) -> list[pathlib.Path]:
+    def clean_unsubmitted_capsules(self, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> list[str]:
         """
-        Remove all queued (unsubmitted) capsule directories from the dandiset tree.
+        Delete every queued (unsubmitted) job capsule from a Dandiset on the archive.
 
-        A capsule is *queued* when its directory has a ``code/`` subdirectory but no
-        ``logs/`` or ``derivatives/`` content and no submitted marker. Each matching
-        job capsule directory is deleted from the DANDI archive (via ``dandi delete``)
-        and the local filesystem.
+        A capsule is *queued* when its entry's status is ``"pending"`` and its ``code/``
+        directory carries no submitted marker (``submitted`` or ``submitted_date-*``). Each
+        capsule is resolved against *dandiset_id*'s remote ``assets.jsonld`` and deleted by
+        URL via ``dandi delete``, so no local Dandiset clone is involved.
 
         Parameters
         ----------
         dandiset_id : str, optional
-            The Dandiset whose local clone is used to resolve and delete
-            matching job capsule directories.
-        base_directory : pathlib.Path, optional
-            The structured base directory. The Dandiset clone is read from its
-            ``dandi/`` directory.
+            The Dandiset the capsules are deleted from. Defaults to the job
+            capsules Dandiset.
 
         Returns
         -------
-        list of pathlib.Path
-            Job capsule directory paths that were deleted.
+        list of str
+            Capsule paths (relative to the Dandiset root) that were deleted.
 
         Raises
         ------
         RuntimeError
             If ``DANDI_API_KEY`` is not set or is blank.
+        subprocess.CalledProcessError
+            If ``dandi delete`` fails.
         """
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)
 
-        dandiset_directory = _dandiset_directory(base_directory=base_directory, dandiset_id=dandiset_id)
-        cleanable_capsule_dirs = [
-            capsule_dir
-            for entry in self.entries
-            if (capsule_dir := entry.resolve_unsubmitted_capsule_dir(dandiset_directory)) is not None
-        ]
+        asset_paths = set(load_assets_jsonld_metadata(dandiset_id=dandiset_id).path_to_asset_metadata)
+        removed: list[str] = []
+        for entry in self.with_status("pending"):
+            capsule_path = entry.resolve_capsule_path(asset_paths)
+            capsule_asset_paths = [path for path in asset_paths if path.startswith(f"{capsule_path}/")]
+            if not capsule_asset_paths:
+                continue
 
-        removed: list[pathlib.Path] = []
-        for capsule_dir in cleanable_capsule_dirs:
-            if capsule_dir.is_dir():
-                parent_dir = capsule_dir.parent
-                subprocess.run(
-                    ["dandi", "delete", str(capsule_dir)],
-                    input=b"y\n",
-                    check=True,
-                )
-                shutil.rmtree(capsule_dir)
-                _remove_empty_parents(start=parent_dir, stop=dandiset_directory / "derivatives")
-                removed.append(capsule_dir)
+            submitted_marker_prefixes = (f"{capsule_path}/code/submitted", f"{capsule_path}/code/submitted_date-")
+            if any(
+                path == submitted_marker_prefixes[0] or path.startswith(submitted_marker_prefixes[1])
+                for path in capsule_asset_paths
+            ):
+                continue
+
+            subprocess.run(
+                ["dandi", "delete", f"dandi://dandi/{dandiset_id}/{capsule_path}/"],
+                input=b"y\n",
+                check=True,
+            )
+            removed.append(capsule_path)
 
         return removed
 
@@ -964,30 +960,38 @@ class PipelineQueue:
         """
         Scan nextflow/slurm logs and write per-capsule error lines into a Dandiset.
 
-        Logs are still located by walking the local clone of *dandiset_id* at
-        ``dandi/{dandiset_id}/`` under *base_directory*. The resulting records are written to *relative_path* within
+        Each capsule's ``logs/nextflow.log`` and ``logs/*slurm.log`` are read straight from
+        *dandiset_id* on the archive, located through its remote ``assets.jsonld``, so no
+        local Dandiset clone is involved. The resulting records are written to *relative_path* within
         *dandiset_id* (default ``derivatives/issues_dump.json``) via
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`, rather than written to local
         disk.
         """
-        dandiset_directory = _dandiset_directory(base_directory=base_directory, dandiset_id=dandiset_id)
+        metadata = load_assets_jsonld_metadata(dandiset_id=dandiset_id)
         records: list[dict] = []
-        for logs_dir in _list_capsule_log_directories(dandiset_directory=dandiset_directory):
-            nextflow_log = logs_dir / "nextflow.log"
-            slurm_logs = sorted(path for path in logs_dir.glob("*slurm.log") if path.is_file())
+        for capsule_path, log_paths in _capsule_log_paths(metadata.path_to_asset_metadata).items():
+            nextflow_log_path = f"{capsule_path}/logs/nextflow.log"
+            has_nextflow_log = nextflow_log_path in log_paths
+            nextflow_errors = (
+                _extract_error_lines(_read_text_asset_at_path(metadata=metadata, path=nextflow_log_path) or "")
+                if has_nextflow_log
+                else []
+            )
 
-            nextflow_errors = _extract_error_lines(log_file=nextflow_log)
-            slurm_errors = {log_file.name: _extract_error_lines(log_file=log_file) for log_file in slurm_logs}
-            slurm_errors = {key: value for key, value in slurm_errors.items() if value}
+            slurm_errors: dict[str, list[str]] = {}
+            for log_path in log_paths:
+                if not log_path.endswith("slurm.log"):
+                    continue
+                errors = _extract_error_lines(_read_text_asset_at_path(metadata=metadata, path=log_path) or "")
+                if errors:
+                    slurm_errors[pathlib.PurePosixPath(log_path).name] = errors
             if not nextflow_errors and not slurm_errors:
                 continue
 
             records.append(
                 {
-                    "capsule_path": logs_dir.parent.relative_to(dandiset_directory).as_posix(),
-                    "nextflow_log": (
-                        nextflow_log.relative_to(dandiset_directory).as_posix() if nextflow_log.is_file() else None
-                    ),
+                    "capsule_path": capsule_path,
+                    "nextflow_log": nextflow_log_path if has_nextflow_log else None,
                     "nextflow_errors": nextflow_errors,
                     "slurm_errors": {
                         log_name: errors for log_name, errors in sorted(slurm_errors.items(), key=lambda item: item[0])

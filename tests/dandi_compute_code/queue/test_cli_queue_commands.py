@@ -154,11 +154,9 @@ def test_cli_aind_prepare_passes_config_key(base_directory: pathlib.Path) -> Non
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_clean_calls_helper(base_directory: pathlib.Path) -> None:
+def test_cli_queue_clean_calls_helper() -> None:
     """dandicompute queue clean delegates to PipelineQueue and reports removed paths."""
-    dandiset_dir = base_directory / "dandi" / "001697"
-
-    fake_removed = [dandiset_dir / "derivatives" / "dandiset-000001" / "sub-mouse01" / "capsule-a"]
+    fake_removed = ["derivatives/dandisets-000/dandiset-000001/sub-mouse01/pipeline-test/job-240101aa0001"]
     mock_state = mock.Mock()
     mock_state.clean_unsubmitted_capsules.return_value = fake_removed
     runner = CliRunner()
@@ -166,18 +164,18 @@ def test_cli_queue_clean_calls_helper(base_directory: pathlib.Path) -> None:
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state) as mock_from_dandi:
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "clean", "--base", str(base_directory)],
+            ["queue", "clean"],
             env={"DANDI_API_KEY": "test-key"},
         )
 
     assert result.exit_code == 0, result.output
     mock_from_dandi.assert_called_once_with()
-    mock_state.clean_unsubmitted_capsules.assert_called_once_with(base_directory=base_directory)
+    mock_state.clean_unsubmitted_capsules.assert_called_once_with()
     assert "Cleaned 1 unsubmitted capsule" in result.output
 
 
 @pytest.mark.ai_generated
-def test_cli_queue_clean_reports_nothing_found(base_directory: pathlib.Path) -> None:
+def test_cli_queue_clean_reports_nothing_found() -> None:
     """dandicompute queue clean reports when no unsubmitted capsules are found."""
     mock_state = mock.Mock()
     mock_state.clean_unsubmitted_capsules.return_value = []
@@ -186,7 +184,7 @@ def test_cli_queue_clean_reports_nothing_found(base_directory: pathlib.Path) -> 
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=mock_state):
         result = runner.invoke(
             _dandicompute_group,
-            ["queue", "clean", "--base", str(base_directory)],
+            ["queue", "clean"],
             env={"DANDI_API_KEY": "test-key"},
         )
 

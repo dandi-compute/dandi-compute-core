@@ -17,12 +17,11 @@ from __future__ import annotations
 import concurrent.futures
 import dataclasses
 import logging
-import urllib.error
-import urllib.request
 
 import beartype
 
 from ._globals import _SBATCH_DIRECTIVE_RE
+from ._queue_utils import _read_asset_text
 from ..dandiset._load_assets_jsonld_metadata import AssetsJsonldMetadata, load_assets_jsonld_metadata
 
 _log = logging.getLogger(__name__)
@@ -82,21 +81,6 @@ class CapsuleResources:
             time_limit=directives.get("time", ""),
         )
         return resources
-
-
-@beartype.beartype
-def _read_asset_text(asset: dict[str, object], /) -> str | None:
-    """Download a small text asset from its DANDI blob URL."""
-    content_urls = asset.get("contentUrl")
-    for url in content_urls if isinstance(content_urls, list) else []:
-        if not isinstance(url, str) or "/blobs/" not in url:
-            continue
-        try:
-            with urllib.request.urlopen(url, timeout=30) as response:
-                return response.read().decode("utf-8", errors="replace")
-        except (urllib.error.URLError, TimeoutError, UnicodeDecodeError) as exception:
-            _log.warning("Unable to read a text asset from %s: %s", url, exception)
-    return None
 
 
 @beartype.beartype
