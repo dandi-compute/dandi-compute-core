@@ -11,8 +11,8 @@ _JOB_CAPSULES_DANDISET_ID = "001697"
 
 
 @pytest.mark.ai_generated
-def test_dump_issues_writes_per_capsule_records(tmp_path: pathlib.Path) -> None:
-    dandiset_dir = tmp_path / "dandiset"
+def test_dump_issues_writes_per_capsule_records(base_directory: pathlib.Path) -> None:
+    dandiset_dir = base_directory / "dandi" / _JOB_CAPSULES_DANDISET_ID
     dandiset_dir.mkdir()
 
     write_job_capsule_logs(
@@ -33,7 +33,7 @@ def test_dump_issues_writes_per_capsule_records(tmp_path: pathlib.Path) -> None:
     )
 
     with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
-        records = PipelineQueue.dump_issues(dandiset_directory=dandiset_dir)
+        records = PipelineQueue.dump_issues(base_directory=base_directory)
 
     assert len(records) == 1
     assert records[0]["capsule_path"].endswith("job-240101aa0001")
@@ -50,19 +50,14 @@ def test_dump_issues_writes_per_capsule_records(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
-def test_dump_issues_forwards_dandiset_id_and_relative_path(tmp_path: pathlib.Path) -> None:
-    """dump_issues forwards dandiset_id/relative_path/processing_directory/test to write_dandiset_file."""
-    dandiset_dir = tmp_path / "dandiset"
-    dandiset_dir.mkdir()
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
+def test_dump_issues_forwards_dandiset_id_and_relative_path(base_directory: pathlib.Path) -> None:
+    """dump_issues forwards dandiset_id/relative_path/base_directory/test to write_dandiset_file."""
 
     with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
         PipelineQueue.dump_issues(
-            dandiset_directory=dandiset_dir,
             dandiset_id="000123",
             relative_path="derivatives/custom_dump.json",
-            processing_directory=processing_dir,
+            base_directory=base_directory,
             test=True,
         )
 
@@ -70,14 +65,14 @@ def test_dump_issues_forwards_dandiset_id_and_relative_path(tmp_path: pathlib.Pa
         dandiset_id="000123",
         relative_path="derivatives/custom_dump.json",
         content=mock.ANY,
-        processing_directory=processing_dir,
+        base_directory=base_directory,
         test=True,
     )
 
 
 @pytest.mark.ai_generated
-def test_summarize_issues_writes_descending_frequency(tmp_path: pathlib.Path) -> None:
-    dandiset_dir = tmp_path / "dandiset"
+def test_summarize_issues_writes_descending_frequency(base_directory: pathlib.Path) -> None:
+    dandiset_dir = base_directory / "dandi" / _JOB_CAPSULES_DANDISET_ID
     dandiset_dir.mkdir()
 
     write_job_capsule_logs(
@@ -98,7 +93,7 @@ def test_summarize_issues_writes_descending_frequency(tmp_path: pathlib.Path) ->
     )
 
     with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
-        summary = PipelineQueue.summarize_issues(dandiset_directory=dandiset_dir)
+        summary = PipelineQueue.summarize_issues(base_directory=base_directory)
 
     assert summary == {"3": ["error: common failure"], "1": ["error: unique failure"]}
 
@@ -117,23 +112,18 @@ def test_summarize_issues_writes_descending_frequency(tmp_path: pathlib.Path) ->
 
 
 @pytest.mark.ai_generated
-def test_summarize_issues_forwards_dandiset_id_to_dump_and_summary(tmp_path: pathlib.Path) -> None:
-    """summarize_issues forwards dandiset_id/processing_directory/test to both writes."""
-    dandiset_dir = tmp_path / "dandiset"
-    dandiset_dir.mkdir()
-    processing_dir = tmp_path / "processing"
-    processing_dir.mkdir()
+def test_summarize_issues_forwards_dandiset_id_to_dump_and_summary(base_directory: pathlib.Path) -> None:
+    """summarize_issues forwards dandiset_id/base_directory/test to both writes."""
 
     with mock.patch("dandi_compute_code.queue._pipeline_queue.write_dandiset_file") as mock_write_file:
         PipelineQueue.summarize_issues(
-            dandiset_directory=dandiset_dir,
             dandiset_id="000123",
-            processing_directory=processing_dir,
+            base_directory=base_directory,
             test=True,
         )
 
     assert mock_write_file.call_count == 2
     for call in mock_write_file.call_args_list:
         assert call.kwargs["dandiset_id"] == "000123"
-        assert call.kwargs["processing_directory"] == processing_dir
+        assert call.kwargs["base_directory"] == base_directory
         assert call.kwargs["test"] is True

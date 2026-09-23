@@ -6,6 +6,7 @@ import click
 
 from ._clean_work_directory import clean_work_directory
 from ._styled_echo import _styled_echo
+from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
@@ -13,6 +14,17 @@ from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_
 from ..queue import TEST_QUEUE_CONTENT_ID, PipelineQueue, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
+
+_base_option = click.option(
+    "--base",
+    "base_directory",
+    help="Path to the structured base directory, which holds code/, processing/, work/, "
+    "aind-ephys-pipeline/ and dandi/{dandiset id}/.",
+    required=False,
+    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
+    default=_DEFAULT_BASE_DIRECTORY,
+    show_default=True,
+)
 
 
 def _require_dandi_api_key() -> None:
@@ -51,21 +63,22 @@ def _dandicompute_group():
 
 # dandicompute clean [OPTIONS]
 @_dandicompute_group.command(name="clean")
+@_base_option
 @click.option(
-    "--directory",
-    "directory",
-    help="Path to the work directory to clean (all contents except 'apptainer_cache' will be deleted).",
+    "--work",
+    "work",
+    help="Clean the base directory's work/ (all contents except 'apptainer_cache' will be deleted).",
     required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
+    is_flag=True,
+    default=False,
 )
 @click.option(
     "--dispatch",
-    "dispatch_directory",
-    help="Path to the processing directory whose finished dispatch directories should be removed.",
+    "dispatch",
+    help="Remove finished dispatch directories from the base directory's processing/.",
     required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
+    is_flag=True,
+    default=False,
 )
 @click.option(
     "--age",
@@ -84,25 +97,26 @@ def _dandicompute_group():
     default=False,
 )
 def _clean_command(
-    directory: pathlib.Path | None = None,
-    dispatch_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
+    work: bool = False,
+    dispatch: bool = False,
     minimum_age_hours: float = 24.0,
     silent: bool = False,
 ) -> None:
-    """Clean a work directory, finished dispatch directories, or both."""
-    if directory is None and dispatch_directory is None:
-        raise click.UsageError("Nothing to clean. Pass --directory, --dispatch, or both.")
+    """Clean the work directory, finished dispatch directories, or both."""
+    if not work and not dispatch:
+        raise click.UsageError("Nothing to clean. Pass --work, --dispatch, or both.")
 
     _configure_logging(silent=silent)
 
-    if directory is not None:
-        clean_work_directory(directory=directory)
+    if work:
+        clean_work_directory(base_directory)
         if not silent:
             _styled_echo(text="\nWork directory cleaned!", color="green")
 
-    if dispatch_directory is not None:
+    if dispatch:
         removed = clean_dispatch_directories(
-            processing_directory=dispatch_directory,
+            base_directory=base_directory,
             minimum_age_hours=minimum_age_hours,
         )
         if silent:
@@ -184,14 +198,7 @@ def _prepare_group() -> None:
     type=str,
     default="default",
 )
-@click.option(
-    "--pipeline",
-    "pipeline_directory",
-    help="Local path to the AIND pipeline repository.",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--version",
     "pipeline_version",
@@ -229,7 +236,7 @@ def _prepare_aind_command(
     dandiset_id: str | None = None,
     dandiset_path: str | None = None,
     config_key: str = "default",
-    pipeline_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     parameters_key: str = "default",
     submit: bool = False,
     silent: bool = False,
@@ -242,7 +249,7 @@ def _prepare_aind_command(
     if test:
         PipelineQueue.create_job_capsules(
             content_ids=[TEST_QUEUE_CONTENT_ID],
-            pipeline_directory=pipeline_directory,
+            base_directory=base_directory,
             config_key=config_key,
         )
         return
@@ -255,7 +262,7 @@ def _prepare_aind_command(
         dandiset_id=dandiset_id,
         dandiset_path=dandiset_path,
         config_key=config_key,
-        pipeline_directory=pipeline_directory,
+        base_directory=base_directory,
         pipeline_version=pipeline_version,
         parameters_key=parameters_key,
         silent=silent,
@@ -293,6 +300,7 @@ def _jobs_group() -> None:
 
 # dandicompute jobs create [OPTIONS]
 @_jobs_group.command(name="create")
+@_base_option
 @click.option(
     "--pipeline",
     "only_pipeline",
@@ -335,6 +343,7 @@ def _jobs_group() -> None:
     default=False,
 )
 def _jobs_create_command(
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
     config_key: str = "default",
     limit: int | None = None,
@@ -350,6 +359,7 @@ def _jobs_create_command(
         limit=limit,
         only_pipeline=only_pipeline,
         force_latest_versions=force_latest_versions,
+        base_directory=base_directory,
     )
     if not silent:
         noun = "job capsule" if created_count == 1 else "job capsules"
@@ -383,15 +393,7 @@ def _queue_group() -> None:
     default=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
     show_default=True,
 )
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Directory for the temporary working trees used to write each jobs.tsv and paths.tsv "
-    "(defaults to the system temporary location).",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--test",
     "test",
@@ -410,7 +412,7 @@ def _queue_group() -> None:
 def _queue_refresh_command(
     dandiset_id: str,
     archive_dandiset_id: str,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
@@ -429,7 +431,7 @@ def _queue_refresh_command(
     for target_dandiset_id in (dandiset_id, archive_dandiset_id):
         PipelineQueue.write_dandiset_jobs_table(
             dandiset_id=target_dandiset_id,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
         if not silent:
@@ -441,13 +443,7 @@ def _queue_refresh_command(
 
 # dandicompute queue clean [OPTIONS]
 @_queue_group.command(name="clean")
-@click.option(
-    "--dandiset",
-    "dandiset_directory",
-    help="Path to a local clone of the dandiset repository to scan for queued capsules.",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-)
+@_base_option
 @click.option(
     "--silent",
     help="Suppress informational log output.",
@@ -456,7 +452,7 @@ def _queue_refresh_command(
     default=False,
 )
 def _queue_clean_command(
-    dandiset_directory: pathlib.Path,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     silent: bool = False,
 ) -> None:
     """Delete unsubmitted capsules that are no longer present in the queue."""
@@ -464,7 +460,7 @@ def _queue_clean_command(
     _require_dandi_api_key()
 
     state = PipelineQueue.from_dandi()
-    removed = state.clean_unsubmitted_capsules(dandiset_directory=dandiset_directory)
+    removed = state.clean_unsubmitted_capsules(base_directory=base_directory)
     if removed:
         if not silent:
             for path in removed:
@@ -478,13 +474,6 @@ def _queue_clean_command(
 # dandicompute queue stats [OPTIONS]
 @_queue_group.command(name="stats")
 @click.option(
-    "--dandiset",
-    "dandiset_directory",
-    help="Path to a local dandiset clone used to locate Nextflow timeline reports.",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-)
-@click.option(
     "--dandiset-id",
     "dandiset_id",
     help="Dandiset ID the aggregate statistics JSON is written into.",
@@ -493,15 +482,7 @@ def _queue_clean_command(
     default=_JOB_CAPSULES_DANDISET_ID,
     show_default=True,
 )
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Directory for the temporary working tree used to write the statistics JSON "
-    "(defaults to the system temporary location).",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--test",
     "test",
@@ -518,9 +499,8 @@ def _queue_clean_command(
     default=False,
 )
 def _queue_stats_command(
-    dandiset_directory: pathlib.Path,
     dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
@@ -529,9 +509,8 @@ def _queue_stats_command(
 
     state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
     state.aggregate_statistics(
-        dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         test=test,
     )
     if not silent:
@@ -566,13 +545,7 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
 
 # dandicompute queue process [OPTIONS]
 @_queue_group.command(name="process")
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Path to the directory the per-pipeline dispatch directories are created in.",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-)
+@_base_option
 @click.option(
     "--pipeline",
     "only_pipeline",
@@ -614,7 +587,7 @@ def _queue_pending_command(context: click.Context, silent: bool = False) -> None
     show_default=True,
 )
 def _queue_process_command(
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
     max_concurrent: int | None = None,
     silent: bool = False,
@@ -632,7 +605,7 @@ def _queue_process_command(
     _require_dandi_devel()
 
     results = PipelineQueue.process_queue(
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         only_pipeline=only_pipeline,
         max_concurrent=max_concurrent,
         jitter_seconds=jitter_seconds,
@@ -659,13 +632,6 @@ def _issues_group() -> None:
 # dandicompute issues dump [OPTIONS]
 @_issues_group.command(name="dump")
 @click.option(
-    "--directory",
-    "dandiset_directory",
-    help="Path to a local clone of the dandiset repository to scan for logs.",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-)
-@click.option(
     "--dandiset-id",
     "dandiset_id",
     help="Dandiset ID the issue dump JSON is written into.",
@@ -674,15 +640,7 @@ def _issues_group() -> None:
     default=_JOB_CAPSULES_DANDISET_ID,
     show_default=True,
 )
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Directory for the temporary working tree used to write the issue dump JSON "
-    "(defaults to the system temporary location).",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--test",
     "test",
@@ -699,9 +657,8 @@ def _issues_group() -> None:
     default=False,
 )
 def _issues_dump_command(
-    dandiset_directory: pathlib.Path,
     dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
@@ -709,9 +666,8 @@ def _issues_dump_command(
     _configure_logging(silent=silent)
 
     PipelineQueue.dump_issues(
-        dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         test=test,
     )
     if not silent:
@@ -721,13 +677,6 @@ def _issues_dump_command(
 # dandicompute issues summarize [OPTIONS]
 @_issues_group.command(name="summarize")
 @click.option(
-    "--directory",
-    "dandiset_directory",
-    help="Path to a local clone of the dandiset repository to scan for logs.",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-)
-@click.option(
     "--dandiset-id",
     "dandiset_id",
     help="Dandiset ID the issue summary JSON (and its issue dump) is written into.",
@@ -736,15 +685,7 @@ def _issues_dump_command(
     default=_JOB_CAPSULES_DANDISET_ID,
     show_default=True,
 )
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Directory for the temporary working tree used to write the issue summary JSON "
-    "(defaults to the system temporary location).",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--test",
     "test",
@@ -761,9 +702,8 @@ def _issues_dump_command(
     default=False,
 )
 def _issues_summarize_command(
-    dandiset_directory: pathlib.Path,
     dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
@@ -771,9 +711,8 @@ def _issues_summarize_command(
     _configure_logging(silent=silent)
 
     PipelineQueue.summarize_issues(
-        dandiset_directory=dandiset_directory,
         dandiset_id=dandiset_id,
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         test=test,
     )
     if not silent:
@@ -817,14 +756,7 @@ def _issues_summarize_command(
     default=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
     show_default=True,
 )
-@click.option(
-    "--processing",
-    "processing_directory",
-    help="Directory for the temporary working tree (defaults to the system temporary location).",
-    required=False,
-    type=click.Path(exists=True, file_okay=False, path_type=pathlib.Path),
-    default=None,
-)
+@_base_option
 @click.option(
     "--test",
     "test",
@@ -845,7 +777,7 @@ def _archive_command(
     capsule_path: str | None,
     dandiset_id: str,
     archive_dandiset_id: str,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
@@ -863,7 +795,7 @@ def _archive_command(
             capsule_path=capsule_path,
             source_dandiset_id=dandiset_id,
             target_dandiset_id=archive_dandiset_id,
-            processing_directory=processing_directory,
+            base_directory=base_directory,
             test=test,
         )
         if not silent:
@@ -875,7 +807,7 @@ def _archive_command(
         status=status,
         dandiset_id=dandiset_id,
         archive_dandiset_id=archive_dandiset_id,
-        processing_directory=processing_directory,
+        base_directory=base_directory,
         test=test,
     )
 

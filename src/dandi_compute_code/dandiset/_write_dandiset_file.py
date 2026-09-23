@@ -7,6 +7,8 @@ import tempfile
 
 import beartype
 
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
+
 _log = logging.getLogger(__name__)
 
 
@@ -16,7 +18,7 @@ def write_dandiset_file(
     dandiset_id: str,
     relative_path: str,
     content: str,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
 ) -> None:
     """
@@ -36,9 +38,9 @@ def write_dandiset_file(
         slashes are stripped.
     content : str
         Text content to write.
-    processing_directory : pathlib.Path, optional
-        Directory in which the temporary working tree is created. When ``None``, the system
-        default temporary location is used.
+    base_directory : pathlib.Path, optional
+        The structured base directory. The temporary working tree is created in its
+        ``processing/`` directory.
     test : bool, optional
         When ``True``, leave the temporary working tree on disk after a successful upload
         for debugging.
@@ -56,7 +58,9 @@ def write_dandiset_file(
 
     relative_file_path = relative_path.strip("/")
 
-    processing_root = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="write-dandiset-file-"))
+    processing_root = pathlib.Path(
+        tempfile.mkdtemp(dir=_processing_directory(base_directory), prefix="write-dandiset-file-")
+    )
     _log.info("Writing %s into Dandiset %s in %s", relative_file_path, dandiset_id, processing_root)
 
     dandiset_url = f"dandi://dandi/{dandiset_id}/"

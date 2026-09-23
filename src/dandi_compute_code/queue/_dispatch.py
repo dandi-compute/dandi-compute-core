@@ -11,7 +11,7 @@ A dispatcher is identified on the cluster by its job name, so a pipeline whose a
 still working through its tasks is left alone rather than dispatched a second time.
 
 Every dispatcher keeps its record in one central log directory per pipeline, under the
-processing directory's ``derivatives/logs/``. The minted manifests, the generated array scripts and the
+base directory's ``processing/derivatives/logs/``. The minted manifests, the generated array scripts and the
 array tasks' own output all land there and outlive the dispatch directory, which only holds
 the tasks' working trees and is removed once the array is finished with it.
 """
@@ -38,6 +38,7 @@ from ._globals import (
     _SBATCH_JOB_ID_RE,
 )
 from ._handle_template import generate_array_dispatch_script
+from .._base_directory import _processing_directory
 
 _log = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ class DispatchResult:
 @beartype.beartype
 def clean_dispatch_directories(
     *,
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
     minimum_age_hours: float = 24.0,
 ) -> list[pathlib.Path]:
     """
@@ -135,13 +136,15 @@ def clean_dispatch_directories(
     the window between submitting an array and SLURM reporting it.
 
     Only directories named like a dispatch directory are considered, so anything else sharing
-    *processing_directory* is left alone. That includes the central ``derivatives/logs/`` directory, which
-    keeps every dispatcher's manifests, scripts and output after its dispatch directory is gone.
+    the ``processing/`` directory of *base_directory* is left alone. That includes the central
+    ``derivatives/logs/`` directory, which keeps every dispatcher's manifests, scripts and output
+    after its dispatch directory is gone.
 
     Parameters
     ----------
-    processing_directory : pathlib.Path
-        The directory dispatch directories were created in.
+    base_directory : pathlib.Path
+        The structured base directory. Dispatch directories are created in its
+        ``processing/`` directory.
     minimum_age_hours : float
         Leave directories formed more recently than this alone.
 
@@ -155,6 +158,7 @@ def clean_dispatch_directories(
     RuntimeError
         If ``squeue`` fails, since a live dispatcher cannot be ruled out.
     """
+    processing_directory = _processing_directory(base_directory)
     if not processing_directory.is_dir():
         message = f"The processing directory does not exist or is not a directory: {processing_directory}"
         raise NotADirectoryError(message)
@@ -298,7 +302,7 @@ def dispatch_pipeline_jobs(
     *,
     pipeline: str,
     code_dir_paths: list[str],
-    processing_directory: pathlib.Path,
+    base_directory: pathlib.Path,
     dispatch_config: DispatchConfig,
     dandiset_id: str,
     capsule_resources: dict[str, CapsuleResources] | None = None,
@@ -315,7 +319,7 @@ def dispatch_pipeline_jobs(
     manifest by task index, downloads it, claims it with a submitted marker, and runs it.
 
     The manifests, the array scripts and the array tasks' output are written to the
-    pipeline's central log directory, ``derivatives/logs/<job name>/`` under *processing_directory*,
+    pipeline's central log directory, ``processing/derivatives/logs/<job name>/`` under *base_directory*,
     and are named by when the dispatch was formed. They are kept as the record of what
     each dispatch covered. The per-dispatch directory holds only the tasks' working trees.
 
@@ -335,11 +339,12 @@ def dispatch_pipeline_jobs(
         Capsule ``code`` directory paths (relative to the Dandiset root)
         awaiting submission, across all pipelines. See
         :meth:`~dandi_compute_code.queue.PipelineQueue.pending_code_dirs`.
-    processing_directory : pathlib.Path
-        Directory the dispatch directory and the central log directory are
-        created in. The array tasks read their manifest from the log directory
-        and work in the dispatch directory, so both have to remain reachable
-        from the compute nodes for as long as the array lives.
+    base_directory : pathlib.Path
+        The structured base directory. The dispatch directory and the central
+        log directory are created in its ``processing/`` directory. The array
+        tasks read their manifest from the log directory and work in the
+        dispatch directory, so both have to remain reachable from the compute
+        nodes for as long as the array lives.
     dispatch_config : DispatchConfig
         This pipeline's dispatcher settings.
     dandiset_id : str
@@ -395,6 +400,7 @@ def dispatch_pipeline_jobs(
 
     now = datetime.datetime.now()
     timestamp = f"{now.year:04d}{now.month:02d}{now.day:02d}-{now.hour:02d}{now.minute:02d}{now.second:02d}"
+    processing_directory = _processing_directory(base_directory)
     dispatch_directory = processing_directory / f"{job_name}-{timestamp}"
     dispatch_directory.mkdir(parents=True, exist_ok=True)
     log_directory = processing_directory / _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / job_name

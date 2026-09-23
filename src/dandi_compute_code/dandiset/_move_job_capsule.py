@@ -8,6 +8,7 @@ import tempfile
 import beartype
 
 from ._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
 
 _log = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ def move_job_capsule(
     capsule_path: str,
     source_dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
     target_dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
-    processing_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
 ) -> None:
     """
@@ -49,9 +50,9 @@ def move_job_capsule(
     target_dandiset_id : str, optional
         Dandiset the capsule is moved to. Defaults to the failed runs archive
         Dandiset (``001873``).
-    processing_directory : pathlib.Path, optional
-        Directory in which the temporary per-capsule working tree is created.
-        When ``None``, the system default temporary location is used.
+    base_directory : pathlib.Path, optional
+        The structured base directory. The temporary per-capsule working tree is
+        created in its ``processing/`` directory.
     test : bool, optional
         When ``True``, leave the temporary working tree on disk after a
         successful move for debugging.
@@ -70,7 +71,7 @@ def move_job_capsule(
 
     relative_capsule_path = capsule_path.strip("/")
 
-    processing_root = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="move-capsule-"))
+    processing_root = pathlib.Path(tempfile.mkdtemp(dir=_processing_directory(base_directory), prefix="move-capsule-"))
     _log.info(
         "Moving job capsule %s from %s to %s in %s",
         relative_capsule_path,

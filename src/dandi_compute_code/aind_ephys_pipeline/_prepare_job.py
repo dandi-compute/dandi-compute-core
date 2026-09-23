@@ -18,6 +18,13 @@ import dandi.download
 import dandi.upload
 
 from ._handle_template import generate_aind_ephys_submission_script
+from .._base_directory import (
+    _DEFAULT_BASE_DIRECTORY,
+    _aind_pipeline_directory,
+    _code_directory,
+    _processing_directory,
+    _work_directory,
+)
 from ..dandiset._globals import (
     _JOB_CAPSULES_DANDISET_ID,
     _dandiset_derivatives_relative_dir,
@@ -55,7 +62,7 @@ def prepare_aind_ephys_job(
     dandiset_path: str | None = None,
     config_key: str = "default",
     parameters_key: str = "default",
-    pipeline_directory: pathlib.Path | None = None,
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     force_new_capsule: bool = False,
     silent: bool = False,
 ) -> pathlib.Path | None:
@@ -85,8 +92,10 @@ def prepare_aind_ephys_job(
     parameters_key : str
         The short name of the parameters to use.
         Must be a key registered in `registries/registered_params.json`.
-    pipeline_directory : pathlib.Path, optional
-        Local path to the AIND pipeline repository.
+    base_directory : pathlib.Path, optional
+        The structured base directory. The pipeline repository, this repository's
+        checkout, the processing directory and the work directory are all read from
+        their fixed places under it.
     force_new_capsule : bool, optional
         Whether to form a new job capsule even when one already exists for this job.
         Default is False.
@@ -220,7 +229,6 @@ def prepare_aind_ephys_job(
         raise ValueError(message)
     config_id = actual_config_md5[0:7]
 
-    dandi_compute_dir = pathlib.Path("/orcd/data/dandi/001/dandi-compute")
     content_id_to_usage_dandiset_path_url = (
         "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/derivatives/"
         "derivatives/content_id_to_usage_dandiset_path.jsonl"
@@ -269,9 +277,9 @@ def prepare_aind_ephys_job(
 
     # TODO: if first run for asset, skip below and add sourcedata
 
-    pipeline_directory = (pipeline_directory or dandi_compute_dir / "aind-ephys-pipeline").absolute()
+    pipeline_directory = _aind_pipeline_directory(base_directory).absolute()
     pipeline_file_path = pipeline_directory / "pipeline" / "main_multi_backend.nf"
-    dandi_compute_code_source_dir = dandi_compute_dir / "code"
+    dandi_compute_code_source_dir = _code_directory(base_directory)
 
     pipeline_commit_hash = subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -329,7 +337,7 @@ def prepare_aind_ephys_job(
     # TODO: figure out if Zarr or not - only supports blobs ATM
 
     # Create an empty copy of Dandiset
-    processing_directory = dandi_compute_dir / "processing"
+    processing_directory = _processing_directory(base_directory)
     temporary_processing_directory = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="prepare-job-"))
     dandi.download.download(
         urls="DANDI:001697",
@@ -356,7 +364,7 @@ def prepare_aind_ephys_job(
     intermediate_dir = dandiset_output_dir / "intermediate"
     intermediate_dir.mkdir()
 
-    work_directory = dandi_compute_dir / "work"
+    work_directory = _work_directory(base_directory)
     apptainer_cache_directory = work_directory / "apptainer_cache"
     # NOTE: NUMBA_CACHE_DIR is also needed for the pipeline
     # but must be set in `~/.bashrc`, and must be the same as WORKDIR

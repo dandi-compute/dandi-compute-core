@@ -27,6 +27,16 @@ Two capsules can still land on one job ID when they are the same logical job pre
 
 The job ID is the only capsule layout this package understands. Capsules prepared before it existed carry older names and are invisible to the queue until they are migrated.
 
+## The base directory
+
+Every command operates on one structured base directory, passed as `--base`. It defaults to `/orcd/data/dandi/001/dandi-compute` on MIT Engaging. The layout under it is fixed.
+
+- `code/` is the checkout of this repository.
+- `processing/` holds temporary working trees, dispatch directories and dispatch records.
+- `work/` is the Nextflow work directory.
+- `aind-ephys-pipeline/` is the checkout of the AIND ephys pipeline repository.
+- `dandi/{dandiset id}/` is a local clone of a Dandiset. Only `queue clean`, `queue stats` and `issues dump`/`summarize` still read one.
+
 ## Manual dispatch commands on MIT Engaging
 
 To run manually with confirmation to trigger (for debugging):
@@ -50,7 +60,7 @@ dandicompute prepare aind --test
 To clean unsubmitted job capsules:
 
 ```bash
-dandicompute queue clean --dandiset ./dandi/001697/
+dandicompute queue clean
 ```
 
 To archive a failed job capsule by moving it from `001697` to the permanent archive `001873`:
@@ -63,7 +73,7 @@ dandicompute archive --job derivatives/dandisets-000/dandiset-000409/sub-mouse01
 To check whether there is any queued work before dispatching, use `queue pending`. It exits with code 0 when at least one job is awaiting submission, and code 1 when there is nothing to process. This lets a crontab skip the dispatch entirely when the queue is empty:
 
 ```bash
-dandicompute queue pending --silent && dandicompute queue process --processing ./processing/
+dandicompute queue pending --silent && dandicompute queue process
 ```
 
 

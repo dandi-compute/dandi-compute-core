@@ -50,14 +50,6 @@ def example_pipeline_queue() -> PipelineQueue:
 
 
 @pytest.fixture
-def processing_directory(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A directory for the temporary per-job working trees used during submission."""
-    directory = tmp_path / "processing"
-    directory.mkdir()
-    return directory
-
-
-@pytest.fixture
 def dandi_api_key() -> Iterator[None]:
     """Provide a dummy DANDI_API_KEY for helpers that require it to be set."""
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}):
