@@ -62,7 +62,7 @@ classes:
         required: true
         pattern: "^\\d{6}$"
 
-      dandi_path:
+      within_dandiset_path:
         description: The source asset's path within its Dandiset.
         range: string
         required: true

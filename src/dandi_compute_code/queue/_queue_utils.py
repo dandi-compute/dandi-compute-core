@@ -60,7 +60,7 @@ class _CapsuleLocation:
     """Where one job capsule sits in a Dandiset."""
 
     dandiset_id: str
-    dandi_path: str
+    within_dandiset_path: str
     pipeline: str
     capsule_path: str
     job_id: str
@@ -96,12 +96,12 @@ def _parse_capsule_location(asset_path: str, /) -> tuple[_CapsuleLocation, str] 
     if _JOB_ID_RE.fullmatch(job_id) is None:
         return None
 
-    dandi_path = "/".join(parts[dandiset_index + 1 : pipeline_index]) + ".nwb"
+    within_dandiset_path = "/".join(parts[dandiset_index + 1 : pipeline_index]) + ".nwb"
     subpath = "/".join(parts[capsule_dir_index + 1 :])
 
     location = _CapsuleLocation(
         dandiset_id=parts[dandiset_index][len("dandiset-") :],
-        dandi_path=dandi_path,
+        within_dandiset_path=within_dandiset_path,
         pipeline=pipeline,
         capsule_path="/".join(parts[: capsule_dir_index + 1]),
         job_id=job_id,
@@ -240,7 +240,7 @@ def _resolve_job_info(*, location: _CapsuleLocation, provenance_cache: _CapsuleP
     job_info = JobInfo(
         job_id=location.job_id,
         dandiset_id=location.dandiset_id,
-        dandi_path=location.dandi_path,
+        within_dandiset_path=location.within_dandiset_path,
         pipeline=location.pipeline,
         version=str(fields.get("version") or ""),
         params=str(fields.get("params") or ""),
@@ -352,14 +352,14 @@ def _finalize_job_capsule_records(
         record.update(job_info.to_dict())
 
         upstream_metadata = upstream_cache.get(job_info.dandiset_id)
-        source_metadata = upstream_metadata.path_to_asset_metadata.get(job_info.dandi_path)
+        source_metadata = upstream_metadata.path_to_asset_metadata.get(job_info.within_dandiset_path)
 
         if source_metadata is None:
             _log.warning(
-                "Source asset not found in upstream dandiset %s for dandi_path=%s; "
+                "Source asset not found in upstream dandiset %s for within_dandiset_path=%s; "
                 "emitting record with null content_id/asset_size_bytes",
                 job_info.dandiset_id,
-                job_info.dandi_path,
+                job_info.within_dandiset_path,
             )
             content_id: str | None = None
             asset_size_bytes: int | None = None
@@ -392,7 +392,7 @@ def _sort_key(record: dict[str, object]) -> tuple[str, str, str, str]:
     # coerce to "" so sorting stays total.
     return (
         str(record["dandiset_id"]),
-        str(record["dandi_path"]),
+        str(record["within_dandiset_path"]),
         str(record["content_id"]) if record["content_id"] is not None else "",
         str(record["job_id"]),
     )

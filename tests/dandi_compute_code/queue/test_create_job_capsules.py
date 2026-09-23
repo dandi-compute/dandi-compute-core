@@ -50,7 +50,7 @@ def _pipeline_queue_with_capsule(*, content_id: str, params: str, config: str, v
     job = JobInfo(
         job_id="job-240101aaaaaa",
         dandiset_id="000001",
-        dandi_path="sub-01/sub-01_ecephys.nwb",
+        within_dandiset_path="sub-01/sub-01_ecephys.nwb",
         pipeline="aind+ephys",
         version=version,
         params=PipelineQueue.resolve_params_key_to_id(pipeline="aind+ephys", params_key=params),

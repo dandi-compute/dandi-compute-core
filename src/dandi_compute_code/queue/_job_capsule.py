@@ -34,7 +34,7 @@ JOB_STATUSES: tuple[JobStatus, ...] = ("pending", "stalled", "failed", "successf
 _JOBS_TSV_FIELD_NAMES = [
     "job_id",
     "dandiset_id",
-    "dandi_path",
+    "within_dandiset_path",
     "pipeline",
     "version",
     "params",
@@ -197,7 +197,7 @@ class JobCapsule:
         """
         return (
             self.job.dandiset_id,
-            self.job.dandi_path,
+            self.job.within_dandiset_path,
             self.job.pipeline,
             self.job.version,
             self.job.params,
@@ -216,18 +216,18 @@ class JobCapsule:
         Raises
         ------
         ValueError
-            If this entry's ``dandi_path`` is an empty string.
+            If this entry's ``within_dandiset_path`` is an empty string.
         """
-        if self.job.dandi_path == "":
-            message = f"Entry has invalid dandi_path field (empty): {self!r}"
+        if self.job.within_dandiset_path == "":
+            message = f"Entry has invalid within_dandiset_path field (empty): {self!r}"
             raise ValueError(message)
-        normalized_dandi_path = self.job.dandi_path.removesuffix(".nwb")
+        normalized_within_dandiset_path = self.job.within_dandiset_path.removesuffix(".nwb")
 
         pipeline_dir = (
             base_dir
             / "derivatives"
             / pathlib.PurePosixPath(_dandiset_derivatives_relative_dir(self.job.dandiset_id))
-            / pathlib.PurePosixPath(normalized_dandi_path)
+            / pathlib.PurePosixPath(normalized_within_dandiset_path)
             / f"pipeline-{self.job.pipeline}"
         )
         return pipeline_dir / self.job.job_id
@@ -242,16 +242,16 @@ class JobCapsule:
         Raises
         ------
         ValueError
-            If this entry's ``dandi_path`` is an empty string.
+            If this entry's ``within_dandiset_path`` is an empty string.
         """
-        if self.job.dandi_path == "":
-            message = f"Entry has invalid dandi_path field (empty): {self!r}"
+        if self.job.within_dandiset_path == "":
+            message = f"Entry has invalid within_dandiset_path field (empty): {self!r}"
             raise ValueError(message)
-        normalized_dandi_path = self.job.dandi_path.removesuffix(".nwb")
+        normalized_within_dandiset_path = self.job.within_dandiset_path.removesuffix(".nwb")
 
         pipeline_dir = (
             f"derivatives/{_dandiset_derivatives_relative_dir(self.job.dandiset_id)}"
-            f"/{normalized_dandi_path}/pipeline-{self.job.pipeline}"
+            f"/{normalized_within_dandiset_path}/pipeline-{self.job.pipeline}"
         )
         return f"{pipeline_dir}/{self.job.job_id}"
 
@@ -262,7 +262,7 @@ class JobCapsule:
         :attr:`~dandi_compute_code.dandiset.AssetsJsonldMetadata.path_to_asset_metadata`.
 
         Falls back to searching every ``pipeline-*`` directory in the Dandiset for this
-        entry's job ID, which covers a recorded ``dandi_path`` that does not match the
+        entry's job ID, which covers a recorded ``within_dandiset_path`` that does not match the
         remote layout. This works purely from DANDI metadata, without a local Dandiset
         clone.
 
@@ -305,7 +305,7 @@ class JobCapsule:
         job = JobInfo(
             job_id=data["job_id"],
             dandiset_id=data["dandiset_id"],
-            dandi_path=data["dandi_path"],
+            within_dandiset_path=data["within_dandiset_path"],
             pipeline=data["pipeline"],
             version=data["version"],
             params=data["params"],
@@ -397,7 +397,7 @@ class JobCapsule:
         job = JobInfo(
             job_id=row["job_id"],
             dandiset_id=row["dandiset_id"],
-            dandi_path=row["dandi_path"],
+            within_dandiset_path=row["within_dandiset_path"],
             pipeline=row["pipeline"],
             version=row["version"],
             params=row["params"],

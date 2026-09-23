@@ -9,8 +9,8 @@ Every capsule has a dataset description. The failed and successful ones also hav
 Which mapping a path belongs to is read from where it sits beneath the capsule directory.
 
 The failed and successful capsules carry mock submission and completion times, so their `queue_wait_seconds` and `run_duration_seconds` are filled in. The stalled ones have a submission time only.
-Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `dandi_path`, which is named to describe the scenario it covers.
-Rows that share a `dandi_path` are told apart by their `config`.
+Tests load the file through the fixtures in `../conftest.py` and select the entry they need by its `within_dandiset_path`, which is named to describe the scenario it covers.
+Rows that share a `within_dandiset_path` are told apart by their `config`.
 
 `job_id` is the `job-{YYMMDD}{hash}` directory name of the capsule, and is what names the capsule directory on disk.
 
@@ -24,7 +24,7 @@ The point in the job lifecycle is the `status` column:
 - successful: output present
 - unknown: nothing observed about the capsule at all
 
-| `dandi_path` | Scenario |
+| `within_dandiset_path` | Scenario |
 | --- | --- |
 | `sub-pending` | Prepared but never submitted. |
 | `sub-successful` | Output present, with a known source-asset size (120 bytes). |
@@ -33,5 +33,5 @@ The point in the job lifecycle is the `status` column:
 | `sub-sole/ses-capsule` (Dandiset 001371) | The sole capsule in its pipeline tree, so empty parents are pruned on removal. |
 | `sub-two/ses-capsules` (configs `cfgtwoa` and `cfgtwob`) | The `cfgtwoa` capsule is queued and the `cfgtwob` one is completed, so the shared parent is kept after the queued capsule is removed. |
 | `sub-already/ses-submitted` | Queued in state, but a submitted marker exists on disk, so it is left alone. |
-| `sourcedata/sub-test+bids` (Dandiset 001849) | A queued capsule whose recorded `dandi_path` differs from the on-disk layout, exercising fallback capsule-directory resolution. |
+| `sourcedata/sub-test+bids` (Dandiset 001849) | A queued capsule whose recorded `within_dandiset_path` differs from the on-disk layout, exercising fallback capsule-directory resolution. |
 | `sub-stalled/ses-one` and `sub-stalled/ses-two` | Two capsules submitted to the scheduler with no logs or output ever appearing (the stalled state), both mapped to `asset-ccc`. |

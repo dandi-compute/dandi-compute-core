@@ -21,7 +21,7 @@ class JobInfo:
     job_id: str
 
     dandiset_id: str
-    dandi_path: str
+    within_dandiset_path: str
     pipeline: str
     version: str
     params: str
@@ -33,7 +33,7 @@ class JobInfo:
         return {
             "job_id": self.job_id,
             "dandiset_id": self.dandiset_id,
-            "dandi_path": self.dandi_path,
+            "within_dandiset_path": self.within_dandiset_path,
             "pipeline": self.pipeline,
             "version": self.version,
             "params": self.params,

@@ -1,4 +1,4 @@
-job_id	dandiset_id	dandi_path	pipeline	version	params	config	codebase	content_id	asset_size_bytes	status	created_at	job_submission_time	job_completion_time	queue_wait_seconds	run_duration_seconds
+job_id	dandiset_id	within_dandiset_path	pipeline	version	params	config	codebase	content_id	asset_size_bytes	status	created_at	job_submission_time	job_completion_time	queue_wait_seconds	run_duration_seconds
 job-240101aa0001	000001	sub-pending	test	v1.0	default	cfgpend	v0.3.0	asset-pending	1024	pending	2024-01-01T00:00:00+00:00				
 job-240101aa0002	000001	sub-successful	test	v1.0	default	cfgsucc	v0.3.0	asset-successful	120	successful	2024-01-01T00:00:00+00:00	2024-01-01T00:20:00+00:00	2024-01-01T03:05:00+00:00	1200	9900
 job-240101aa0003	000001	sub-failed/ses-one	test	v1.0	default	cfgfail	v0.3.0	asset-aaa		failed	2024-01-01T00:00:00+00:00	2024-01-01T00:45:00+00:00	2024-01-01T01:12:30+00:00	2700	1650

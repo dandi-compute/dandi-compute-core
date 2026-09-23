@@ -30,7 +30,7 @@ def test_aggregate_queue_statistics_writes_queue_stats_json(
 ) -> None:
     """aggregate_statistics writes queue_stats.json with byte and timeline aggregates."""
     # sub-successful is the only entry with both output and a known source-asset size.
-    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-successful")
     files = job_capsule_files(entry=entry, with_logs=True)
     files[f"{entry.capsule_path()}/logs/timeline.html"] = timeline_two_steps
 
@@ -59,7 +59,7 @@ def test_aggregate_queue_statistics_skips_invalid_timeline_html(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path
 ) -> None:
     """aggregate_statistics ignores timeline files with malformed embedded JSON."""
-    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-successful")
     files = job_capsule_files(entry=entry, with_logs=True)
     files[f"{entry.capsule_path()}/logs/timeline.html"] = "<script>window.data = {invalid json};</script>"
 
@@ -74,9 +74,9 @@ def test_aggregate_queue_statistics_skips_invalid_timeline_html(
 def test_aggregate_queue_statistics_found_timeline_via_fallback_capsule_resolution(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, timeline_one_step: str
 ) -> None:
-    """aggregate_statistics finds timeline files when state dandi_path differs from the remote path."""
+    """aggregate_statistics finds timeline files when state within_dandiset_path differs from the remote path."""
     # The "sourcedata" entry's remote capsule lives under sub-mouse01, so its timeline
-    # must be located via fallback resolution rather than the recorded dandi_path.
+    # must be located via fallback resolution rather than the recorded within_dandiset_path.
     capsule_path = "derivatives/dandisets-001/dandiset-001849/sub-mouse01/pipeline-aind+ephys/job-240101aa0009"
     files = {f"{capsule_path}/logs/timeline.html": timeline_one_step}
 

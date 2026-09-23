@@ -144,14 +144,14 @@ class PipelineQueue:
             and not isinstance(entry.asset_size_bytes, bool)
         )
 
-    def entry_for(self, *, dandi_path: str, config: str | None = None) -> JobCapsule:
+    def entry_for(self, *, within_dandiset_path: str, config: str | None = None) -> JobCapsule:
         """
-        Return the entry with the given ``dandi_path`` (and ``config``).
+        Return the entry with the given ``within_dandiset_path`` (and ``config``).
 
         Parameters
         ----------
-        dandi_path : str
-            The ``dandi_path`` recorded on the target entry.
+        within_dandiset_path : str
+            The ``within_dandiset_path`` recorded on the target entry.
         config : str, optional
             Disambiguates scenarios that hold more than one job capsule for the
             same asset. Any config matches when omitted.
@@ -159,12 +159,12 @@ class PipelineQueue:
         Raises
         ------
         KeyError
-            If no entry matches *dandi_path* and *config*.
+            If no entry matches *within_dandiset_path* and *config*.
         """
         for entry in self.entries:
-            if entry.job.dandi_path == dandi_path and config in (None, entry.job.config):
+            if entry.job.within_dandiset_path == within_dandiset_path and config in (None, entry.job.config):
                 return entry
-        message = f"No entry with dandi_path={dandi_path!r} and config={config!r}"
+        message = f"No entry with within_dandiset_path={within_dandiset_path!r} and config={config!r}"
         raise KeyError(message)
 
     @classmethod

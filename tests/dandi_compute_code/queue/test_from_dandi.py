@@ -289,7 +289,7 @@ def test_from_dandi_parses_capsule_location_and_presence_flags_from_assets_paths
     state_entries = _entries(state)
     assert len(state_entries) == 1
     assert state_entries[0]["dandiset_id"] == "001849"
-    assert state_entries[0]["dandi_path"] == source_path
+    assert state_entries[0]["within_dandiset_path"] == source_path
     assert state_entries[0]["pipeline"] == "aind+ephys"
     assert state_entries[0]["job_id"] == "job-2401010d4bf3"
     assert state_entries[0]["content_id"] == "source-content-id"
@@ -301,7 +301,7 @@ def test_from_dandi_parses_capsule_location_and_presence_flags_from_assets_paths
 
 
 @pytest.mark.ai_generated
-def test_from_dandi_resolves_dandi_path_for_nested_asset() -> None:
+def test_from_dandi_resolves_within_dandiset_path_for_nested_asset() -> None:
     """from_dandi writes the assets.jsonld-resolved source path."""
     content_id = "0fbbca6a-0000-0000-0000-000000000001"
     source_path = "sub-mouse01/sub-mouse01_ses-ses001_obj-raw.nwb"
@@ -346,12 +346,12 @@ def test_from_dandi_resolves_dandi_path_for_nested_asset() -> None:
     state_entries = _entries(state)
     assert len(state_entries) == 1
     assert state_entries[0]["asset_size_bytes"] == asset_size_bytes
-    assert state_entries[0]["dandi_path"] == source_path
+    assert state_entries[0]["within_dandiset_path"] == source_path
 
 
 @pytest.mark.ai_generated
-def test_from_dandi_resolves_dandi_path_for_root_level_asset() -> None:
-    """from_dandi writes the resolved dandi_path even when the matched asset path is at dandiset root."""
+def test_from_dandi_resolves_within_dandiset_path_for_root_level_asset() -> None:
+    """from_dandi writes the resolved within_dandiset_path even when the matched asset path is at dandiset root."""
     content_id = "0fbbca6a-0000-0000-0000-000000000002"
     asset_size_bytes = 4321
     root_asset_path = "sub-mouse01_ses-ses001_obj-raw.nwb"
@@ -395,7 +395,7 @@ def test_from_dandi_resolves_dandi_path_for_root_level_asset() -> None:
     state_entries = _entries(state)
     assert len(state_entries) == 1
     assert state_entries[0]["asset_size_bytes"] == asset_size_bytes
-    assert state_entries[0]["dandi_path"] == root_asset_path
+    assert state_entries[0]["within_dandiset_path"] == root_asset_path
 
 
 @pytest.mark.ai_generated
@@ -467,7 +467,7 @@ def test_from_dandi_includes_all_entries_derived_from_metadata() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 2
-    assert {record["dandi_path"] for record in state_entries} == {
+    assert {record["within_dandiset_path"] for record in state_entries} == {
         "sub-mouse01/sub-mouse01_ecephys.nwb",
         "sub-mouse02/sub-mouse02_ecephys.nwb",
     }
@@ -514,7 +514,7 @@ def test_from_dandi_is_independent_of_local_submitted_marker_files() -> None:
 
     state_entries = _entries(state)
     assert len(state_entries) == 1
-    assert state_entries[0]["dandi_path"] == "sub-mouse01/sub-mouse01_ecephys.nwb"
+    assert state_entries[0]["within_dandiset_path"] == "sub-mouse01/sub-mouse01_ecephys.nwb"
 
 
 @pytest.mark.ai_generated

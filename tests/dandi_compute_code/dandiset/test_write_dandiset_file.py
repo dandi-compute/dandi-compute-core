@@ -12,7 +12,7 @@ from dandi_compute_code.dandiset import write_dandiset_file
 
 _DANDISET_ID = "001697"
 _RELATIVE_PATH = "derivatives/jobs.tsv"
-_CONTENT = "dandiset_id\tdandi_path\n001849\tsub-mouse01/sub-mouse01_ecephys.nwb\n"
+_CONTENT = "dandiset_id\twithin_dandiset_path\n001849\tsub-mouse01/sub-mouse01_ecephys.nwb\n"
 
 
 def _make_run_side_effect(*, upload_returncode: int = 0):

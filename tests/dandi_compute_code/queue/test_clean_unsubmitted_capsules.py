@@ -28,7 +28,7 @@ def test_clean_unsubmitted_capsules_removes_queued_capsules(
     example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules deletes capsules that are queued (code, no logs, no output) by URL."""
-    queued_entry = example_pipeline_queue.entry_for(dandi_path="sub-pending")
+    queued_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-pending")
     queued_path = queued_entry.capsule_path()
 
     with serve_remote_dandiset(job_capsule_files(entry=queued_entry)), mock.patch("subprocess.run") as mock_run:
@@ -40,7 +40,7 @@ def test_clean_unsubmitted_capsules_removes_queued_capsules(
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("dandi_path", "capsule_kwargs"),
+    ("within_dandiset_path", "capsule_kwargs"),
     [
         pytest.param("sub-successful", {"with_logs": True, "with_output": True}, id="with-output"),
         pytest.param("sub-failed/ses-one", {"with_logs": True}, id="with-logs"),
@@ -48,10 +48,12 @@ def test_clean_unsubmitted_capsules_removes_queued_capsules(
     ],
 )
 def test_clean_unsubmitted_capsules_skips_capsules_that_are_not_queued(
-    example_pipeline_queue: PipelineQueue, dandi_api_key: None, dandi_path: str, capsule_kwargs: dict
+    example_pipeline_queue: PipelineQueue, dandi_api_key: None, within_dandiset_path: str, capsule_kwargs: dict
 ) -> None:
     """Capsules with output, logs, or a submitted marker are left on the archive."""
-    files = job_capsule_files(entry=example_pipeline_queue.entry_for(dandi_path=dandi_path), **capsule_kwargs)
+    files = job_capsule_files(
+        entry=example_pipeline_queue.entry_for(within_dandiset_path=within_dandiset_path), **capsule_kwargs
+    )
 
     with serve_remote_dandiset(files), mock.patch("subprocess.run") as mock_run:
         removed = example_pipeline_queue.clean_unsubmitted_capsules()
@@ -65,7 +67,7 @@ def test_clean_unsubmitted_capsules_ignores_dataset_description_in_logs(
     example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """A logs/ directory holding only dataset_description.json does not protect a queued capsule."""
-    queued_entry = example_pipeline_queue.entry_for(dandi_path="sub-pending")
+    queued_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-pending")
     queued_path = queued_entry.capsule_path()
     files = job_capsule_files(entry=queued_entry) | {f"{queued_path}/logs/dataset_description.json": "{}\n"}
 
@@ -92,8 +94,8 @@ def test_clean_unsubmitted_capsules_leaves_a_sibling_capsule_with_output(
     example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """Only the queued capsule is deleted when a sibling under the same pipeline has output."""
-    queued_entry = example_pipeline_queue.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwoa")
-    remaining_entry = example_pipeline_queue.entry_for(dandi_path="sub-two/ses-capsules", config="cfgtwob")
+    queued_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-two/ses-capsules", config="cfgtwoa")
+    remaining_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-two/ses-capsules", config="cfgtwob")
     files = job_capsule_files(entry=queued_entry) | job_capsule_files(entry=remaining_entry, with_output=True)
 
     with serve_remote_dandiset(files), mock.patch("subprocess.run") as mock_run:
@@ -108,8 +110,8 @@ def test_clean_unsubmitted_capsules_removes_only_queued_not_submitted(
     example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
     """clean_unsubmitted_capsules only deletes queued capsules, leaving submitted ones intact."""
-    queued_entry = example_pipeline_queue.entry_for(dandi_path="sub-pending")
-    submitted_entry = example_pipeline_queue.entry_for(dandi_path="sub-already/ses-submitted")
+    queued_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-pending")
+    submitted_entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-already/ses-submitted")
     files = job_capsule_files(entry=queued_entry) | job_capsule_files(entry=submitted_entry, submitted=True)
 
     with serve_remote_dandiset(files), mock.patch("subprocess.run") as mock_run:
@@ -123,9 +125,9 @@ def test_clean_unsubmitted_capsules_removes_only_queued_not_submitted(
 def test_clean_unsubmitted_capsules_removes_entry_via_fallback_capsule_resolution(
     example_pipeline_queue: PipelineQueue, dandi_api_key: None
 ) -> None:
-    """clean_unsubmitted_capsules deletes a queued entry whose dandi_path differs from its remote path."""
+    """clean_unsubmitted_capsules deletes a queued entry whose within_dandiset_path differs from its remote path."""
     # The "sourcedata" entry's remote capsule lives under sub-mouse01, so it must be
-    # located via fallback resolution rather than the recorded dandi_path.
+    # located via fallback resolution rather than the recorded within_dandiset_path.
     capsule_path = "derivatives/dandisets-001/dandiset-001849/sub-mouse01/pipeline-aind+ephys/job-240101aa0009"
 
     with (
