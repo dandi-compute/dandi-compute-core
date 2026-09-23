@@ -33,15 +33,6 @@ pip install --group schemas
 DANDI_COMPUTE_REQUIRE_STRICT_SCHEMA_VALIDATION=1 pytest tests/dandi_compute_code/schemas
 ```
 
-## Building these docs
-
-```bash
-pip install -e . -r docs/requirements.txt
-sphinx-build -W --keep-going -b html docs docs/_build/html
-```
-
-The narrative pages are Markdown, parsed by MyST. Diagrams are written as fenced `mermaid` blocks, which render both here and on GitHub. The API reference is generated from docstrings. Keep docstrings in NumPy style, since warnings fail the build.
-
 ## Package layout
 
 ```mermaid
