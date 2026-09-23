@@ -166,3 +166,9 @@ Both are written as draft Dandisets with `dandi upload --allow-any-path`, since 
 | `Build and upload LFP container image` | Manual | Builds and pushes the LFP container to GHCR |
 
 The documentation is hosted on Read the Docs from `.readthedocs.yaml`.
+
+```{toctree}
+:hidden:
+
+dispatch
+```

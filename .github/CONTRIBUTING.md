@@ -134,4 +134,4 @@ A new pipeline also needs:
 
 ## Adding a schema
 
-See [docs/schemas.md](../docs/schemas.md).
+See [docs/internal/schemas.md](../docs/internal/schemas.md).

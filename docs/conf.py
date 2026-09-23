@@ -53,7 +53,7 @@ intersphinx_mapping = {
 }
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md", "schemas.md"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md", "internal/**"]
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -70,6 +70,12 @@ html_theme_options = {
 
 html_static_path = ["_static"]
 
-# The narrative pages sit at the top level with no subpages, so the primary sidebar would only
-# show an empty "Section Navigation". It is kept for the API reference, which has subpages.
-html_sidebars = {"*": []}
+# Top-level pages with no subpages would only show an empty "Section Navigation", so the primary
+# sidebar is kept only for pages in a section with subpages, and for the API reference.
+html_sidebars = {
+    "*": [],
+    "overview": ["sidebar-nav-bs"],
+    "job_capsules": ["sidebar-nav-bs"],
+    "infrastructure": ["sidebar-nav-bs"],
+    "dispatch": ["sidebar-nav-bs"],
+}

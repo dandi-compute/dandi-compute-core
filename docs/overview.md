@@ -115,3 +115,9 @@ Dispatcher
 
 Base directory
 : The fixed working tree on the cluster every command is pointed at with `--base`. See [Infrastructure](infrastructure.md).
+
+```{toctree}
+:hidden:
+
+job_capsules
+```

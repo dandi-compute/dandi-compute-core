@@ -19,7 +19,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
    :maxdepth: 2
    :caption: Concepts
 
-   job_capsules
    data_model
 
 .. toctree::
@@ -27,7 +26,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
    :caption: Operations
 
    infrastructure
-   dispatch
 
 .. toctree::
    :maxdepth: 1
