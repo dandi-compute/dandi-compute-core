@@ -78,7 +78,7 @@ _LFP_SCRIPT_KWARGS = {
 _JOB_INFO_KWARGS = {
     "job_id": 1,
     "dandiset_id": "000409",
-    "dandi_path": "sub-1/sub-1_ecephys.nwb",
+    "within_dandiset_path": "sub-1/sub-1_ecephys.nwb",
     "pipeline": "lfp",
     "version": "v1.0.0",
     "params": "abcdef0",
@@ -100,12 +100,21 @@ _CASES = [
         generate_aind_ephys_submission_script, (), _AIND_SCRIPT_KWARGS, id="generate_aind_ephys_submission_script"
     ),
     pytest.param(
-        build_lfp_pipeline_path, (), {"dandiset_id": 1, "output_dandi_path": "sub-1"}, id="build_lfp_pipeline_path"
+        build_lfp_pipeline_path,
+        (),
+        {"dandiset_id": 1, "output_within_dandiset_path": "sub-1"},
+        id="build_lfp_pipeline_path",
     ),
     pytest.param(
         build_lfp_job_hash,
         (),
-        {"dandiset_id": "000409", "dandi_path": "x", "bidsy_version": "v1", "params_id": "a", "content_id": None},
+        {
+            "dandiset_id": "000409",
+            "within_dandiset_path": "x",
+            "bidsy_version": "v1",
+            "params_id": "a",
+            "content_id": None,
+        },
         id="build_lfp_job_hash-none-content-id",
     ),
     pytest.param(

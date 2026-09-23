@@ -267,7 +267,7 @@ def test_prepare_aind_ephys_job_writes_job_provenance_in_dataset_description(
 
     assert provenance["job_id"] == capsule_directory.name
     assert provenance["dandiset_id"] == "000001"
-    assert provenance["dandi_path"] == "sub-mouse01/sub-mouse01_ecephys.nwb"
+    assert provenance["within_dandiset_path"] == "sub-mouse01/sub-mouse01_ecephys.nwb"
     assert provenance["content_id"] == content_id
     assert provenance["pipeline"] == "aind+ephys"
     assert provenance["version"] == "v1.1.0"

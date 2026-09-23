@@ -16,7 +16,7 @@ def _make_entry(**overrides: object) -> JobCapsule:
     job_kwargs = {
         "job_id": "job-250101abc123",
         "dandiset_id": "001849",
-        "dandi_path": "sub-mouse01/sub-mouse01_ecephys.nwb",
+        "within_dandiset_path": "sub-mouse01/sub-mouse01_ecephys.nwb",
         "pipeline": "aind+ephys",
         "version": "v1.0",
         "params": "abc1234",
@@ -85,16 +85,18 @@ def test_job_capsule_to_tsv_row_none_becomes_empty_cell() -> None:
 @pytest.mark.ai_generated
 def test_pipeline_queue_to_tsv_string_is_tab_delimited_with_header() -> None:
     """PipelineQueue.to_tsv_string writes a tab-delimited table with a header row."""
-    state = PipelineQueue(entries=[_make_entry(), _make_entry(dandi_path="sub-mouse02/sub-mouse02_ecephys.nwb")])
+    state = PipelineQueue(
+        entries=[_make_entry(), _make_entry(within_dandiset_path="sub-mouse02/sub-mouse02_ecephys.nwb")]
+    )
     tsv_text = state.to_tsv_string()
 
     reader = csv.DictReader(io.StringIO(tsv_text), delimiter="\t")
     rows = list(reader)
     assert reader.fieldnames is not None
     assert "dandiset_id" in reader.fieldnames
-    assert "dandi_path" in reader.fieldnames
+    assert "within_dandiset_path" in reader.fieldnames
     assert len(rows) == 2
-    assert {row["dandi_path"] for row in rows} == {
+    assert {row["within_dandiset_path"] for row in rows} == {
         "sub-mouse01/sub-mouse01_ecephys.nwb",
         "sub-mouse02/sub-mouse02_ecephys.nwb",
     }
@@ -280,7 +282,7 @@ def test_pipeline_queue_from_tsv_reads_table_without_submission_column(tmp_path:
 @pytest.mark.ai_generated
 def test_example_queue_reads_paths_from_sibling_table(example_pipeline_queue: PipelineQueue) -> None:
     """The example queue picks up the asset paths recorded in the paths.tsv beside it."""
-    entry = example_pipeline_queue.entry_for(dandi_path="sub-successful")
+    entry = example_pipeline_queue.entry_for(within_dandiset_path="sub-successful")
     capsule_path = entry.capsule_path()
 
     assert entry.output_paths == {f"{capsule_path}/derivatives/output.nwb": "95557b8d-acb3-59bb-bf23-d9fc29ff0eed"}

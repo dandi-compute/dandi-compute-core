@@ -9,7 +9,7 @@ _JOB_ID = "job-240101a1b2c3"
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("dandi_path", "relative_prefix"),
+    ("within_dandiset_path", "relative_prefix"),
     [
         ("sub-mouse01", pathlib.Path("derivatives/dandisets-000/dandiset-000001/sub-mouse01/pipeline-test")),
         (
@@ -23,7 +23,7 @@ _JOB_ID = "job-240101a1b2c3"
     ],
 )
 def test_capsule_dir_is_the_job_id_under_the_pipeline_directory(
-    dandi_path: str,
+    within_dandiset_path: str,
     relative_prefix: pathlib.Path,
     tmp_path: pathlib.Path,
 ) -> None:
@@ -31,7 +31,7 @@ def test_capsule_dir_is_the_job_id_under_the_pipeline_directory(
     entry = {
         "job_id": _JOB_ID,
         "dandiset_id": "000001",
-        "dandi_path": dandi_path,
+        "within_dandiset_path": within_dandiset_path,
         "pipeline": "test",
         "version": "v1.0",
         "params": "abc1234",
@@ -50,7 +50,7 @@ def test_capsule_dir_name_carries_no_identity_entities(tmp_path: pathlib.Path) -
     entry = {
         "job_id": _JOB_ID,
         "dandiset_id": "000001",
-        "dandi_path": "sub-mouse01",
+        "within_dandiset_path": "sub-mouse01",
         "pipeline": "test",
         "version": "v1.1.1",
         "params": "4af6a25",
@@ -71,7 +71,7 @@ def test_capsule_path_mirrors_capsule_dir(tmp_path: pathlib.Path) -> None:
     entry = {
         "job_id": _JOB_ID,
         "dandiset_id": "000001",
-        "dandi_path": "sub-mouse01/ses-01",
+        "within_dandiset_path": "sub-mouse01/ses-01",
         "pipeline": "test",
         "version": "v1.0",
         "params": "abc1234",
@@ -99,15 +99,15 @@ def test_capsule_path_mirrors_capsule_dir(tmp_path: pathlib.Path) -> None:
                 "config": "def5678",
                 "codebase": "v0.3.0",
             },
-            # A JobCapsule always carries dandi_path, so a missing key fails at construction.
+            # A JobCapsule always carries within_dandiset_path, so a missing key fails at construction.
             KeyError,
-            r"dandi_path",
+            r"within_dandiset_path",
         ),
         (
             {
                 "job_id": _JOB_ID,
                 "dandiset_id": "000001",
-                "dandi_path": "",
+                "within_dandiset_path": "",
                 "pipeline": "test",
                 "version": "v1.0",
                 "params": "abc1234",
@@ -115,16 +115,16 @@ def test_capsule_path_mirrors_capsule_dir(tmp_path: pathlib.Path) -> None:
                 "codebase": "v0.3.0",
             },
             ValueError,
-            r"Entry has invalid dandi_path field \(empty\)",
+            r"Entry has invalid within_dandiset_path field \(empty\)",
         ),
     ],
 )
-def test_capsule_dir_requires_valid_dandi_path(
+def test_capsule_dir_requires_valid_within_dandiset_path(
     entry: dict,
     expected_exception: type[Exception],
     expected_message: str,
     tmp_path: pathlib.Path,
 ) -> None:
-    """JobCapsule.capsule_dir requires a valid dandi_path value."""
+    """JobCapsule.capsule_dir requires a valid within_dandiset_path value."""
     with pytest.raises(expected_exception, match=expected_message):
         JobCapsule.from_dict(entry).capsule_dir(tmp_path)

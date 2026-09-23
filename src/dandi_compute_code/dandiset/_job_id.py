@@ -39,7 +39,7 @@ _PROVENANCE_KEY = "DandiCompute"
 def _compute_job_hash(
     *,
     dandiset_id: str,
-    dandi_path: str,
+    within_dandiset_path: str,
     pipeline: str,
     version: str,
     params: str,
@@ -53,7 +53,7 @@ def _compute_job_hash(
     which release of this package formed it, which matches how the queue decides whether a
     capsule already exists.
     """
-    payload = "|".join([dandiset_id, dandi_path, pipeline, version, params, config, content_id])
+    payload = "|".join([dandiset_id, within_dandiset_path, pipeline, version, params, config, content_id])
     job_hash = hashlib.md5(payload.encode("utf-8")).hexdigest()[:6]
     return job_hash
 

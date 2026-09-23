@@ -58,7 +58,7 @@ def test_from_dandi_reads_from_archive_dandiset_when_requested() -> None:
 
     archive_entries = [entry.to_dict() for entry in state]
     assert len(archive_entries) == 1
-    assert archive_entries[0]["dandi_path"] == source_path
+    assert archive_entries[0]["within_dandiset_path"] == source_path
     assert archive_entries[0]["content_id"] == "source-id"
     assert archive_entries[0]["status"] == "pending"
 

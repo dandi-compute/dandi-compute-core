@@ -251,7 +251,7 @@ def prepare_aind_ephys_job(
         raise UnmappedContentIDError(message)
 
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
-    output_dandi_path = dandiset_path.removesuffix(".nwb")
+    output_within_dandiset_path = dandiset_path.removesuffix(".nwb")
     # Parse BIDS entities from all path components (directory parts and filename stem),
     # and skip tokens that are modality suffixes (no "-" separator, e.g. "ecephys").
     # Directory parts are needed for AIND-style paths where "sub-" appears only in the folder name.
@@ -301,12 +301,11 @@ def prepare_aind_ephys_job(
 
     codebase_version = importlib.metadata.version("dandi-compute-code")
     bidsy_pipeline_version = pipeline_version.replace("-", "+")
-    pipeline_dandiset_path = (
-        f"derivatives/{_dandiset_derivatives_relative_dir(dandiset_id)}/{output_dandi_path}/pipeline-aind+ephys"
-    )
+    derivatives_relative_dir = _dandiset_derivatives_relative_dir(dandiset_id)
+    pipeline_dandiset_path = f"derivatives/{derivatives_relative_dir}/{output_within_dandiset_path}/pipeline-aind+ephys"
     job_hash = _compute_job_hash(
         dandiset_id=dandiset_id,
-        dandi_path=dandiset_path,
+        within_dandiset_path=dandiset_path,
         pipeline="aind+ephys",
         version=bidsy_pipeline_version,
         params=params_id,
@@ -401,7 +400,7 @@ def prepare_aind_ephys_job(
         _PROVENANCE_KEY: {
             "job_id": job_id,
             "dandiset_id": dandiset_id,
-            "dandi_path": dandiset_path,
+            "within_dandiset_path": dandiset_path,
             "content_id": content_id,
             "pipeline": "aind+ephys",
             "version": bidsy_pipeline_version,

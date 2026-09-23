@@ -17,7 +17,7 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
     The expected path structure (relative to
     ``derivatives/dandisets-{first 3 digits}/dandiset-{dandiset_id}/``) is::
 
-        <dandi-path>/pipeline-{pipeline}/job-{YYMMDD}{hash}/
+        <within-dandiset-path>/pipeline-{pipeline}/job-{YYMMDD}{hash}/
 
     The capsule directory name carries only the job ID, so the pipeline version, codebase
     version, parameters and config are read from its ``dataset_description.json`` provenance.
@@ -48,10 +48,10 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
     if dandiset_dir is None:
         return None
     dandiset_id = dandiset_dir.name[len("dandiset-") :]
-    dandi_path_parts = pipeline_dir.relative_to(dandiset_dir).parts[:-1]
-    if not dandi_path_parts:
+    within_dandiset_path_parts = pipeline_dir.relative_to(dandiset_dir).parts[:-1]
+    if not within_dandiset_path_parts:
         return None
-    dandi_path = pathlib.PurePosixPath(*dandi_path_parts).as_posix()
+    within_dandiset_path = pathlib.PurePosixPath(*within_dandiset_path_parts).as_posix()
 
     provenance = _read_capsule_provenance(capsule_dir)
 
@@ -74,7 +74,7 @@ def _parse_job_capsule_dir(capsule_dir: pathlib.Path, /) -> dict | None:
         "job_id": capsule_dir.name,
         "dandiset_id": dandiset_id,
         "content_id": content_id,
-        "dandi_path": dandi_path,
+        "within_dandiset_path": within_dandiset_path,
         "pipeline": pipeline,
         "version": provenance.get("version", ""),
         "codebase": provenance.get("codebase", ""),

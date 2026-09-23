@@ -7,7 +7,7 @@ from dandi_compute_code.lfp_pipeline import build_lfp_job_hash, build_lfp_pipeli
 
 @pytest.mark.ai_generated
 def test_build_pipeline_path_layout() -> None:
-    pipeline_path = build_lfp_pipeline_path(dandiset_id="000409", output_dandi_path="sub-01/sub-01_ecephys")
+    pipeline_path = build_lfp_pipeline_path(dandiset_id="000409", output_within_dandiset_path="sub-01/sub-01_ecephys")
 
     assert pipeline_path == "derivatives/dandiset-000409/sub-01/sub-01_ecephys/pipeline-lfp"
 
@@ -16,7 +16,7 @@ def test_build_pipeline_path_layout() -> None:
 def test_build_job_hash_is_a_short_hex_digest() -> None:
     job_hash = build_lfp_job_hash(
         dandiset_id="000409",
-        dandi_path="sub-01/sub-01_ecephys.nwb",
+        within_dandiset_path="sub-01/sub-01_ecephys.nwb",
         bidsy_version="v0.4.0",
         params_id="2f6768c",
         content_id="content-aaa",
@@ -36,14 +36,14 @@ def test_build_job_hash_is_a_short_hex_digest() -> None:
 def test_build_job_hash_differs_per_identifying_field(params_id: str, content_id: str) -> None:
     baseline_job_hash = build_lfp_job_hash(
         dandiset_id="000409",
-        dandi_path="sub-01/sub-01_ecephys.nwb",
+        within_dandiset_path="sub-01/sub-01_ecephys.nwb",
         bidsy_version="v0.4.0",
         params_id="2f6768c",
         content_id="content-aaa",
     )
     job_hash = build_lfp_job_hash(
         dandiset_id="000409",
-        dandi_path="sub-01/sub-01_ecephys.nwb",
+        within_dandiset_path="sub-01/sub-01_ecephys.nwb",
         bidsy_version="v0.4.0",
         params_id=params_id,
         content_id=content_id,

@@ -94,7 +94,7 @@ def test_from_dandi_reads_identity_from_capsule_provenance() -> None:
     entry = state.entries[0]
     assert entry.job.job_id == _JOB_ID
     assert entry.job.dandiset_id == "001697"
-    assert entry.job.dandi_path == _SOURCE_PATH
+    assert entry.job.within_dandiset_path == _SOURCE_PATH
     assert entry.job.pipeline == "test"
     assert entry.job.version == "v1.1.0"
     assert entry.job.codebase == "v0.4.0"

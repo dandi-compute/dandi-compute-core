@@ -38,7 +38,7 @@ _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL = (
 
 
 @beartype.beartype
-def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
+def build_lfp_pipeline_path(*, dandiset_id: str, output_within_dandiset_path: str) -> str:
     """
     Build the path of the LFP pipeline directory that holds an asset's job capsules.
 
@@ -47,7 +47,7 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
     str
         The pipeline directory path under the job capsules Dandiset.
     """
-    pipeline_path = f"derivatives/dandiset-{dandiset_id}/{output_dandi_path}/pipeline-lfp"
+    pipeline_path = f"derivatives/dandiset-{dandiset_id}/{output_within_dandiset_path}/pipeline-lfp"
     return pipeline_path
 
 
@@ -55,7 +55,7 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_dandi_path: str) -> str:
 def build_lfp_job_hash(
     *,
     dandiset_id: str,
-    dandi_path: str,
+    within_dandiset_path: str,
     bidsy_version: str,
     params_id: str,
     content_id: str,
@@ -74,7 +74,7 @@ def build_lfp_job_hash(
     """
     job_hash = _compute_job_hash(
         dandiset_id=dandiset_id,
-        dandi_path=dandi_path,
+        within_dandiset_path=within_dandiset_path,
         pipeline="lfp",
         version=bidsy_version,
         params=params_id,
@@ -195,7 +195,7 @@ def prepare_lfp_job(
         raise UnmappedContentIDError(message)
 
     dandiset_id, dandiset_path = next(iter(content_id_to_usage_dandiset_path[content_id].items()))
-    output_dandi_path = dandiset_path.removesuffix(".nwb")
+    output_within_dandiset_path = dandiset_path.removesuffix(".nwb")
 
     dandi_compute_code_source_dir = _code_directory(base_directory)
     dandi_compute_code_commit_hash = subprocess.check_output(
@@ -209,10 +209,12 @@ def prepare_lfp_job(
 
     codebase_version = importlib.metadata.version("dandi-compute-code")
     bidsy_pipeline_version = pipeline_version.replace("-", "+")
-    pipeline_dandiset_path = build_lfp_pipeline_path(dandiset_id=dandiset_id, output_dandi_path=output_dandi_path)
+    pipeline_dandiset_path = build_lfp_pipeline_path(
+        dandiset_id=dandiset_id, output_within_dandiset_path=output_within_dandiset_path
+    )
     job_hash = build_lfp_job_hash(
         dandiset_id=dandiset_id,
-        dandi_path=dandiset_path,
+        within_dandiset_path=dandiset_path,
         bidsy_version=bidsy_pipeline_version,
         params_id=params_id,
         content_id=content_id,
@@ -261,7 +263,7 @@ def prepare_lfp_job(
     log_directory.mkdir()
     output_nwb_directory.mkdir()
 
-    output_nwb_file_path = output_nwb_directory / f"{pathlib.Path(output_dandi_path).name}_desc-lfp"
+    output_nwb_file_path = output_nwb_directory / f"{pathlib.Path(output_within_dandiset_path).name}_desc-lfp"
     container_image = _LFP_CONTAINER_IMAGE_TEMPLATE.format(version=pipeline_version)
     environment_directory = "/orcd/data/dandi/001/environments/name-lfp_environment"
     done_tracker_file_path = processing_directory / "done.txt"
@@ -290,7 +292,7 @@ def prepare_lfp_job(
         _PROVENANCE_KEY: {
             "job_id": job_id,
             "dandiset_id": dandiset_id,
-            "dandi_path": dandiset_path,
+            "within_dandiset_path": dandiset_path,
             "content_id": content_id,
             "pipeline": "lfp",
             "version": bidsy_pipeline_version,

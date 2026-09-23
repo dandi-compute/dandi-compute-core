@@ -11,7 +11,7 @@ def _entry(status: str, /) -> JobCapsule:
     job = JobInfo(
         job_id=f"job-250101{status[:6]}",
         dandiset_id="001849",
-        dandi_path=f"sub-{status}/sub-{status}_ecephys.nwb",
+        within_dandiset_path=f"sub-{status}/sub-{status}_ecephys.nwb",
         pipeline="aind+ephys",
         version="v1.0",
         params="abc1234",
@@ -27,7 +27,7 @@ def test_job_capsule_defaults_to_unknown() -> None:
     job = JobInfo(
         job_id="job-250101abc123",
         dandiset_id="001849",
-        dandi_path="sub-mouse01/sub-mouse01_ecephys.nwb",
+        within_dandiset_path="sub-mouse01/sub-mouse01_ecephys.nwb",
         pipeline="aind+ephys",
         version="v1.0",
         params="abc1234",
