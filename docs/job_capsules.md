@@ -72,6 +72,8 @@ Parameters and configs enter the hash by the MD5 of their contents rather than b
 
 Two capsules can still share an ID when the same job is formed twice on the same day, for example by `jobs create --latest`. The second carries a `-2` suffix, the third `-3`, and so on. The queue reads through the suffix, so every spelling is recognised as the same job.
 
+This job ID is the only capsule layout the package understands. Capsules prepared before it existed carry older names, and the queue does not see them until they are migrated.
+
 ## Provenance
 
 The job ID alone does not say what was run. That is recorded in the capsule's `dataset_description.json`, under a `DandiCompute` key next to the standard BIDS fields.

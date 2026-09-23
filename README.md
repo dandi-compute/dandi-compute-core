@@ -2,122 +2,18 @@
 
 Contains essential code for orchestrating computation submission and queue management for processing pipelines acting on DANDI assets.
 
-Full documentation, including an architecture overview, set up guide, data model diagrams and infrastructure details, is in [`docs/`](docs/). Start with [docs/overview.md](docs/overview.md).
+## Documentation
 
+The documentation is at [dandi-compute-code.readthedocs.io](https://dandi-compute-code.readthedocs.io). It covers how the system fits together, setting it up, job capsules, the data model, the infrastructure it runs on, and the API reference. The sources are in [`docs/`](docs/).
 
-
-## Job capsules
-
-Each run of a pipeline over one asset lives in its own job capsule directory:
-
-```
-derivatives/dandisets-{first 3 digits}/dandiset-{dandiset_id}/{dandi path}/pipeline-{pipeline}/job-{YYMMDD}{hash}
-```
-
-The job ID is the whole name. `YYMMDD` is the date the capsule was prepared, which keeps the name readable and separates re-attempts of the same job across days. The hash is the first six characters of the MD5 checksum of the fields that identify the job, so capsules for different parameters, configs, versions or assets stay apart.
-
-The codebase version is deliberately left out of the hash. A job is the same logical job no matter which release of this package formed it, which is how the queue decides that a capsule already exists and must not be formed a second time.
-
-Everything the name used to spell out is recorded in two places instead:
-
-- the `DandiCompute` provenance block in the capsule's `dataset_description.json`
-- the `derivatives/jobs.tsv` summary table, which reads that provenance back
-
-The asset paths of each capsule are kept out of `jobs.tsv` so it stays readable as a table. They are listed one per row in the sibling `derivatives/paths.tsv` table, keyed by job ID.
-
-Two capsules can still land on one job ID when they are the same logical job prepared on the same day: re-attempts, or runs differing only in codebase version, which the hash ignores. Those carry a `-2`, `-3` counter, and the queue reads through it, so every spelling of a name reads back as the same job. Preparation never produces one, since it does not form a capsule for a job that already has one, but capsules migrated onto this layout do.
-
-The job ID is the only capsule layout this package understands. Capsules prepared before it existed carry older names and are invisible to the queue until they are migrated.
-
-## The base directory
-
-Every command operates on one structured base directory, passed as `--base`. It defaults to `/orcd/data/dandi/001/dandi-compute` on MIT Engaging. The layout under it is fixed. No command reads a local Dandiset clone. Dandisets are always addressed by ID and read from or written to the archive directly.
-
-- `code/` is the checkout of this repository.
-- `processing/` holds temporary working trees, dispatch directories and dispatch records.
-- `work/` is the Nextflow work directory.
-- `aind-ephys-pipeline/` is the checkout of the AIND ephys pipeline repository.
-
-## Manual dispatch commands on MIT Engaging
-
-To run manually with confirmation to trigger (for debugging):
+## Installation
 
 ```bash
-dandicompute aind prepare --id [full content ID]
+pip install git+https://github.com/dandi-compute/dandi-compute-core
 ```
 
-To run automatically:
+This installs the `dandicompute` command. Run `dandicompute --help` to see what it can do.
 
-```bash
-dandicompute aind prepare --id [full content ID] --submit
-```
+## Contributing
 
-To test automatically on the example asset:
-
-```bash
-dandicompute prepare aind --test
-```
-
-To clean unsubmitted job capsules:
-
-```bash
-dandicompute queue clean
-```
-
-To archive a failed job capsule by moving it from `001697` to the permanent archive `001873`:
-
-```bash
-dandicompute archive --job derivatives/dandisets-000/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-260916a1b2c3
-```
-
-
-To check whether there is any queued work before dispatching, use `queue pending`. It exits with code 0 when at least one job is awaiting submission, and code 1 when there is nothing to process. This lets a crontab skip the dispatch entirely when the queue is empty:
-
-```bash
-dandicompute queue pending --silent && dandicompute queue process
-```
-
-
-
-## Schemas
-
-The internal structures this package passes around are described by LinkML schemas under `src/dandi_compute_code/schemas/`, and validated against them at runtime and in CI. Pipeline parameter schemas stay plain JSON Schema. See [docs/schemas.md](docs/schemas.md).
-
-## Contributing Non-Code Files
-
-Non-code files for the AIND ephys pipeline are organized under the following subdirectories of `src/dandi_compute_code/aind_ephys_pipeline/`:
-
-- **`templates/`** — Jinja2 submission script templates (e.g., `submission_template.txt`).
-  Add a new `.txt` template here and reference it via `_globals.py` or a new globals module.
-
-- **`params/`** — JSON parameter files passed to the pipeline (e.g., `default.json`, `no_motion.json`).
-  To add a new parameters file:
-  1. Add the `[id].json` file to this directory.
-  2. Register it in `registries/registered_params.json` by adding an entry with the short name as the key, and its relative `path` and full MD5 `md5` as values, e.g.:
-     ```json
-     "my+params": {
-       "path": "my_params.json",
-       "md5": "<md5 hash of the file>"
-     }
-     ```
-  The short name can then be passed via the `parameters_key` argument in `_prepare_job.py` or via `--params` on the CLI.
-
-- **`registries/`** — JSON registry files mapping short names to resource paths and checksums (e.g., `registered_params.json`).
-
-- **`configs/`** — Nextflow configuration files for a specific compute environment (e.g., `mit_engaging.config`).
-  To add a new config file:
-  1. Add the `[environment].config` file to this directory.
-  2. Register it in `registries/registered_configs.json` by adding an entry with the short name as the key, and its relative `path` and full MD5 `md5` as values.
-  Use `--config` / `config_key` to select a registered config (default: `default`).
-
-Non-code files for the LFP pipeline are organized under the following subdirectories of `src/dandi_compute_code/lfp_pipeline/`:
-
-- **`params/`** — JSON parameter files (e.g., `name-default.json`) plus `parameter_schema.json`, the JSON Schema that defines and constrains the exposed LFP parameters. It is written by hand and is what both the website renders and `validate_lfp_parameters` checks against.
-  To add a new parameters file:
-  1. Add the `name-[id].json` file to this directory.
-  2. Register it in `registries/registered_params.json` by adding an entry with the short name as the key, and its relative `path` and full MD5 `md5` as values.
-  The short name can then be passed via the `parameters_key` argument of `load_lfp_parameters`.
-
-- **`registries/`** — JSON registry files mapping short names to resource paths and checksums (e.g., `registered_params.json`).
-
-The LFP pipeline depends on heavy scientific packages (SpikeInterface, neuroconv, pynwb). These are deliberately kept out of the base install and are declared only in `src/dandi_compute_code/lfp_pipeline/envs/pyproject.toml`. To run the LFP pipeline, use the runtime container built from `src/dandi_compute_code/lfp_pipeline/containers/lfp.Dockerfile`, or reproduce it locally with `pip install . ./src/dandi_compute_code/lfp_pipeline/envs`. The container image is built and pushed to the GitHub Container Registry by the manually dispatched `Build and upload LFP container image` workflow.
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for development setup, and for how to add parameter sets, configs and pipelines.

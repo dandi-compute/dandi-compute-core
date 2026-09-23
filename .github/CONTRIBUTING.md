@@ -69,6 +69,19 @@ flowchart LR
 | `dandiset` | Reading `assets.jsonld`, writing a single file into a Dandiset, moving a capsule between Dandisets, and job ID handling. |
 | `schemas` | The LinkML schemas and the runtime validator. |
 
+## Where pipeline files live
+
+Each pipeline keeps its non-code files in subdirectories of its package, `src/dandi_compute_code/aind_ephys_pipeline/` or `src/dandi_compute_code/lfp_pipeline/`.
+
+| Directory | Holds |
+|---|---|
+| `templates/` | The Jinja2 submission script template, `submission_template.txt` |
+| `params/` | Parameter files, named `name-{id}.json`. The LFP pipeline also keeps `parameter_schema.json` here, the hand-written JSON Schema its parameters are validated against. |
+| `configs/` | Nextflow configs for a compute environment, named `name-{environment}_revision-{n}.config` (AIND only) |
+| `registries/` | The registries mapping short keys to those files and their MD5 checksums |
+
+The LFP pipeline's scientific dependencies (SpikeInterface, neuroconv, pynwb) are kept out of the base install. They are declared in `src/dandi_compute_code/lfp_pipeline/envs/pyproject.toml` and baked into the container built from `src/dandi_compute_code/lfp_pipeline/containers/lfp.Dockerfile`, which the manually dispatched `Build and upload LFP container image` workflow pushes to the GitHub Container Registry.
+
 ## Adding a parameter set
 
 1. Add the file to the pipeline's `params/` directory, named `name-{id}.json`. For AIND, include a `pipeline_version` field naming the release it was written for.

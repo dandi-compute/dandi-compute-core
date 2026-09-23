@@ -2,7 +2,7 @@
 
 DANDI Compute runs on [MIT Engaging](https://orcd-docs.mit.edu), the MIT Office of Research Computing and Data's SLURM cluster. This page describes what it depends on there and elsewhere, and where each piece lives.
 
-## Topology
+## Where things run
 
 ```mermaid
 flowchart TB
