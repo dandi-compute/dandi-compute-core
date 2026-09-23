@@ -5,7 +5,8 @@ description: >-
   A LinkML schema describing a job capsule, which is one unit of pipeline work over one
   DANDI asset. The flat record described here is what `JobCapsule.to_dict` produces and
   `JobCapsule.from_dict` consumes. Apart from its path mappings, which are kept as rows of
-  the sibling `paths.tsv` table, it is also one row of the `jobs.tsv` table.
+  the sibling `paths.tsv` table, it is also one row of the `jobs.tsv` table. The column
+  descriptions in the `jobs.json` and `paths.json` sidecars of those tables are read from here.
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -121,6 +122,9 @@ classes:
       asset_size_bytes:
         description: The source asset's size in bytes, or null alongside an unresolved content_id.
         range: integer
+        unit:
+          symbol: B
+          ucum_code: By
         minimum_value: 0
         required: false
 
@@ -187,6 +191,9 @@ classes:
           Whole seconds between `created_at` and `job_submission_time`. Derived rather than
           stored, so it is written to the jobs table but ignored when one is read back.
         range: integer
+        unit:
+          symbol: s
+          ucum_code: s
         minimum_value: 0
         required: false
 
@@ -195,6 +202,9 @@ classes:
           Whole seconds between `job_submission_time` and `job_completion_time`. Derived on
           the same terms as `queue_wait_seconds`.
         range: integer
+        unit:
+          symbol: s
+          ucum_code: s
         minimum_value: 0
         required: false
 

@@ -397,7 +397,10 @@ def _queue_group() -> None:
 @click.option(
     "--test",
     "test",
-    help="Preserve the temporary working trees used to write each jobs.tsv and paths.tsv instead of cleaning them up.",
+    help=(
+        "Preserve the temporary working trees used to write each jobs.tsv, paths.tsv and their JSON sidecars "
+        "instead of cleaning them up."
+    ),
     required=False,
     is_flag=True,
     default=False,
@@ -422,7 +425,8 @@ def _queue_refresh_command(
     Ephemerally rebuilds and rewrites derivatives/jobs.tsv within both the source and
     archived Dandisets themselves (see PipelineQueue.write_dandiset_jobs_table), so each always
     reflects its current state fetched fresh from its own assets.jsonld. The asset paths of
-    each job are written beside it to derivatives/paths.tsv.
+    each job are written beside it to derivatives/paths.tsv, and each table is accompanied by
+    its JSON sidecar (derivatives/jobs.json and derivatives/paths.json) describing its columns.
     """
     _configure_logging(silent=silent)
     _require_dandi_api_key()
@@ -436,7 +440,10 @@ def _queue_refresh_command(
         )
         if not silent:
             _styled_echo(
-                text=f"\nWrote derivatives/jobs.tsv and derivatives/paths.tsv to Dandiset {target_dandiset_id}.",
+                text=(
+                    "\nWrote derivatives/jobs.tsv, derivatives/paths.tsv and their JSON sidecars "
+                    f"to Dandiset {target_dandiset_id}."
+                ),
                 color="green",
             )
 

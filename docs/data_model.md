@@ -121,6 +121,8 @@ erDiagram
 | `derivatives/...` | `output_paths` |
 | `logs/...` | `log_paths` |
 
+Each table is accompanied by a BIDS-style JSON sidecar, `derivatives/jobs.json` and `derivatives/paths.json`. The sidecar gives every column its `Description`, read from the job capsule LinkML schema. It also lists the permissible `status` values as `Levels` and the `Units` of the size and duration columns.
+
 `content_id` and `asset_size_bytes` describe the *source* asset. They are looked up in the source Dandiset's own `assets.jsonld` by `within_dandiset_path`, and left null with a warning when that path no longer exists there.
 
 ### Example rows

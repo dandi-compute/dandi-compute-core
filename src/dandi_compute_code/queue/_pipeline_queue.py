@@ -3,7 +3,9 @@ PipelineQueue — typed container for ``jobs.tsv``.
 
 ``jobs.tsv`` is a tab-separated table where each row is one job
 capsule. The asset paths of each capsule are kept apart in a sibling ``paths.tsv`` table,
-one row per path, so that ``jobs.tsv`` stays narrow enough to render as a table.
+one row per path, so that ``jobs.tsv`` stays narrow enough to render as a table. Each
+table is accompanied by a BIDS-style JSON sidecar (``jobs.json`` and ``paths.json``)
+describing its columns.
 :class:`PipelineQueue` is the container over both, a list of
 :class:`~._job_capsule.JobCapsule` objects (the typed row model, defined in
 :mod:`._job_capsule`) with convenience helpers for filtering and round-trip I/O.
@@ -59,6 +61,7 @@ from ._queue_utils import (
     _sort_key,
     _UpstreamMetadataCache,
 )
+from ._tsv_sidecar import _tsv_sidecar_string
 from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset import move_job_capsule, write_dandiset_file
@@ -390,20 +393,42 @@ class PipelineQueue:
             writer.writerows(entry.to_paths_tsv_rows())
         return buffer.getvalue()
 
+    @staticmethod
+    def to_tsv_sidecar_string() -> str:
+        """Serialise the BIDS-style ``jobs.json`` sidecar describing each ``jobs.tsv`` column."""
+        return _tsv_sidecar_string(class_name="JobCapsule", field_names=_JOBS_TSV_FIELD_NAMES)
+
+    @staticmethod
+    def to_paths_tsv_sidecar_string() -> str:
+        """Serialise the BIDS-style ``paths.json`` sidecar describing each ``paths.tsv`` column."""
+        return _tsv_sidecar_string(class_name="PathEntry", field_names=_PATHS_TSV_FIELD_NAMES)
+
+    def _tables_by_relative_path(self, jobs_relative_path: pathlib.PurePath, /) -> dict[pathlib.PurePath, str]:
+        """The content of ``jobs.tsv``, ``paths.tsv`` and their JSON sidecars, keyed by where each is written."""
+        paths_relative_path = jobs_relative_path.with_name(_PATHS_TSV_FILE_NAME)
+        tables = {
+            jobs_relative_path: self.to_tsv_string(),
+            jobs_relative_path.with_suffix(".json"): self.to_tsv_sidecar_string(),
+            paths_relative_path: self.to_paths_tsv_string(),
+            paths_relative_path.with_suffix(".json"): self.to_paths_tsv_sidecar_string(),
+        }
+        return tables
+
     def to_tsv(self, file_path: pathlib.Path, /) -> None:
         """
         Write all entries to *file_path* as a tab-separated ``jobs.tsv`` table.
 
-        The asset paths of the entries are written to a ``paths.tsv`` table beside it.
+        The asset paths of the entries are written to a ``paths.tsv`` table beside it, and
+        each table is accompanied by its JSON sidecar (``jobs.json`` and ``paths.json``).
 
         Parameters
         ----------
         file_path : pathlib.Path
-            Destination path. The file, and the ``paths.tsv`` beside it, are
-            overwritten if they already exist.
+            Destination path. The file, and the ``paths.tsv`` and sidecars beside
+            it, are overwritten if they already exist.
         """
-        file_path.write_text(self.to_tsv_string())
-        file_path.with_name(_PATHS_TSV_FILE_NAME).write_text(self.to_paths_tsv_string())
+        for table_file_path, content in self._tables_by_relative_path(file_path).items():
+            table_file_path.write_text(content)
 
     @classmethod
     def write_dandiset_jobs_table(
@@ -421,7 +446,8 @@ class PipelineQueue:
         :meth:`from_dandi`) and uploads it as a tab-separated table to *relative_path* within
         *dandiset_id* (default ``derivatives/jobs.tsv``) via
         :func:`~dandi_compute_code.dandiset.write_dandiset_file`. The asset paths of the
-        entries are uploaded the same way to a ``paths.tsv`` beside it.
+        entries are uploaded the same way to a ``paths.tsv`` beside it, and each table is
+        accompanied by its JSON sidecar (``jobs.json`` and ``paths.json``).
 
         Intended to be called once for the job capsules ("source") Dandiset and once for the
         failed runs archive ("archived") Dandiset. There is no local queue directory or local
@@ -435,7 +461,8 @@ class PipelineQueue:
             the table is written into. Defaults to the job capsules Dandiset.
         relative_path : str, optional
             Path (relative to the Dandiset root) the ``jobs.tsv`` table is
-            written to. The ``paths.tsv`` table is written beside it.
+            written to. The ``paths.tsv`` table and both JSON sidecars are
+            written beside it.
         base_directory : pathlib.Path, optional
             The structured base directory. The temporary working tree used to upload the table is
             created in its ``processing/`` directory.
@@ -449,14 +476,12 @@ class PipelineQueue:
             If ``DANDI_API_KEY`` is unset or blank, or if the upload fails.
         """
         state = cls.from_dandi(dandiset_id=dandiset_id)
-        paths_relative_path = str(pathlib.PurePosixPath(relative_path).with_name(_PATHS_TSV_FILE_NAME))
-        for table_relative_path, content in (
-            (relative_path, state.to_tsv_string()),
-            (paths_relative_path, state.to_paths_tsv_string()),
-        ):
+        for table_relative_path, content in state._tables_by_relative_path(
+            pathlib.PurePosixPath(relative_path)
+        ).items():
             write_dandiset_file(
                 dandiset_id=dandiset_id,
-                relative_path=table_relative_path,
+                relative_path=str(table_relative_path),
                 content=content,
                 base_directory=base_directory,
                 test=test,

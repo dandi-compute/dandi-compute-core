@@ -11,7 +11,7 @@ _FAILED_RUNS_ARCHIVE_DANDISET_ID = "001873"
 
 @pytest.mark.ai_generated
 def test_write_dandiset_jobs_table_builds_state_and_uploads() -> None:
-    """write_dandiset_jobs_table builds the state from the given Dandiset and uploads jobs.tsv and paths.tsv."""
+    """write_dandiset_jobs_table builds the state from the given Dandiset and uploads both tables and sidecars."""
     source_path = "sub-mouse01/sub-mouse01_ecephys.nwb"
     capsule_path = (
         "derivatives/dandiset-001697/sub-mouse01/sub-mouse01_ecephys/pipeline-aind+ephys/"
@@ -52,7 +52,9 @@ def test_write_dandiset_jobs_table_builds_state_and_uploads() -> None:
     ):
         PipelineQueue.write_dandiset_jobs_table(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
 
-    state_kwargs, paths_kwargs = (call.kwargs for call in mock_write_file.call_args_list)
+    state_kwargs, state_sidecar_kwargs, paths_kwargs, paths_sidecar_kwargs = (
+        call.kwargs for call in mock_write_file.call_args_list
+    )
     assert state_kwargs["dandiset_id"] == _JOB_CAPSULES_DANDISET_ID
     assert state_kwargs["relative_path"] == "derivatives/jobs.tsv"
     assert "dandiset_id\t" in state_kwargs["content"].splitlines()[0]
@@ -60,11 +62,15 @@ def test_write_dandiset_jobs_table_builds_state_and_uploads() -> None:
     assert paths_kwargs["dandiset_id"] == _JOB_CAPSULES_DANDISET_ID
     assert paths_kwargs["relative_path"] == "derivatives/paths.tsv"
     assert paths_kwargs["content"].splitlines()[0] == "job_id\tpath\tcontent_id"
+    assert state_sidecar_kwargs["relative_path"] == "derivatives/jobs.json"
+    assert state_sidecar_kwargs["content"] == PipelineQueue.to_tsv_sidecar_string()
+    assert paths_sidecar_kwargs["relative_path"] == "derivatives/paths.json"
+    assert paths_sidecar_kwargs["content"] == PipelineQueue.to_paths_tsv_sidecar_string()
 
 
 @pytest.mark.ai_generated
 def test_write_dandiset_jobs_table_empty_state_writes_header_only() -> None:
-    """write_dandiset_jobs_table uploads header-only state and paths tables when there are no entries."""
+    """write_dandiset_jobs_table uploads header-only tables, and their sidecars, when there are no entries."""
     with (
         mock.patch(
             "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
@@ -76,8 +82,11 @@ def test_write_dandiset_jobs_table_empty_state_writes_header_only() -> None:
 
     assert [call.kwargs["relative_path"] for call in mock_write_file.call_args_list] == [
         "derivatives/jobs.tsv",
+        "derivatives/jobs.json",
         "derivatives/paths.tsv",
+        "derivatives/paths.json",
     ]
     for call in mock_write_file.call_args_list:
         assert call.kwargs["dandiset_id"] == _FAILED_RUNS_ARCHIVE_DANDISET_ID
-        assert len(call.kwargs["content"].splitlines()) == 1
+        if call.kwargs["relative_path"].endswith(".tsv"):
+            assert len(call.kwargs["content"].splitlines()) == 1
