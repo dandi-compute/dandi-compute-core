@@ -30,10 +30,10 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
    dispatch
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Development
 
-   contributing
+   Contributing <https://github.com/dandi-compute/dandi-compute-core/blob/main/.github/CONTRIBUTING.md>
 
 .. toctree::
    :maxdepth: 1
