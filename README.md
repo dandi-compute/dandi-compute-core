@@ -2,6 +2,8 @@
 
 Contains essential code for orchestrating computation submission and queue management for processing pipelines acting on DANDI assets.
 
+Full documentation, including an architecture overview, usage guide, data model diagrams and infrastructure details, is in [`docs/`](docs/). Start with [docs/overview.md](docs/overview.md).
+
 
 
 ## Job capsules

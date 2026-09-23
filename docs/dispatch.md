@@ -124,7 +124,7 @@ The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline
 
 ## The log directory
 
-Dispatch works inside the `processing/` directory of the base directory given by `--base` (see the README for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
+Dispatch works inside the `processing/` directory of the base directory given by `--base` (see [Infrastructure](infrastructure.md) for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
 
 Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}`. For resource group `n` it writes:
 

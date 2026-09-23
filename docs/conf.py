@@ -24,7 +24,16 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.intersphinx",
     "sphinx_autodoc_typehints",
+    "myst_parser",
+    "sphinxcontrib.mermaid",
 ]
+
+# The narrative pages are Markdown so they also read well on GitHub. Fenced ``mermaid`` blocks
+# render as diagrams in both places.
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+myst_enable_extensions = ["colon_fence", "deflist"]
+myst_fence_as_directive = ["mermaid"]
+myst_heading_anchors = 3
 
 autosummary_generate = True
 # The LFP pipeline runtime dependencies are an optional extra, so mock them to
