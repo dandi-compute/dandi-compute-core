@@ -1,6 +1,6 @@
 # Data model
 
-This page maps the structures the package reads, writes and passes around, and how they relate. The authoritative definitions are the LinkML schemas under `src/dandi_compute_code/schemas/` (see [Schemas](schemas.md)). The diagrams here follow them field for field.
+This page maps the structures the package reads, writes and passes around, and how they relate. The authoritative definitions are the LinkML schemas under `src/dandi_compute_code/schemas/`. The diagrams here follow them field for field.
 
 ## How it fits together
 

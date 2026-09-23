@@ -107,7 +107,3 @@ A new pipeline also needs:
 - an entry for that template in `_PIPELINE_TEMPLATE_FILE_PATHS` in `queue/_dispatch_config.py`
 - its registries, added to `_PARAMS_REGISTRIES` and, if it has configs, `_CONFIGS_REGISTRIES` in `queue/_globals.py`
 - an entry in `pipeline_configs.json`
-
-## Adding a schema
-
-See [Schemas](schemas.md).

@@ -34,7 +34,6 @@ New here? Start with the :doc:`overview`, then read :doc:`setup` to get it runni
    :caption: Development
 
    contributing
-   schemas
 
 .. toctree::
    :maxdepth: 1
