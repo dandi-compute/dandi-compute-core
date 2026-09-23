@@ -6,14 +6,14 @@ Orchestration code for running processing pipelines over assets on the
 per asset and pipeline, uploads it to a Dandiset, runs it on a SLURM cluster, and
 tracks every capsule through its lifecycle using nothing but the archive's own metadata.
 
-New here? Start with the :doc:`overview`, then read :doc:`usage` to run your first job.
+New here? Start with the :doc:`overview`, then read :doc:`setup` to get it running.
 
 .. toctree::
    :maxdepth: 2
    :caption: Getting started
 
    overview
-   usage
+   setup
 
 .. toctree::
    :maxdepth: 2

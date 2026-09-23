@@ -1,4 +1,6 @@
-# Usage
+# Set up
+
+DANDI Compute runs passively. Once it is installed and scheduled, it finds qualifying assets, forms and dispatches job capsules, and reports on them without anyone driving it. This page covers getting it to that point, and the commands for stepping in by hand when something needs attention.
 
 ## Installation
 
@@ -36,6 +38,21 @@ pip install -e . --group all
 | `DANDI_DEVEL` | `queue refresh`, `queue process`, `archive` | Enables the DANDI client's development options, which `dandi upload --allow-any-path` requires for the non-BIDS paths capsules use. |
 
 A command that needs one of these and finds it unset exits with an error before touching anything.
+
+## Running on a schedule
+
+This is the whole of normal operation. A handful of `dandicompute` commands run from `cron` on a login node, and everything else follows from them. The schedule below is an example of how the commands fit together, not a copy of the live crontab.
+
+```text
+# m    h  dom mon dow  command
+*/15   *  *   *   *    dandicompute queue pending --silent && dandicompute queue process --silent
+0      */6 *  *   *    dandicompute jobs create --limit 50 --silent
+30     *  *   *   *    dandicompute queue refresh --silent
+0      3  *   *   *    dandicompute queue stats --silent && dandicompute issues summarize --silent
+0      4  *   *   *    dandicompute clean --dispatch --silent
+```
+
+`cron` does not read a login shell's profile, so the `DANDI_API_KEY` and `DANDI_DEVEL` variables and the environment holding `dandicompute` have to be set up in the crontab itself or in a wrapper script.
 
 ## The command line
 
@@ -79,7 +96,9 @@ flowchart TD
 
 Run any command with `--help` for its full list of options.
 
-## Common tasks
+## Stepping in by hand
+
+The schedule keeps everything moving on its own. These commands are for debugging a single asset, rolling out a change, or cleaning up after failures.
 
 ### Process one asset by hand
 
@@ -164,21 +183,6 @@ dandicompute clean --work              # empty work/ except its apptainer_cache/
 dandicompute clean --dispatch          # remove dispatch directories with no live array
 dandicompute clean --dispatch --age 6  # only those at least 6 hours old
 ```
-
-## Running on a schedule
-
-In production these run from `cron` on a login node. The schedule below is an example of how the commands fit together, not a copy of the live crontab.
-
-```text
-# m    h  dom mon dow  command
-*/15   *  *   *   *    dandicompute queue pending --silent && dandicompute queue process --silent
-0      */6 *  *   *    dandicompute jobs create --limit 50 --silent
-30     *  *   *   *    dandicompute queue refresh --silent
-0      3  *   *   *    dandicompute queue stats --silent && dandicompute issues summarize --silent
-0      4  *   *   *    dandicompute clean --dispatch --silent
-```
-
-`cron` does not read a login shell's profile, so the `DANDI_API_KEY` and `DANDI_DEVEL` variables and the environment holding `dandicompute` have to be set up in the crontab itself or in a wrapper script.
 
 ## Using the Python API
 
