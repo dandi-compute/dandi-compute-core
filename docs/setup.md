@@ -10,10 +10,10 @@ The orchestration side is a light install. It needs Python 3.10 or newer.
 pip install git+https://github.com/dandi-compute/dandi-compute-core
 ```
 
-On the cluster the package is installed from the `code/` checkout inside the base directory, so that the commit recorded in each capsule's provenance matches what is on disk:
+On the cluster the package is installed from the `code/` checkout inside the base directory (`{base}` below, see [Infrastructure](infrastructure.md)), so that the commit recorded in each capsule's provenance matches what is on disk:
 
 ```bash
-cd /orcd/data/dandi/001/dandi-compute/code
+cd {base}/code
 git pull
 pip install -e .
 ```
@@ -30,14 +30,9 @@ For development, the `dev`, `docs` and `schemas` dependency groups are available
 pip install -e . --group all
 ```
 
-## Environment variables
+## Credentials
 
-| Variable | Needed by | Purpose |
-|---|---|---|
-| `DANDI_API_KEY` | Every command that writes to the archive | Authenticates uploads, deletions and moves on the DANDI Archive. |
-| `DANDI_DEVEL` | `queue refresh`, `queue process`, `archive` | Enables the DANDI client's development options, which `dandi upload --allow-any-path` requires for the non-BIDS paths capsules use. |
-
-A command that needs one of these and finds it unset exits with an error before touching anything.
+Every command that writes to the archive needs `DANDI_API_KEY`, which authenticates uploads, deletions and moves on the DANDI Archive. A command that needs it and finds it unset exits with an error before touching anything.
 
 ## Running on a schedule
 
@@ -52,7 +47,7 @@ This is the whole of normal operation. A handful of `dandicompute` commands run 
 0      4  *   *   *    dandicompute clean --dispatch --silent
 ```
 
-`cron` does not read a login shell's profile, so the `DANDI_API_KEY` and `DANDI_DEVEL` variables and the environment holding `dandicompute` have to be set up in the crontab itself or in a wrapper script.
+`cron` does not read a login shell's profile, so `DANDI_API_KEY` and the environment holding `dandicompute` have to be set up in the crontab itself or in a wrapper script.
 
 ## The command line
 
