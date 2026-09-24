@@ -44,7 +44,7 @@ Pipelines differ here for real reasons:
 
 | pipeline | its `submit.sh` | resulting array |
 |---|---|---|
-| `aind+ephys` | a Nextflow driver that dispatches the heavy work to its own jobs, so it needs very little itself | 1GB / 1 CPU / `mit_normal` / 12h |
+| `aind+ephys` | a Nextflow driver that dispatches the heavy work to its own jobs, so it needs very little itself | 1GB / 1 CPU / `mit_preemptable` / 48h |
 | `lfp` | does its work in process via `datalad containers-run` | 16GB / 1 CPU / `mit_preemptable` / 48h |
 
 Capsules of one pipeline normally agree, since one template renders them all, so this is one array per pipeline in practice. They can diverge when a template changed between the releases that prepared them, and a capsule needing more than its neighbours would otherwise be truncated by an array sized for them.
@@ -102,7 +102,7 @@ The output reports what each pipeline dispatched, with one line per array naming
 
 ```
 aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requested resources.
-  array 900: 12 capsules requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time
+  array 900: 12 capsules requesting 1GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
   array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
 
   logs, manifests and scripts: processing/derivatives/logs/dandicompute-dispatch-aind-ephys

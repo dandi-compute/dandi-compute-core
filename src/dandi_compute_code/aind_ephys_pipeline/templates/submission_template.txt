@@ -3,8 +3,8 @@
 #SBATCH --output={{ log_directory }}/job-%j_slurm.log
 #SBATCH --mem=1GB
 #SBATCH --cpus-per-task 1
-#SBATCH --partition=mit_normal
-#SBATCH --time=12:00:00
+#SBATCH --partition=mit_preemptable
+#SBATCH --time=48:00:00
 #SBATCH --signal=B:USR1@600
 
 NWB_FILE_PATH="{{ nwb_file_path }}"
