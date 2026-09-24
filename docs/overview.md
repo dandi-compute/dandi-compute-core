@@ -52,7 +52,7 @@ A few properties fall out of this design.
 
 | Pipeline | Key | What it does | Where its code lives | Runtime |
 |---|---|---|---|---|
-| AIND ephys | `aind+ephys` | Spike sorting, postprocessing, quality control and visualization of extracellular electrophysiology | [`aind-ephys-pipeline`](https://github.com/CodyCBakerPhD/aind-ephys-pipeline), checked out under the base directory | Nextflow driving Apptainer containers |
+| AIND ephys | `aind+ephys` | Spike sorting, postprocessing, quality control and visualization of extracellular electrophysiology | [`aind-ephys-pipeline`](https://github.com/AllenNeuralDynamics/aind-ephys-pipeline), checked out under the base directory | Nextflow driving Apptainer containers |
 | LFP | `lfp` | Filtering, re-referencing and resampling of raw ephys into an LFP series | `src/dandi_compute_code/lfp_pipeline/` | The `dandi-compute-lfp` container via `datalad containers-run` |
 
 Pipelines are listed in `src/dandi_compute_code/queue/pipeline_configs.json`, along with which parameter sets each one forms capsules for.
