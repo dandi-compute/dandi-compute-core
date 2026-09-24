@@ -10,11 +10,15 @@ Each array task then:
 
 1. reads its capsule out of the manifest by `SLURM_ARRAY_TASK_ID`, which is why array indices are one-based
 2. downloads that capsule's `code/` tree with `dandi download --preserve-tree`
-3. claims it by writing a `submitted_date-*` marker and uploading that marker back
+3. claims it by writing a `submitted_date-*` marker holding its own array job and task IDs, and uploading that marker back
 4. runs the capsule's `submit.sh`
 5. removes its working tree, unless `--test` was passed
 
 The capsule is claimed before it runs, so a dispatch that overlaps a live array sees it as submitted and does not place it in a second one.
+
+A capsule someone else has claimed is left alone. A task SLURM requeued, after preemption for example, keeps its IDs. It finds its own claim from before the requeue and runs the capsule again, and the AIND pipeline resumes from the steps that had already finished.
+
+Each task is warned before it is stopped, so its capsule can upload its logs and read as `failed` rather than `stalled`. A capsule that asks for a warning ahead of its time limit (`#SBATCH --signal`, which the AIND template sets) has that signal passed on by the task's batch shell. When SLURM stops the task outright, with preemption or `scancel`, the batch shell and the task's log stay up until the capsule has wrapped up.
 
 ## The concurrency limit
 

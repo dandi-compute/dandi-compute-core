@@ -94,11 +94,22 @@ def test_submission_script_asks_to_be_warned_ahead_of_its_time_limit(capsule: di
 
 @pytest.mark.ai_generated
 @pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
-def test_submission_script_stops_nextflow_and_uploads_logs_when_warned(capsule: dict[str, pathlib.Path]) -> None:
+@pytest.mark.parametrize(
+    "stop_signal",
+    [
+        pytest.param(signal.SIGUSR1, id="time-limit-warning"),
+        pytest.param(signal.SIGTERM, id="preempted-or-cancelled"),
+    ],
+)
+def test_submission_script_stops_nextflow_and_uploads_logs_when_stopped(
+    capsule: dict[str, pathlib.Path],
+    stop_signal: signal.Signals,
+) -> None:
     """
-    A run cut off by its time limit reads as failed, with logs, rather than stalled without any.
+    A run cut off early reads as failed, with logs, rather than stalled without any.
 
-    Partial results are removed first so that they are not uploaded as the capsule's output.
+    That holds whether SLURM warned it of its time limit or stopped it outright. Partial results
+    are removed first so that they are not uploaded as the capsule's output.
     """
     environment = {
         **os.environ,
@@ -114,7 +125,7 @@ def test_submission_script_stops_nextflow_and_uploads_logs_when_warned(capsule: 
     )
     try:
         _wait_for(capsule["records"] / "nextflow_arguments")
-        process.send_signal(signal.SIGUSR1)
+        process.send_signal(stop_signal)
         output, _ = process.communicate(timeout=60)
     finally:
         if process.poll() is None:

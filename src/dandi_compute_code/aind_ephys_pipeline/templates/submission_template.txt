@@ -32,14 +32,17 @@ RUNDIR="{{ log_directory }}"
 cd "$RUNDIR"
 
 # The steps Nextflow submits queue and run inside this job's time limit. When the limit is
-# near, SLURM sends USR1 (`--signal` above). Nextflow is then stopped, which cancels the steps
-# it submitted, and the logs are uploaded so the capsule reads as failed rather than stalled.
-# Nextflow gets up to five of the ten minutes to cancel its steps, leaving the rest for the
-# upload. A later run of this script resumes from the steps that had already finished.
-upload_logs_before_time_limit() {
-    echo "=== Time limit is near; stopping nextflow and uploading logs ==="
+# near, SLURM sends USR1 (`--signal` above). When it stops the job early (preemption,
+# `scancel`), it sends TERM. Either way Nextflow is stopped, which cancels the steps it
+# submitted, and the logs are uploaded so the capsule reads as failed rather than stalled.
+# Nextflow gets up to five of the ten minutes of the warning to cancel its steps, leaving the
+# rest for the upload, but only seconds after TERM, where the grace period may be short. A
+# later run of this script, including a requeued one, resumes from the steps already finished.
+stop_nextflow_and_upload_logs() {
+    trap '' USR1 TERM
+    echo "=== $1; stopping nextflow and uploading logs ==="
     kill -TERM "$NEXTFLOW_PID" 2>/dev/null || true
-    for _ in $(seq 300); do
+    for _ in $(seq "$2"); do
         kill -0 "$NEXTFLOW_PID" 2>/dev/null || break
         sleep 1
     done
@@ -48,7 +51,8 @@ upload_logs_before_time_limit() {
     dandi upload --validation skip
     exit 1
 }
-trap upload_logs_before_time_limit USR1
+trap 'stop_nextflow_and_upload_logs "Time limit is near" 300' USR1
+trap 'stop_nextflow_and_upload_logs "Stopped by SLURM" 10' TERM
 
 DATA_PATH="$DATA_PATH" RESULTS_PATH="$RESULTS_PATH" NXF_APPTAINER_CACHEDIR="$NXF_APPTAINER_CACHEDIR" nextflow \
     -C "{{ config_file_path }}" \
@@ -60,7 +64,7 @@ DATA_PATH="$DATA_PATH" RESULTS_PATH="$RESULTS_PATH" NXF_APPTAINER_CACHEDIR="$NXF
     --job_dispatch_args "--nwb-files $NWB_FILE_PATH" &
 NEXTFLOW_PID=$!
 wait "$NEXTFLOW_PID"
-trap - USR1
+trap - USR1 TERM
 
 echo "=== Directory tree of \$RESULTS_PATH after nextflow run ==="
 tree "$RESULTS_PATH" || find "$RESULTS_PATH" -print
