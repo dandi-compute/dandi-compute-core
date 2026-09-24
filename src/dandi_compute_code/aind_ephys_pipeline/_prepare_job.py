@@ -367,7 +367,9 @@ def prepare_aind_ephys_job(
     capsule_versions_file_path = pipeline_repo_directory / "pipeline" / "capsule_versions.env"
 
     # TODO: could look up description, authors, license, etc. from source dandiset metadata
-    pipeline_url = f"https://github.com/CodyCBakerPhD/aind-ephys-pipeline/tree/{pipeline_version.replace('+','%2B')}"
+    pipeline_url = (
+        f"https://github.com/AllenNeuralDynamics/aind-ephys-pipeline/tree/{pipeline_version.replace('+','%2B')}"
+    )
     dataset_description = {
         "Name": f"DANDI Compute: AIND Ephys pipeline output for Dandiset {dandiset_id}",
         "BIDSVersion": "1.10",
@@ -375,7 +377,7 @@ def prepare_aind_ephys_job(
         "GeneratedBy": [
             {
                 "Name": "AIND Ephys Pipeline",
-                "Description": "A customized and version-locked branch of the main AIND ephys pipeline.",
+                "Description": "The AIND ephys pipeline, run at a released version.",
                 "Version": f"{pipeline_version}+{pipeline_commit_hash}",
                 "CodeURL": pipeline_url,
             },
