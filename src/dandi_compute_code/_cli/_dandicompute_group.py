@@ -444,7 +444,19 @@ def _jobs_refresh_command(
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    for target_dandiset_id in (dandiset_id, archive_dandiset_id):
+    _refresh_jobs_tables(
+        dandiset_ids=(dandiset_id, archive_dandiset_id),
+        base_directory=base_directory,
+        test=test,
+        silent=silent,
+    )
+
+
+def _refresh_jobs_tables(
+    *, dandiset_ids: tuple[str, ...], base_directory: pathlib.Path, test: bool, silent: bool
+) -> None:
+    """Rewrite jobs.tsv, paths.tsv and their sidecars into each of *dandiset_ids*."""
+    for target_dandiset_id in dandiset_ids:
         PipelineQueue.write_dandiset_jobs_table(
             dandiset_id=target_dandiset_id,
             base_directory=base_directory,
@@ -531,7 +543,14 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
 )
 @click.option(
     "--record",
-    help="Record this attempt and a snapshot of squeue in derivatives/logs/squeue/, locally and on the Dandiset.",
+    help="Add a line for this attempt to the day's log in derivatives/logs/dispatch/, locally and on the Dandiset.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "--refresh",
+    help="Rewrite jobs.tsv into both Dandisets afterwards, unless every pipeline's array was still churning.",
     required=False,
     is_flag=True,
     default=False,
@@ -544,6 +563,7 @@ def _jobs_dispatch_command(
     test: bool = False,
     jitter_seconds: float = 30.0,
     record: bool = False,
+    refresh: bool = False,
 ) -> None:
     """Hand every pending job capsule to its pipeline's SLURM array dispatcher."""
     # The concurrency limit is a per-pipeline setting, so an override that silently applied to
@@ -563,6 +583,13 @@ def _jobs_dispatch_command(
         record=record,
         test=test,
     )
+    if refresh and any(result.status != "dispatcher-active" for result in results.values()):
+        _refresh_jobs_tables(
+            dandiset_ids=(_JOB_CAPSULES_DANDISET_ID, _FAILED_RUNS_ARCHIVE_DANDISET_ID),
+            base_directory=base_directory,
+            test=test,
+            silent=silent,
+        )
     if silent:
         return
 

@@ -140,13 +140,18 @@ These files are the lasting record of what each dispatch covered and how it was 
 
 ### Recorded attempts
 
-`--record` also keeps a record of the attempt itself, whatever it dispatched. It is written to `derivatives/logs/squeue/{timestamp}-squeue.txt` and posted to the same path in the Dandiset. It names when and on which host the attempt ran and what it did for each pipeline, along with the error that stopped it if one did. It ends with this user's jobs as `squeue --me` listed them, taken after dispatching so that any array just submitted is in it.
+`--record` also logs the attempt itself, whatever it dispatched. Each attempt adds one line to the day's log, `derivatives/logs/dispatch/{YYYY-MM-DD}.log`, which is posted in full to the same path in the Dandiset. The line names when and on which host the attempt ran, what it did for each pipeline, and the error that stopped it if one did:
 
-The runner passes `--record` each time its SLURM job starts, so the archive shows that the cluster tried to dispatch on a given day even when nothing was waiting. A post that fails is logged as a warning rather than raised, so it never masks the dispatch it records.
+```
+2026-09-24T06:30:04 node1234 aind+ephys: skipped, array 23601234 still active; lfp: nothing pending
+2026-09-24T07:00:05 node1234 aind+ephys: dispatched 12 as array 23605678; lfp: nothing pending; squeue: 20260924-070005-squeue.txt
+```
 
-The array tasks read their manifest from here as they start, so the log directory has to stay readable from the compute nodes.
+An attempt that submits an array also keeps a snapshot of this user's jobs from `squeue --me` in `derivatives/logs/squeue/{timestamp}-squeue.txt`, taken after dispatching so the new array is in it, and names it in its line.
 
-A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` directory, where the capsule uploads it from.
+Before reading any pending capsules, dispatch asks `squeue` whether each pipeline's array is still active. When every one is, the attempt is logged as skipped without fetching the assets metadata, so a frequent crontab stays cheap while an array churns. A post that fails is logged as a warning rather than raised, so it never masks the dispatch it records.
+
+`--refresh` rewrites `jobs.tsv` into both Dandisets after the attempt, as `jobs refresh` does, unless every pipeline's array was still churning.
 
 ## The dispatch directory
 

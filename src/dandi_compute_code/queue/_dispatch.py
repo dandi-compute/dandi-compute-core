@@ -15,9 +15,10 @@ base directory's ``processing/derivatives/logs/``. The minted manifests, the gen
 array tasks' own output all land there and outlive the dispatch directory, which only holds
 the tasks' working trees and is removed once the array is finished with it.
 
-A dispatch can also be recorded. The attempt's outcome and a snapshot of ``squeue`` are kept in
-that log directory under ``squeue/`` and posted to the same path in the Dandiset, so the archive
-shows that the cluster tried to dispatch, and what it saw, even on a day nothing went out.
+A dispatch can also be recorded. Every attempt adds one line to a daily log in that log directory
+under ``dispatch/``, and an attempt that submits an array also keeps a snapshot of ``squeue``
+under ``squeue/``. Both are posted to the same paths in the Dandiset, so the archive shows each
+time the cluster tried to dispatch, including the attempts that found an array still churning.
 """
 
 from __future__ import annotations
@@ -55,11 +56,13 @@ _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}.sh"
 #: Name of one array task's output, with SLURM filling in the array job and task IDs.
 _DISPATCH_LOG_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}-%A_%a.log"
 
-#: Where each recorded dispatch attempt is kept, relative to both the processing directory and
-#: the Dandiset root.
-_DISPATCH_RECORD_RELATIVE_PATH = _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / "squeue"
-#: Name of one recorded dispatch attempt.
-_DISPATCH_RECORD_FILE_NAME_TEMPLATE = "{timestamp}-squeue.txt"
+#: Where recorded dispatch attempts are kept, relative to both the processing directory and the
+#: Dandiset root. One line per attempt, one file per day.
+_DISPATCH_DAILY_LOG_RELATIVE_PATH = _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / "dispatch"
+_DISPATCH_DAILY_LOG_FILE_NAME_TEMPLATE = "{date}.log"
+#: Where the `squeue` snapshot of an attempt that submitted an array is kept.
+_SQUEUE_SNAPSHOT_RELATIVE_PATH = _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / "squeue"
+_SQUEUE_SNAPSHOT_FILE_NAME_TEMPLATE = "{timestamp}-squeue.txt"
 #: The `squeue` columns a recorded attempt shows, wide enough for dispatcher job names.
 _SQUEUE_RECORD_FORMAT = "%.10i %15P %40j %10u %.2t %.10M %.6D %.2C %.10m %30R"
 
@@ -118,6 +121,15 @@ class DispatchResult:
             f"{self.pipeline}: dispatched {self.task_count} {noun} as {len(self.arrays)} array jobs, "
             f"one per distinct set of requested resources."
         )
+
+    def brief(self) -> str:
+        """This outcome in a few words, for a one-line log entry."""
+        if self.status == "no-pending":
+            return f"{self.pipeline}: nothing pending"
+        if self.status == "dispatcher-active":
+            return f"{self.pipeline}: skipped, array {','.join(self.active_job_ids)} still active"
+        array_job_ids = ",".join(array.array_job_id for array in self.arrays)
+        return f"{self.pipeline}: dispatched {self.task_count} as array {array_job_ids}"
 
     def summary_lines(self) -> list[str]:
         """
@@ -327,61 +339,15 @@ def _squeue_snapshot() -> str:
 
 
 @beartype.beartype
-def record_dispatch_attempt(
+def _post(
     *,
     base_directory: pathlib.Path,
     dandiset_id: str,
-    results: dict[str, DispatchResult],
-    error: str | None = None,
-    test: bool = False,
-) -> pathlib.Path:
-    """
-    Keep a record of one dispatch attempt, locally and on the archive.
-
-    The record names when and where the attempt ran, what it did for each pipeline, and the
-    error that stopped it if one did. It ends with a snapshot of this user's jobs from `squeue`,
-    taken after dispatching so that any array just submitted is in it.
-
-    It is written to ``derivatives/logs/squeue/`` in the processing directory of
-    *base_directory*, and posted to the same path in *dandiset_id*. A failed post is logged
-    rather than raised, so that it never masks the dispatch it records.
-
-    Parameters
-    ----------
-    base_directory : pathlib.Path
-        The structured base directory.
-    dandiset_id : str
-        The Dandiset the record is posted to.
-    results : dict of str to DispatchResult
-        The outcome per pipeline, for as many pipelines as the attempt got through.
-    error : str, optional
-        What stopped the attempt, if something did.
-    test : bool, optional
-        When ``True``, the working tree used for the post is left on disk.
-
-    Returns
-    -------
-    pathlib.Path
-        The local copy of the record.
-    """
-    now = datetime.datetime.now()
-    lines = [f"Dispatch attempt at {now.isoformat(timespec='seconds')} on {socket.gethostname()}", ""]
-    for result in results.values():
-        lines.extend(result.summary_lines())
-    if not results:
-        lines.append("No pipeline was dispatched.")
-    if error is not None:
-        lines.append(f"The attempt stopped with an error: {error}")
-    content = "\n".join(lines) + "\n\n" + _squeue_snapshot()
-
-    relative_path = _DISPATCH_RECORD_RELATIVE_PATH / _DISPATCH_RECORD_FILE_NAME_TEMPLATE.format(
-        timestamp=now.strftime(_DISPATCH_DIRECTORY_TIMESTAMP_FORMAT)
-    )
-    record_file_path = _processing_directory(base_directory) / relative_path
-    record_file_path.parent.mkdir(parents=True, exist_ok=True)
-    record_file_path.write_text(content)
-    _log.info("Recorded this dispatch attempt in %s", record_file_path)
-
+    relative_path: pathlib.PurePosixPath,
+    content: str,
+    test: bool,
+) -> None:
+    """Post a record to the Dandiset, logging rather than raising when that fails."""
     try:
         write_dandiset_file(
             dandiset_id=dandiset_id,
@@ -391,8 +357,91 @@ def record_dispatch_attempt(
             test=test,
         )
     except RuntimeError as exception:
-        _log.warning("Could not post the dispatch record to Dandiset %s: %s", dandiset_id, exception)
-    return record_file_path
+        _log.warning("Could not post %s to Dandiset %s: %s", relative_path, dandiset_id, exception)
+
+
+@beartype.beartype
+def record_dispatch_attempt(
+    *,
+    base_directory: pathlib.Path,
+    dandiset_id: str,
+    results: dict[str, DispatchResult],
+    error: str | None = None,
+    test: bool = False,
+) -> pathlib.Path:
+    """
+    Add one line for this dispatch attempt to the day's dispatch log, locally and on the archive.
+
+    The line names when and on which host the attempt ran, what it did for each pipeline, and the
+    error that stopped it if one did. The day's log is kept in ``derivatives/logs/dispatch/`` in
+    the processing directory of *base_directory* and posted in full to the same path in
+    *dandiset_id*, so the archive always holds every attempt of the day so far.
+
+    An attempt that submitted an array also keeps a snapshot of this user's jobs from `squeue`,
+    taken after dispatching, in ``derivatives/logs/squeue/``. Its line names that snapshot.
+
+    A failed post is logged rather than raised, so that it never masks the dispatch it records.
+
+    Parameters
+    ----------
+    base_directory : pathlib.Path
+        The structured base directory.
+    dandiset_id : str
+        The Dandiset the records are posted to.
+    results : dict of str to DispatchResult
+        The outcome per pipeline, for as many pipelines as the attempt got through.
+    error : str, optional
+        What stopped the attempt, if something did.
+    test : bool, optional
+        When ``True``, the working trees used for the posts are left on disk.
+
+    Returns
+    -------
+    pathlib.Path
+        The local copy of the day's dispatch log.
+    """
+    now = datetime.datetime.now()
+    processing_directory = _processing_directory(base_directory)
+    parts = [result.brief() for result in results.values()] or ["nothing dispatched"]
+    if error is not None:
+        parts.append(f"error: {error}")
+
+    if any(result.status == "dispatched" for result in results.values()):
+        snapshot_relative_path = _SQUEUE_SNAPSHOT_RELATIVE_PATH / _SQUEUE_SNAPSHOT_FILE_NAME_TEMPLATE.format(
+            timestamp=now.strftime(_DISPATCH_DIRECTORY_TIMESTAMP_FORMAT)
+        )
+        summary = [line for result in results.values() for line in result.summary_lines()]
+        snapshot = "\n".join(summary) + "\n\n" + _squeue_snapshot()
+        snapshot_file_path = processing_directory / snapshot_relative_path
+        snapshot_file_path.parent.mkdir(parents=True, exist_ok=True)
+        snapshot_file_path.write_text(snapshot)
+        _post(
+            base_directory=base_directory,
+            dandiset_id=dandiset_id,
+            relative_path=snapshot_relative_path,
+            content=snapshot,
+            test=test,
+        )
+        parts.append(f"squeue: {snapshot_relative_path.name}")
+
+    line = f"{now.isoformat(timespec='seconds')} {socket.gethostname()} " + "; ".join(parts)
+    daily_log_relative_path = _DISPATCH_DAILY_LOG_RELATIVE_PATH / _DISPATCH_DAILY_LOG_FILE_NAME_TEMPLATE.format(
+        date=now.date().isoformat()
+    )
+    daily_log_file_path = processing_directory / daily_log_relative_path
+    daily_log_file_path.parent.mkdir(parents=True, exist_ok=True)
+    with daily_log_file_path.open("a") as daily_log:
+        daily_log.write(line + "\n")
+    _log.info("Recorded this dispatch attempt in %s: %s", daily_log_file_path, line)
+
+    _post(
+        base_directory=base_directory,
+        dandiset_id=dandiset_id,
+        relative_path=daily_log_relative_path,
+        content=daily_log_file_path.read_text(),
+        test=test,
+    )
+    return daily_log_file_path
 
 
 @beartype.beartype
