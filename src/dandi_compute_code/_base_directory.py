@@ -30,6 +30,12 @@ def _work_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
 
 
 @beartype.beartype
+def _apptainer_cache_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
+    """The Apptainer image cache Nextflow reads container images from under *base_directory*."""
+    return _work_directory(base_directory) / "apptainer_cache"
+
+
+@beartype.beartype
 def _aind_pipeline_directory(base_directory: pathlib.Path, /) -> pathlib.Path:
     """The checkout of the AIND ephys pipeline repository under *base_directory*."""
     return base_directory / "aind-ephys-pipeline"

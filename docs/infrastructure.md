@@ -48,7 +48,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 ├── dandi-compute-core/          # checkout of this repository, installed with pip -e (not read by path)
 ├── aind-ephys-pipeline/         # checkout of the AIND ephys pipeline, tags checked out per job
 ├── work/                        # Nextflow work directory
-│   └── apptainer_cache/         # container images, kept by `clean --work`
+│   └── apptainer_cache/         # container images, filled by `images cache`, kept by `clean --work`
 └── processing/
     ├── prepare-job-XXXXXXXX/    # one preparation tree per capsule (see below)
     │   └── 001697/
@@ -103,6 +103,8 @@ Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow env
 | `postprocessing` | 16 | 64 GB | `mit_normal` |
 
 These figures come from `configs/name-mit+engaging_revision-2.config`, which the `default` config key points to. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
+
+Every step image is tagged `si-<SPIKEINTERFACE_VERSION>` from the pipeline version's `capsule_versions.env`. The driver's 1 GB is not enough to build one of these images, so they must already be in `work/apptainer_cache/` when a capsule starts. `dandicompute images cache` puts them there from a job with enough memory.
 
 When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule.
 

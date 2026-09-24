@@ -2,13 +2,20 @@ import logging
 import os
 import pathlib
 
+import beartype
 import click
 
 from ._clean_work_directory import clean_work_directory
 from ._styled_echo import _styled_echo
 from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from .._configure_logging import _configure_logging
-from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
+from ..aind_ephys_pipeline import (
+    aind_ephys_container_images,
+    cache_container_images,
+    missing_container_images,
+    prepare_aind_ephys_job,
+    submit_job,
+)
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
 from ..queue import TEST_QUEUE_CONTENT_ID, PipelineQueue, clean_dispatch_directories
@@ -563,6 +570,100 @@ def _jobs_dispatch_command(
     for result in results.values():
         color = "green" if result.status == "dispatched" else "yellow"
         _styled_echo(text="\n" + "\n".join(result.summary_lines()), color=color)
+
+
+# dandicompute images
+@_dandicompute_group.group(name="images")
+def _images_group() -> None:
+    """Cache the container images AIND ephys pipeline steps run in."""
+    pass
+
+
+_pipeline_version_option = click.option(
+    "--version",
+    "pipeline_version",
+    help=(
+        "AIND ephys pipeline release tag whose images to use. Defaults to the latest tag in the local "
+        "checkout, which is the version new job capsules are formed against."
+    ),
+    required=False,
+    type=str,
+    default=None,
+)
+
+
+@beartype.beartype
+def _resolve_aind_ephys_images(*, base_directory: pathlib.Path, pipeline_version: str | None) -> list[str]:
+    """The AIND ephys step images at *pipeline_version*, or at the latest local version when it is ``None``."""
+    if pipeline_version is None:
+        pipeline_version = PipelineQueue.resolve_latest_pipeline_version(
+            pipeline="aind+ephys", base_directory=base_directory
+        )
+    images = aind_ephys_container_images(pipeline_version=pipeline_version, base_directory=base_directory)
+    return images
+
+
+# dandicompute images missing [OPTIONS]
+@_images_group.command(name="missing")
+@_base_option
+@_pipeline_version_option
+@click.option(
+    "--silent",
+    help="Suppress informational log output. The missing images are still printed.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+def _images_missing_command(
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
+    pipeline_version: str | None = None,
+    silent: bool = False,
+) -> None:
+    """Print the AIND ephys images not yet in the Apptainer cache, one per line.
+
+    Prints nothing when every image is cached. The exit code is only non-zero on an error, so a
+    workflow can decide whether a caching job is needed from the output alone, for example:
+
+        missing=$(dandicompute images missing --silent)
+        [ -n "$missing" ] && sbatch --wait launcher/cache_images.sh
+    """
+    _configure_logging(silent=silent)
+    images = _resolve_aind_ephys_images(base_directory=base_directory, pipeline_version=pipeline_version)
+    for image in missing_container_images(images=images, base_directory=base_directory):
+        click.echo(image)
+
+
+# dandicompute images cache [OPTIONS]
+@_images_group.command(name="cache")
+@_base_option
+@_pipeline_version_option
+@click.option(
+    "--silent",
+    help="Suppress informational log output.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+def _images_cache_command(
+    base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
+    pipeline_version: str | None = None,
+    silent: bool = False,
+) -> None:
+    """Pull the AIND ephys images that are not yet cached into the Apptainer cache.
+
+    Building an image takes several gigabytes of memory, so run this inside a job that asks for
+    it (see the runner's launcher/cache_images.sh) rather than on a login node.
+    """
+    _configure_logging(silent=silent)
+    images = _resolve_aind_ephys_images(base_directory=base_directory, pipeline_version=pipeline_version)
+    pulled = cache_container_images(images=images, base_directory=base_directory)
+    if silent:
+        return
+
+    if pulled:
+        _styled_echo(text="\nCached " + ", ".join(pulled) + ".", color="green")
+    else:
+        _styled_echo(text="\nEvery image was already cached.", color="green")
 
 
 # dandicompute issues

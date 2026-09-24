@@ -23,6 +23,15 @@ from dandi_compute_code._cli import _dandicompute_group
         (["jobs", "refresh", "--help"], "Rewrite jobs.tsv into both Dandisets."),
         (["jobs", "pending", "--help"], "Report whether any queued jobs are awaiting submission."),
         (["jobs", "dispatch", "--help"], "Hand every pending job capsule to its pipeline's SLURM array dispatcher."),
+        (["images", "--help"], "Cache the container images AIND ephys pipeline steps run in."),
+        (
+            ["images", "missing", "--help"],
+            "Print the AIND ephys images not yet in the Apptainer cache, one per line.",
+        ),
+        (
+            ["images", "cache", "--help"],
+            "Pull the AIND ephys images that are not yet cached into the Apptainer cache.",
+        ),
         (["issues", "--help"], "Scan logs and write per-capsule and aggregate issue reports."),
         (["issues", "dump", "--help"], "Scan nextflow and slurm logs and write per-capsule issue records."),
         (["issues", "summarize", "--help"], "Summarize discovered issue lines by descending occurrence count."),

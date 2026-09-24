@@ -21,6 +21,7 @@ from ._handle_template import generate_aind_ephys_submission_script
 from .._base_directory import (
     _DEFAULT_BASE_DIRECTORY,
     _aind_pipeline_directory,
+    _apptainer_cache_directory,
     _processing_directory,
     _work_directory,
 )
@@ -356,7 +357,7 @@ def prepare_aind_ephys_job(
     intermediate_dir.mkdir()
 
     work_directory = _work_directory(base_directory)
-    apptainer_cache_directory = work_directory / "apptainer_cache"
+    apptainer_cache_directory = _apptainer_cache_directory(base_directory)
     # NOTE: NUMBA_CACHE_DIR is also needed for the pipeline
     # but must be set in `~/.bashrc`, and must be the same as WORKDIR
     # NUMBA_CACHE_DIR = "/orcd/data/dandi/001/dandi-compute/work"

@@ -88,6 +88,18 @@ dandicompute jobs dispatch --pipeline lfp --max 4   # one pipeline, overriding i
 dandicompute jobs dispatch --jitter 0               # no random start delay
 ```
 
+### Cache the AIND container images
+
+Nextflow pulls each step's container image into `work/apptainer_cache/` the first time a step needs it, and it does so inside the capsule's 1 GB driver job. Building a SIF file from a multi-gigabyte image takes far more memory than that, so the pull is killed and the capsule fails before any step runs. Cache the images ahead of time from a job that has the memory instead.
+
+```bash
+dandicompute images missing                 # images of the latest local tag that are not cached yet
+dandicompute images missing --version v1.2.4
+sbatch --wait dandi-compute-runner/launcher/cache_images.sh   # runs `dandicompute images cache` with 32 GB
+```
+
+`images missing` prints nothing and still exits 0 when every image is in place, so its output alone says whether a caching job is needed. `images cache` pulls under the file name Nextflow looks for, one image at a time behind a lock on the cache, and renames each into place only once complete. The runner's `Cache container images` workflow does this after every `Update codebase` run, which is when a new pipeline tag can first appear.
+
 ### Report on the queue
 
 ```bash
