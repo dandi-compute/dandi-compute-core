@@ -273,6 +273,7 @@ def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Pa
         pytest.param(["--test"], {"test": True}, id="test"),
         pytest.param(["--jitter", "120.0"], {"jitter_seconds": 120.0}, id="jitter"),
         pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
+        pytest.param(["--record"], {"record": True}, id="record"),
     ],
 )
 def test_cli_jobs_dispatch_forwards_its_options(
@@ -295,6 +296,7 @@ def test_cli_jobs_dispatch_forwards_its_options(
             "only_pipeline": None,
             "max_concurrent": None,
             "jitter_seconds": 30.0,
+            "record": False,
             "test": False,
             **expected_keyword_arguments,
         }

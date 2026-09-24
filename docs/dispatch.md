@@ -138,6 +138,12 @@ Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}
 
 These files are the lasting record of what each dispatch covered and how it was submitted. Nothing removes them, `clean` included.
 
+### Recorded attempts
+
+`--record` also keeps a record of the attempt itself, whatever it dispatched. It is written to `derivatives/logs/squeue/{timestamp}-squeue.txt` and posted to the same path in the Dandiset. It names when and on which host the attempt ran and what it did for each pipeline, along with the error that stopped it if one did. It ends with this user's jobs as `squeue --me` listed them, taken after dispatching so that any array just submitted is in it.
+
+The runner passes `--record` each time its SLURM job starts, so the archive shows that the cluster tried to dispatch on a given day even when nothing was waiting. A post that fails is logged as a warning rather than raised, so it never masks the dispatch it records.
+
 The array tasks read their manifest from here as they start, so the log directory has to stay readable from the compute nodes.
 
 A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` directory, where the capsule uploads it from.

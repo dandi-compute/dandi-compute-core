@@ -36,7 +36,7 @@ from typing import ClassVar, Literal
 import beartype
 
 from ._capsule_resources import read_capsule_resources
-from ._dispatch import DispatchResult, dispatch_pipeline_jobs
+from ._dispatch import DispatchResult, dispatch_pipeline_jobs, record_dispatch_attempt
 from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
@@ -626,6 +626,7 @@ class PipelineQueue:
         max_concurrent: int | None = None,
         jitter_seconds: float = 30.0,
         dandiset_id: str = _DANDISET_ID,
+        record: bool = False,
         test: bool = False,
     ) -> dict[str, DispatchResult]:
         """
@@ -659,6 +660,9 @@ class PipelineQueue:
             state at once.
         dandiset_id : str, optional
             The Dandiset capsules are downloaded from and uploaded back to.
+        record : bool, optional
+            If ``True``, keep a record of this attempt, locally and in *dandiset_id*, whatever
+            it dispatched. See :func:`~._dispatch.record_dispatch_attempt`.
         test : bool, optional
             If ``True``, array tasks leave their working trees on disk for
             debugging.
@@ -693,28 +697,42 @@ class PipelineQueue:
             _log.info("Sleeping %.2f seconds (jitter) before dispatching jobs", delay)
             time.sleep(delay)
 
-        code_dir_paths = cls.pending_code_dirs()
-        _log.info("Found %d pending queue entries", len(code_dir_paths))
-        capsule_resources = read_capsule_resources(code_dir_paths)
-
         results: dict[str, DispatchResult] = {}
-        for pipeline_name in pipelines:
-            if only_pipeline is not None and pipeline_name != only_pipeline:
-                continue
-            dispatch_config = DispatchConfig.from_pipeline_config(
-                pipeline=pipeline_name,
-                pipeline_config=pipeline_config,
-                max_concurrent=max_concurrent,
-            )
-            results[pipeline_name] = dispatch_pipeline_jobs(
-                pipeline=pipeline_name,
-                code_dir_paths=code_dir_paths,
-                base_directory=base_directory,
-                dispatch_config=dispatch_config,
-                dandiset_id=dandiset_id,
-                capsule_resources=capsule_resources,
-                test=test,
-            )
+        error: str | None = None
+        try:
+            code_dir_paths = cls.pending_code_dirs()
+            _log.info("Found %d pending queue entries", len(code_dir_paths))
+            capsule_resources = read_capsule_resources(code_dir_paths)
+
+            for pipeline_name in pipelines:
+                if only_pipeline is not None and pipeline_name != only_pipeline:
+                    continue
+                dispatch_config = DispatchConfig.from_pipeline_config(
+                    pipeline=pipeline_name,
+                    pipeline_config=pipeline_config,
+                    max_concurrent=max_concurrent,
+                )
+                results[pipeline_name] = dispatch_pipeline_jobs(
+                    pipeline=pipeline_name,
+                    code_dir_paths=code_dir_paths,
+                    base_directory=base_directory,
+                    dispatch_config=dispatch_config,
+                    dandiset_id=dandiset_id,
+                    capsule_resources=capsule_resources,
+                    test=test,
+                )
+        except Exception as exception:
+            error = f"{type(exception).__name__}: {exception}"
+            raise
+        finally:
+            if record:
+                record_dispatch_attempt(
+                    base_directory=base_directory,
+                    dandiset_id=dandiset_id,
+                    results=results,
+                    error=error,
+                    test=test,
+                )
         return results
 
     def existing_capsule_keys(self) -> set[tuple[str, str, str, str]]:

@@ -529,6 +529,13 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
     default=30.0,
     show_default=True,
 )
+@click.option(
+    "--record",
+    help="Record this attempt and a snapshot of squeue in derivatives/logs/squeue/, locally and on the Dandiset.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
 def _jobs_dispatch_command(
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
@@ -536,6 +543,7 @@ def _jobs_dispatch_command(
     silent: bool = False,
     test: bool = False,
     jitter_seconds: float = 30.0,
+    record: bool = False,
 ) -> None:
     """Hand every pending job capsule to its pipeline's SLURM array dispatcher."""
     # The concurrency limit is a per-pipeline setting, so an override that silently applied to
@@ -552,6 +560,7 @@ def _jobs_dispatch_command(
         only_pipeline=only_pipeline,
         max_concurrent=max_concurrent,
         jitter_seconds=jitter_seconds,
+        record=record,
         test=test,
     )
     if silent:

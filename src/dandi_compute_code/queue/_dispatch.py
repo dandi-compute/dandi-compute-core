@@ -14,6 +14,10 @@ Every dispatcher keeps its record in one central log directory per pipeline, und
 base directory's ``processing/derivatives/logs/``. The minted manifests, the generated array scripts and the
 array tasks' own output all land there and outlive the dispatch directory, which only holds
 the tasks' working trees and is removed once the array is finished with it.
+
+A dispatch can also be recorded. The attempt's outcome and a snapshot of ``squeue`` are kept in
+that log directory under ``squeue/`` and posted to the same path in the Dandiset, so the archive
+shows that the cluster tried to dispatch, and what it saw, even on a day nothing went out.
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ import datetime
 import logging
 import pathlib
 import shutil
+import socket
 import subprocess
 from typing import Literal
 
@@ -39,6 +44,7 @@ from ._globals import (
 )
 from ._handle_template import generate_array_dispatch_script
 from .._base_directory import _processing_directory
+from ..dandiset import write_dandiset_file
 
 _log = logging.getLogger(__name__)
 
@@ -48,6 +54,14 @@ _MANIFEST_FILE_NAME_TEMPLATE = "{timestamp}-manifest-{index}.txt"
 _DISPATCH_SCRIPT_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}.sh"
 #: Name of one array task's output, with SLURM filling in the array job and task IDs.
 _DISPATCH_LOG_FILE_NAME_TEMPLATE = "{timestamp}-dispatch-{index}-%A_%a.log"
+
+#: Where each recorded dispatch attempt is kept, relative to both the processing directory and
+#: the Dandiset root.
+_DISPATCH_RECORD_RELATIVE_PATH = _DISPATCH_LOG_DIRECTORY_RELATIVE_PATH / "squeue"
+#: Name of one recorded dispatch attempt.
+_DISPATCH_RECORD_FILE_NAME_TEMPLATE = "{timestamp}-squeue.txt"
+#: The `squeue` columns a recorded attempt shows, wide enough for dispatcher job names.
+_SQUEUE_RECORD_FORMAT = "%.10i %15P %40j %10u %.2t %.10M %.6D %.2C %.10m %30R"
 
 DispatchStatus = Literal["dispatched", "no-pending", "dispatcher-active"]
 
@@ -295,6 +309,90 @@ def _submit_array_job(script_file_path: pathlib.Path, /) -> str:
         raise RuntimeError(message)
     array_job_id = match.group("job_id")
     return array_job_id
+
+
+@beartype.beartype
+def _squeue_snapshot() -> str:
+    """This user's jobs as `squeue` lists them, or why they could not be listed."""
+    command = ["squeue", "--me", f"--format={_SQUEUE_RECORD_FORMAT}"]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True)
+    except OSError as exception:
+        snapshot = f"$ {' '.join(command)}\n(squeue could not be run: {exception})\n"
+        return snapshot
+    snapshot = f"$ {' '.join(command)}\n{result.stdout}"
+    if result.returncode != 0:
+        snapshot += f"(squeue exited with code {result.returncode}: {result.stderr.strip()})\n"
+    return snapshot
+
+
+@beartype.beartype
+def record_dispatch_attempt(
+    *,
+    base_directory: pathlib.Path,
+    dandiset_id: str,
+    results: dict[str, DispatchResult],
+    error: str | None = None,
+    test: bool = False,
+) -> pathlib.Path:
+    """
+    Keep a record of one dispatch attempt, locally and on the archive.
+
+    The record names when and where the attempt ran, what it did for each pipeline, and the
+    error that stopped it if one did. It ends with a snapshot of this user's jobs from `squeue`,
+    taken after dispatching so that any array just submitted is in it.
+
+    It is written to ``derivatives/logs/squeue/`` in the processing directory of
+    *base_directory*, and posted to the same path in *dandiset_id*. A failed post is logged
+    rather than raised, so that it never masks the dispatch it records.
+
+    Parameters
+    ----------
+    base_directory : pathlib.Path
+        The structured base directory.
+    dandiset_id : str
+        The Dandiset the record is posted to.
+    results : dict of str to DispatchResult
+        The outcome per pipeline, for as many pipelines as the attempt got through.
+    error : str, optional
+        What stopped the attempt, if something did.
+    test : bool, optional
+        When ``True``, the working tree used for the post is left on disk.
+
+    Returns
+    -------
+    pathlib.Path
+        The local copy of the record.
+    """
+    now = datetime.datetime.now()
+    lines = [f"Dispatch attempt at {now.isoformat(timespec='seconds')} on {socket.gethostname()}", ""]
+    for result in results.values():
+        lines.extend(result.summary_lines())
+    if not results:
+        lines.append("No pipeline was dispatched.")
+    if error is not None:
+        lines.append(f"The attempt stopped with an error: {error}")
+    content = "\n".join(lines) + "\n\n" + _squeue_snapshot()
+
+    relative_path = _DISPATCH_RECORD_RELATIVE_PATH / _DISPATCH_RECORD_FILE_NAME_TEMPLATE.format(
+        timestamp=now.strftime(_DISPATCH_DIRECTORY_TIMESTAMP_FORMAT)
+    )
+    record_file_path = _processing_directory(base_directory) / relative_path
+    record_file_path.parent.mkdir(parents=True, exist_ok=True)
+    record_file_path.write_text(content)
+    _log.info("Recorded this dispatch attempt in %s", record_file_path)
+
+    try:
+        write_dandiset_file(
+            dandiset_id=dandiset_id,
+            relative_path=str(relative_path),
+            content=content,
+            base_directory=base_directory,
+            test=test,
+        )
+    except RuntimeError as exception:
+        _log.warning("Could not post the dispatch record to Dandiset %s: %s", dandiset_id, exception)
+    return record_file_path
 
 
 @beartype.beartype

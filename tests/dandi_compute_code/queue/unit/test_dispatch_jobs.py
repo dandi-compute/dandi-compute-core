@@ -161,3 +161,95 @@ def test_dispatch_jobs_sleeps_within_jitter_range(base_directory: pathlib.Path) 
 
     mock_uniform.assert_called_once_with(0, 30.0)
     mock_sleep.assert_called_once_with(5.0)
+
+
+def _squeue_run(command: list[str], **_: object) -> mock.MagicMock:
+    """A subprocess.run stand-in answering the snapshot's `squeue --me` call."""
+    result = mock.MagicMock()
+    result.returncode = 0
+    result.stderr = ""
+    result.stdout = "JOBID PARTITION NAME\n4242 mit_preemptable dandicompute-dispatch-aind-ephys\n"
+    return result
+
+
+def _records(base_directory: pathlib.Path, /) -> list[pathlib.Path]:
+    return sorted((base_directory / "processing" / "derivatives" / "logs" / "squeue").glob("*-squeue.txt"))
+
+
+@pytest.mark.ai_generated
+def test_dispatch_jobs_records_the_attempt_locally_and_on_the_dandiset(base_directory: pathlib.Path) -> None:
+    """A recorded attempt shows what each pipeline did and what squeue listed, even with nothing to do."""
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_squeue_run) as mock_run,
+        mock.patch("dandi_compute_code.queue._dispatch.write_dandiset_file") as mock_post,
+    ):
+        PipelineQueue.dispatch_jobs(base_directory=base_directory, jitter_seconds=0.0, record=True)
+
+    [record_file_path] = _records(base_directory)
+    record = record_file_path.read_text()
+    assert "aind+ephys: no capsules are waiting to be submitted." in record
+    assert "4242 mit_preemptable dandicompute-dispatch-aind-ephys" in record
+    assert mock_run.call_args.args[0][:2] == ["squeue", "--me"]
+    assert mock_post.call_args.kwargs["dandiset_id"] == "001697"
+    assert mock_post.call_args.kwargs["relative_path"] == f"derivatives/logs/squeue/{record_file_path.name}"
+    assert mock_post.call_args.kwargs["content"] == record
+
+
+@pytest.mark.ai_generated
+def test_dispatch_jobs_records_nothing_unless_asked(base_directory: pathlib.Path) -> None:
+    """Recording posts to the archive, so a plain dispatch leaves no record."""
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
+        mock.patch("dandi_compute_code.queue._dispatch.write_dandiset_file") as mock_post,
+    ):
+        PipelineQueue.dispatch_jobs(base_directory=base_directory, jitter_seconds=0.0)
+
+    assert _records(base_directory) == []
+    mock_post.assert_not_called()
+
+
+@pytest.mark.ai_generated
+def test_dispatch_jobs_records_an_attempt_that_fails(base_directory: pathlib.Path) -> None:
+    """A failed attempt is still one the cluster made, so it is recorded with its error and re-raised."""
+    with (
+        mock.patch(
+            "dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs",
+            side_effect=RuntimeError("archive unreachable"),
+        ),
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_squeue_run),
+        mock.patch("dandi_compute_code.queue._dispatch.write_dandiset_file"),
+        pytest.raises(RuntimeError, match="archive unreachable"),
+    ):
+        PipelineQueue.dispatch_jobs(base_directory=base_directory, jitter_seconds=0.0, record=True)
+
+    [record_file_path] = _records(base_directory)
+    assert "The attempt stopped with an error: RuntimeError: archive unreachable" in record_file_path.read_text()
+
+
+@pytest.mark.ai_generated
+def test_dispatch_jobs_keeps_its_results_when_the_record_cannot_be_posted(base_directory: pathlib.Path) -> None:
+    """A failed post is logged rather than raised, so it never masks the dispatch it records."""
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=_squeue_run),
+        mock.patch("dandi_compute_code.queue._dispatch.write_dandiset_file", side_effect=RuntimeError("upload failed")),
+    ):
+        results = PipelineQueue.dispatch_jobs(base_directory=base_directory, jitter_seconds=0.0, record=True)
+
+    assert {result.status for result in results.values()} == {"no-pending"}
+    assert len(_records(base_directory)) == 1
+
+
+@pytest.mark.ai_generated
+def test_dispatch_jobs_records_why_squeue_could_not_be_read(base_directory: pathlib.Path) -> None:
+    """A missing squeue is noted in the record instead of stopping it."""
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.PipelineQueue.pending_code_dirs", return_value=[]),
+        mock.patch("dandi_compute_code.queue._dispatch.subprocess.run", side_effect=FileNotFoundError("squeue")),
+        mock.patch("dandi_compute_code.queue._dispatch.write_dandiset_file"),
+    ):
+        PipelineQueue.dispatch_jobs(base_directory=base_directory, jitter_seconds=0.0, record=True)
+
+    [record_file_path] = _records(base_directory)
+    assert "(squeue could not be run:" in record_file_path.read_text()
