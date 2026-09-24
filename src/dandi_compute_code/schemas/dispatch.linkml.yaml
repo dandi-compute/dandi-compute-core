@@ -65,6 +65,16 @@ classes:
         required: true
         pattern: "^$|^(?:\\d+-)?\\d{1,3}(?::\\d{2}){0,2}$"
 
+      signal:
+        description: >-
+          The `--signal` request, as SLURM writes it (for example "B:USR1@600"). It warns the
+          capsule ahead of its time limit. SLURM sends it to the array task's batch shell,
+          which passes it on to the capsule. Empty when the capsule's submission script
+          states no `--signal` directive.
+        range: string
+        required: false
+        pattern: "^$|^(?:[BR]+:)?[A-Za-z0-9]+(?:@\\d+)?$"
+
   DispatchConfig:
     description: >-
       The settings of one pipeline's array dispatcher. Only the two queue limits are

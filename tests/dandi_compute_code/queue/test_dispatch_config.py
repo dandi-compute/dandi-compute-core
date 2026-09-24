@@ -163,6 +163,7 @@ def test_resources_are_read_back_from_the_pipelines_submission_template(pipeline
     assert dispatch_config.partition == directives["partition"]
     assert dispatch_config.time_limit == directives["time"]
     assert dispatch_config.cpus_per_task == int(directives["cpus-per-task"])
+    assert dispatch_config.signal == directives.get("signal", "")
 
 
 @pytest.mark.ai_generated

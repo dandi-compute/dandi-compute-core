@@ -44,6 +44,7 @@ class CapsuleResources:
     cpus_per_task: int
     partition: str
     time_limit: str
+    signal: str = ""
 
     def describe(self) -> str:
         """These requests on one line, for logs and the dispatch summary."""
@@ -62,7 +63,7 @@ class CapsuleResources:
         directives = {
             match.group("name"): match.group("value")
             for match in _SBATCH_DIRECTIVE_RE.finditer(script)
-            if match.group("name") in {"mem", "cpus-per-task", "partition", "time"}
+            if match.group("name") in {"mem", "cpus-per-task", "partition", "time", "signal"}
         }
         if not directives:
             return None
@@ -79,6 +80,7 @@ class CapsuleResources:
             cpus_per_task=parsed_cpus_per_task,
             partition=directives.get("partition", ""),
             time_limit=directives.get("time", ""),
+            signal=directives.get("signal", ""),
         )
         return resources
 

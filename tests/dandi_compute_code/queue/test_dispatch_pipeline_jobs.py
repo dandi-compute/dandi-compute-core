@@ -1,4 +1,9 @@
+import os
 import pathlib
+import shutil
+import signal
+import subprocess
+import time
 from unittest import mock
 
 import pytest
@@ -196,9 +201,65 @@ def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
     script = _script(result)
     assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
     assert 'CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"' in script
-    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"' in script
-    # pipefail is what keeps a failing capsule a failing array task through that pipe.
-    assert "set -euo pipefail" in script
+    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" > >(tee "$CAPSULE_LOG_FILE_PATH") 2>&1 &' in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_fails_the_array_task_when_its_capsule_fails(base_directory: pathlib.Path) -> None:
+    """The capsule runs in the background, so its exit status is carried over by hand."""
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    script = _script(result)
+    assert 'wait "$CAPSULE_PID" || CAPSULE_STATUS=$?' in script
+    assert 'exit "$CAPSULE_STATUS"' in script
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("script", "expected_signal"),
+    [
+        ("#SBATCH --time=12:00:00\n#SBATCH --signal=B:USR1@600\n", "B:USR1@600"),
+        ("#SBATCH --time=12:00:00\n", ""),
+    ],
+)
+def test_capsule_resources_read_the_signal_directive(script: str, expected_signal: str) -> None:
+    """A capsule asking to be warned ahead of its time limit keeps that request through dispatch."""
+    resources = CapsuleResources.from_submission_script(script)
+
+    assert resources.signal == expected_signal
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_passes_a_requested_signal_on_to_the_capsule(base_directory: pathlib.Path) -> None:
+    """
+    SLURM sends a `B:` signal to the array task's batch shell only.
+
+    The capsule runs as a child of that shell, so the shell has to pass the signal on for the
+    capsule to hear it.
+    """
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal="B:USR1@600"),
+    )
+
+    script = _script(result)
+    assert "#SBATCH --signal=B:USR1@600" in script
+    assert 'kill -s "$SIGNAL_NAME" "$CAPSULE_PID"' in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_sets_no_signal_when_the_capsule_asks_for_none(base_directory: pathlib.Path) -> None:
+    """A capsule that does not handle the warning is left to run until the time limit."""
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys"),
+    )
+
+    script = _script(result)
+    assert "#SBATCH --signal=" not in script
+    assert "trap '" not in script
 
 
 @pytest.mark.ai_generated
@@ -550,3 +611,112 @@ def test_dispatch_leaves_only_working_trees_to_the_dispatch_directory(base_direc
     assert list(result.dispatch_directory.iterdir()) == []
     script = _script(result)
     assert f'TASK_DIRECTORY="{result.dispatch_directory.absolute()}/task-' in script
+
+
+# The tests below run the generated array script for real under bash, with `dandi` replaced by
+# a stub that "downloads" a fake capsule. The fake capsule loops until it hears USR1, so the
+# only way for it to finish is the array task's batch shell passing that signal on.
+
+_NEEDS_BASH = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+
+_FAKE_CAPSULE_SCRIPT = """#!/bin/bash
+#SBATCH --output={log_directory}/job-%j_slurm.log
+trap 'echo "capsule heard USR1"; echo heard > "{marker_file_path}"; exit 1' USR1
+echo "capsule started"
+while true; do sleep 0.1; done
+"""
+
+_FAKE_DANDI = """#!/bin/bash
+if [ "$1" = "download" ]; then
+    target="${3#dandi://dandi/}"
+    mkdir -p "$target"
+    cp "$FAKE_CAPSULE_SCRIPT" "$target/submit.sh"
+fi
+"""
+
+
+def _wait_for(file_path: pathlib.Path, /, *, timeout_seconds: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while not file_path.exists():
+        if time.monotonic() > deadline:
+            message = f"{file_path} never appeared"
+            raise TimeoutError(message)
+        time.sleep(0.05)
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+def test_array_task_passes_the_time_limit_warning_on_to_its_capsule(
+    base_directory: pathlib.Path,
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    SLURM warns only the batch shell, so the capsule hears USR1 only because it is passed on.
+
+    The capsule's own exit status then has to come back out as the array task's.
+    """
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS[:1],
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal="B:USR1@600"),
+    )
+
+    log_directory = tmp_path / "capsule_logs"
+    marker_file_path = tmp_path / "heard_usr1"
+    fake_capsule_script_path = tmp_path / "fake_submit.sh"
+    fake_capsule_script_path.write_text(
+        _FAKE_CAPSULE_SCRIPT.format(log_directory=log_directory, marker_file_path=marker_file_path)
+    )
+    stub_directory = tmp_path / "stubs"
+    stub_directory.mkdir()
+    fake_dandi_path = stub_directory / "dandi"
+    fake_dandi_path.write_text(_FAKE_DANDI)
+    fake_dandi_path.chmod(0o755)
+
+    environment = {
+        **os.environ,
+        "PATH": f"{stub_directory}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_CAPSULE_SCRIPT": str(fake_capsule_script_path),
+        "SLURM_ARRAY_TASK_ID": "1",
+        "SLURM_ARRAY_JOB_ID": "100",
+        "SLURM_JOB_ID": "101",
+    }
+    process = subprocess.Popen(
+        ["bash", str(result.arrays[0].script_file_path)],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        capsule_log_file_path = log_directory / "job-101_slurm.log"
+        _wait_for(capsule_log_file_path)
+        deadline = time.monotonic() + 20.0
+        while "capsule started" not in capsule_log_file_path.read_text() and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+        process.send_signal(signal.SIGUSR1)
+        output, _ = process.communicate(timeout=30)
+    finally:
+        if process.poll() is None:
+            process.kill()
+
+    assert marker_file_path.read_text().strip() == "heard"
+    assert process.returncode == 1, output
+    assert "Capsule" in output and "exited with status 1" in output
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+@pytest.mark.parametrize("signal_request", ["B:USR1@600", ""])
+def test_generated_array_script_is_valid_bash(base_directory: pathlib.Path, signal_request: str) -> None:
+    """The template renders to a script bash can parse, with or without a signal."""
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal=signal_request),
+    )
+
+    check = subprocess.run(["bash", "-n", str(result.arrays[0].script_file_path)], capture_output=True, text=True)
+
+    assert check.returncode == 0, check.stderr

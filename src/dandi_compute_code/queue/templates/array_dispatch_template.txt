@@ -6,7 +6,8 @@
 #SBATCH --partition={{ partition }}
 #SBATCH --time={{ time_limit }}
 #SBATCH --array={{ array_specification }}
-
+{% if signal %}#SBATCH --signal={{ signal }}
+{% endif %}
 set -euo pipefail
 
 DANDISET_ID="{{ dandiset_id }}"
@@ -50,13 +51,34 @@ CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"
 CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%A/${SLURM_ARRAY_JOB_ID}}"
 CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%a/${SLURM_ARRAY_TASK_ID}}"
 
+# The capsule runs in the background so that this shell is free to act on a signal. A capsule
+# that asks to be warned ahead of its time limit (`#SBATCH --signal`) has that warning sent here
+# by SLURM, never to the capsule itself, so it is passed on.
 if [ -n "$CAPSULE_LOG_FILE_PATH" ]; then
     mkdir -p "$(dirname "$CAPSULE_LOG_FILE_PATH")"
     echo "Writing the capsule's SLURM log to ${CAPSULE_LOG_FILE_PATH}."
-    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" > >(tee "$CAPSULE_LOG_FILE_PATH") 2>&1 &
 else
     echo "Capsule ${CODE_DIR_PATH} declares no SLURM output path; its log stays with this array task."
-    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" &
+fi
+CAPSULE_PID=$!
+{% if signal %}
+SIGNAL_NAME="{{ signal }}"
+SIGNAL_NAME="${SIGNAL_NAME#*:}"
+SIGNAL_NAME="${SIGNAL_NAME%%@*}"
+trap 'echo "Passing ${SIGNAL_NAME} on to the capsule ahead of the time limit."; kill -s "$SIGNAL_NAME" "$CAPSULE_PID" 2>/dev/null || true' "$SIGNAL_NAME"
+{% endif %}
+# A trapped signal interrupts `wait` early, so it is repeated until the capsule has exited.
+CAPSULE_STATUS=0
+wait "$CAPSULE_PID" || CAPSULE_STATUS=$?
+while kill -0 "$CAPSULE_PID" 2>/dev/null; do
+    CAPSULE_STATUS=0
+    wait "$CAPSULE_PID" || CAPSULE_STATUS=$?
+done
+if [ "$CAPSULE_STATUS" -ne 0 ]; then
+    echo "Capsule ${CODE_DIR_PATH} exited with status ${CAPSULE_STATUS}."
+    exit "$CAPSULE_STATUS"
 fi
 {% if keep_task_directory %}
 echo "Leaving task directory in place: ${TASK_DIRECTORY}"

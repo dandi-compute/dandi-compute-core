@@ -438,6 +438,7 @@ def dispatch_pipeline_jobs(
             ).array_specification(len(dispatched_code_dir_paths)),
             dandiset_id=dandiset_id,
             manifest_file_path=str(manifest_file_path.absolute()),
+            signal=resources.signal,
             keep_task_directory=test,
         )
 
