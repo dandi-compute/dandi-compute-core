@@ -1,4 +1,9 @@
+import os
 import pathlib
+import shutil
+import signal
+import subprocess
+import time
 from unittest import mock
 
 import pytest
@@ -196,9 +201,65 @@ def test_dispatch_script_reproduces_the_capsules_own_slurm_log_path(
     script = _script(result)
     assert "sed -n 's/^#SBATCH[[:space:]]\\+--output=//p'" in script
     assert 'CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"' in script
-    assert 'bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"' in script
-    # pipefail is what keeps a failing capsule a failing array task through that pipe.
-    assert "set -euo pipefail" in script
+    assert 'exec tee -a "$CAPSULE_LOG_FILE_PATH") 2>&1 &' in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_fails_the_array_task_when_its_capsule_fails(base_directory: pathlib.Path) -> None:
+    """The capsule runs in the background, so its exit status is carried over by hand."""
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS)
+
+    script = _script(result)
+    assert 'wait "$CAPSULE_PID" || CAPSULE_STATUS=$?' in script
+    assert 'exit "$CAPSULE_STATUS"' in script
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("script", "expected_signal"),
+    [
+        ("#SBATCH --time=12:00:00\n#SBATCH --signal=B:USR1@600\n", "B:USR1@600"),
+        ("#SBATCH --time=12:00:00\n", ""),
+    ],
+)
+def test_capsule_resources_read_the_signal_directive(script: str, expected_signal: str) -> None:
+    """A capsule asking to be warned ahead of its time limit keeps that request through dispatch."""
+    resources = CapsuleResources.from_submission_script(script)
+
+    assert resources.signal == expected_signal
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_passes_a_requested_signal_on_to_the_capsule(base_directory: pathlib.Path) -> None:
+    """
+    SLURM sends a `B:` signal to the array task's batch shell only.
+
+    The capsule runs as a child of that shell, so the shell has to pass the signal on for the
+    capsule to hear it.
+    """
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal="B:USR1@600"),
+    )
+
+    script = _script(result)
+    assert "#SBATCH --signal=B:USR1@600" in script
+    assert 'kill -s "$SIGNAL_NAME" "$CAPSULE_PID"' in script
+
+
+@pytest.mark.ai_generated
+def test_dispatch_script_sets_no_signal_when_the_capsule_asks_for_none(base_directory: pathlib.Path) -> None:
+    """A capsule that does not handle the warning is left to run until the time limit."""
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys"),
+    )
+
+    script = _script(result)
+    assert "#SBATCH --signal=" not in script
+    assert 'kill -s "$SIGNAL_NAME"' not in script
 
 
 @pytest.mark.ai_generated
@@ -550,3 +611,222 @@ def test_dispatch_leaves_only_working_trees_to_the_dispatch_directory(base_direc
     assert list(result.dispatch_directory.iterdir()) == []
     script = _script(result)
     assert f'TASK_DIRECTORY="{result.dispatch_directory.absolute()}/task-' in script
+
+
+# The tests below run the generated array script for real under bash, with `dandi` replaced by
+# a stub that "downloads" a fake capsule, optionally with a claim marker already on it. The
+# SLURM variables a real array task sees are set by hand.
+
+_NEEDS_BASH = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+
+_CLAIM_ID = "100_1"
+
+#: Loops until it hears USR1, so it finishes only if the batch shell passes that signal on.
+_CAPSULE_WAITING_FOR_USR1 = """#!/bin/bash
+#SBATCH --output={log_directory}/job-%j_slurm.log
+trap 'echo heard > "{record_directory}/capsule_heard_usr1"; exit 1' USR1
+echo "capsule started"
+while true; do sleep 0.1; done
+"""
+
+#: Takes a moment to wrap up after TERM and logs while doing so, as the AIND capsule does.
+_CAPSULE_WRAPPING_UP_ON_TERM = """#!/bin/bash
+#SBATCH --output={log_directory}/job-%j_slurm.log
+trap 'sleep 0.5; echo "capsule wrapping up"; exit 3' TERM
+echo "capsule started"
+while true; do sleep 0.1; done
+"""
+
+_CAPSULE_FINISHING_AT_ONCE = """#!/bin/bash
+#SBATCH --output={log_directory}/job-%j_slurm.log
+echo ran > "{record_directory}/capsule_ran"
+echo "capsule started"
+"""
+
+_FAKE_DANDI = """#!/bin/bash
+echo "$1" >> "$FAKE_RECORD_DIRECTORY/dandi_calls"
+if [ "$1" = "download" ]; then
+    target="${*: -1}"
+    target="${target#dandi://dandi/}"
+    mkdir -p "$target"
+    cp "$FAKE_CAPSULE_SCRIPT" "$target/submit.sh"
+    if [ -n "${FAKE_MARKER_CONTENT:-}" ]; then
+        echo "$FAKE_MARKER_CONTENT" > "$target/submitted_date-2026+01+01_time-00+00+00"
+    fi
+fi
+"""
+
+
+def _wait_for(file_path: pathlib.Path, /, *, text: str = "", timeout_seconds: float = 20.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while not file_path.exists() or text not in file_path.read_text():
+        if time.monotonic() > deadline:
+            message = f"{file_path} never appeared with {text!r}"
+            raise TimeoutError(message)
+        time.sleep(0.05)
+
+
+def _start_array_task(
+    *,
+    script_file_path: pathlib.Path,
+    tmp_path: pathlib.Path,
+    capsule_script: str,
+    marker_content: str = "",
+) -> subprocess.Popen:
+    """Run array task 1 of array job 100 with `dandi` stubbed, in a process group of its own."""
+    record_directory = tmp_path / "records"
+    record_directory.mkdir()
+    fake_capsule_script_path = tmp_path / "fake_submit.sh"
+    fake_capsule_script_path.write_text(
+        capsule_script.format(log_directory=tmp_path / "capsule_logs", record_directory=record_directory)
+    )
+    stub_directory = tmp_path / "stubs"
+    stub_directory.mkdir()
+    fake_dandi_path = stub_directory / "dandi"
+    fake_dandi_path.write_text(_FAKE_DANDI)
+    fake_dandi_path.chmod(0o755)
+
+    environment = {
+        **os.environ,
+        "PATH": f"{stub_directory}{os.pathsep}{os.environ['PATH']}",
+        "FAKE_CAPSULE_SCRIPT": str(fake_capsule_script_path),
+        "FAKE_MARKER_CONTENT": marker_content,
+        "FAKE_RECORD_DIRECTORY": str(record_directory),
+        "SLURM_ARRAY_TASK_ID": "1",
+        "SLURM_ARRAY_JOB_ID": "100",
+        "SLURM_JOB_ID": "101",
+    }
+    process = subprocess.Popen(
+        ["bash", str(script_file_path)],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    return process
+
+
+def _finish(process: subprocess.Popen, /) -> str:
+    try:
+        output, _ = process.communicate(timeout=30)
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+    return output
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+def test_array_task_passes_the_time_limit_warning_on_to_its_capsule(
+    base_directory: pathlib.Path,
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    SLURM warns only the batch shell, so the capsule hears USR1 only because it is passed on.
+
+    The capsule's own exit status then has to come back out as the array task's.
+    """
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS[:1],
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal="B:USR1@600"),
+    )
+    process = _start_array_task(
+        script_file_path=result.arrays[0].script_file_path,
+        tmp_path=tmp_path,
+        capsule_script=_CAPSULE_WAITING_FOR_USR1,
+    )
+    _wait_for(tmp_path / "capsule_logs" / "job-101_slurm.log", text="capsule started")
+
+    process.send_signal(signal.SIGUSR1)
+    output = _finish(process)
+
+    assert (tmp_path / "records" / "capsule_heard_usr1").exists()
+    assert process.returncode == 1, output
+    assert "exited with status 1" in output
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+def test_array_task_lets_its_capsule_wrap_up_when_slurm_stops_it(
+    base_directory: pathlib.Path,
+    tmp_path: pathlib.Path,
+) -> None:
+    """
+    SLURM stops a task by sending TERM to every process in it at once.
+
+    The batch shell and the `tee` keeping the capsule's log have to outlast the capsule, or the
+    capsule's wrap-up is cut short and goes unlogged.
+    """
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS[:1])
+    process = _start_array_task(
+        script_file_path=result.arrays[0].script_file_path,
+        tmp_path=tmp_path,
+        capsule_script=_CAPSULE_WRAPPING_UP_ON_TERM,
+    )
+    capsule_log_file_path = tmp_path / "capsule_logs" / "job-101_slurm.log"
+    _wait_for(capsule_log_file_path, text="capsule started")
+
+    os.killpg(process.pid, signal.SIGTERM)
+    output = _finish(process)
+
+    assert process.returncode == 3, output
+    assert "capsule wrapping up" in capsule_log_file_path.read_text()
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+@pytest.mark.parametrize(
+    ("marker_content", "expected_to_run", "expected_to_claim"),
+    [
+        pytest.param("", True, True, id="unclaimed"),
+        pytest.param(_CLAIM_ID, True, False, id="claimed-by-this-task-before-a-requeue"),
+        pytest.param("1", False, False, id="claimed-by-another-run"),
+    ],
+)
+def test_array_task_runs_a_capsule_only_under_its_own_claim(
+    base_directory: pathlib.Path,
+    tmp_path: pathlib.Path,
+    marker_content: str,
+    expected_to_run: bool,
+    expected_to_claim: bool,
+) -> None:
+    """
+    A requeued task keeps its IDs, so a claim carrying them is its own from before the requeue.
+
+    Any other claim belongs to a run that still owns the capsule.
+    """
+    result = _dispatch(base_directory=base_directory, code_dir_paths=_AIND_CODE_DIR_PATHS[:1], test=True)
+    process = _start_array_task(
+        script_file_path=result.arrays[0].script_file_path,
+        tmp_path=tmp_path,
+        capsule_script=_CAPSULE_FINISHING_AT_ONCE,
+        marker_content=marker_content,
+    )
+    output = _finish(process)
+
+    assert process.returncode == 0, output
+    assert (tmp_path / "records" / "capsule_ran").exists() == expected_to_run
+    dandi_calls = (tmp_path / "records" / "dandi_calls").read_text().split()
+    assert ("upload" in dandi_calls) == expected_to_claim
+    if expected_to_claim:
+        capsule_code_directory = result.dispatch_directory / "task-100-1" / "001697" / _AIND_CODE_DIR_PATHS[0]
+        markers = list(capsule_code_directory.glob("submitted_date-*"))
+        assert [marker.read_text().strip() for marker in markers] == [_CLAIM_ID]
+
+
+@pytest.mark.ai_generated
+@_NEEDS_BASH
+@pytest.mark.parametrize("signal_request", ["B:USR1@600", ""])
+def test_generated_array_script_is_valid_bash(base_directory: pathlib.Path, signal_request: str) -> None:
+    """The template renders to a script bash can parse, with or without a signal."""
+    result = _dispatch(
+        base_directory=base_directory,
+        code_dir_paths=_AIND_CODE_DIR_PATHS,
+        dispatch_config=DispatchConfig(pipeline="aind+ephys", signal=signal_request),
+    )
+
+    check = subprocess.run(["bash", "-n", str(result.arrays[0].script_file_path)], capture_output=True, text=True)
+
+    assert check.returncode == 0, check.stderr

@@ -68,7 +68,7 @@ def _read_template_resources(pipeline: str, /) -> dict[str, str]:
         _log.warning("Unable to read the submission template for %s: %s", pipeline, exception)
         return {}
 
-    wanted = {"mem", "cpus-per-task", "partition", "time"}
+    wanted = {"mem", "cpus-per-task", "partition", "time", "signal"}
     resources = {
         match.group("name"): match.group("value")
         for match in _SBATCH_DIRECTIVE_RE.finditer(template)
@@ -95,6 +95,7 @@ class DispatchConfig:
     memory: str = _FALLBACK_MEMORY
     cpus_per_task: int = _FALLBACK_CPUS_PER_TASK
     time_limit: str = _FALLBACK_TIME_LIMIT
+    signal: str = ""
 
     def __post_init__(self) -> None:
         if self.max_concurrent < 1:
@@ -158,6 +159,7 @@ class DispatchConfig:
             memory=resources.get("mem") or _FALLBACK_MEMORY,
             cpus_per_task=int(cpus_per_task) if cpus_per_task is not None else _FALLBACK_CPUS_PER_TASK,
             time_limit=resources.get("time") or _FALLBACK_TIME_LIMIT,
+            signal=resources.get("signal", ""),
         )
         return dispatch_config
 
@@ -186,6 +188,7 @@ class DispatchConfig:
             cpus_per_task=self.cpus_per_task,
             partition=self.partition,
             time_limit=self.time_limit,
+            signal=self.signal,
         )
         return resources
 

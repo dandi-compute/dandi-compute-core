@@ -6,7 +6,9 @@
 #SBATCH --partition={{ partition }}
 #SBATCH --time={{ time_limit }}
 #SBATCH --array={{ array_specification }}
-
+#SBATCH --open-mode=append
+{% if signal %}#SBATCH --signal={{ signal }}
+{% endif %}
 set -euo pipefail
 
 DANDISET_ID="{{ dandiset_id }}"
@@ -21,21 +23,28 @@ fi
 
 mkdir -p "$TASK_DIRECTORY"
 cd "$TASK_DIRECTORY"
-dandi download --preserve-tree "dandi://dandi/${DANDISET_ID}/${CODE_DIR_PATH}/"
+# A requeued task finds its earlier attempt's working tree here, which is refreshed from the
+# archive rather than refused.
+dandi download --existing overwrite --preserve-tree "dandi://dandi/${DANDISET_ID}/${CODE_DIR_PATH}/"
 
 CAPSULE_CODE_DIRECTORY="${TASK_DIRECTORY}/${DANDISET_ID}/${CODE_DIR_PATH}"
 
 # The capsule is claimed before it runs so that a dispatch overlapping this array sees it as
-# submitted and does not place it in a second one.
-if compgen -G "${CAPSULE_CODE_DIRECTORY}/submitted*" > /dev/null; then
+# submitted and does not place it in a second one. The marker holds the ID of the task that
+# claimed it. A task SLURM requeued (after preemption, say) keeps its IDs, so it recognises its
+# own claim and runs the capsule again rather than leaving it to a run that no longer exists.
+CLAIM_ID="${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}"
+if grep -qxF "$CLAIM_ID" "${CAPSULE_CODE_DIRECTORY}"/submitted* 2>/dev/null; then
+    echo "Capsule ${CODE_DIR_PATH} was claimed by this task before it was requeued; running it again."
+elif compgen -G "${CAPSULE_CODE_DIRECTORY}/submitted*" > /dev/null; then
     echo "Capsule ${CODE_DIR_PATH} is already claimed; leaving it to the run that claimed it."
     exit 0
+else
+    MARKER_FILE_PATH="${CAPSULE_CODE_DIRECTORY}/submitted_date-$(date '+%Y+%m+%d_time-%H+%M+%S')"
+    echo "$CLAIM_ID" > "$MARKER_FILE_PATH"
+    echo "Claimed ${CODE_DIR_PATH} with marker $(basename "$MARKER_FILE_PATH")."
+    (cd "${TASK_DIRECTORY}/${DANDISET_ID}" && dandi upload --allow-any-path)
 fi
-
-MARKER_FILE_PATH="${CAPSULE_CODE_DIRECTORY}/submitted_date-$(date '+%Y+%m+%d_time-%H+%M+%S')"
-echo 1 > "$MARKER_FILE_PATH"
-echo "Claimed ${CODE_DIR_PATH} with marker $(basename "$MARKER_FILE_PATH")."
-(cd "${TASK_DIRECTORY}/${DANDISET_ID}" && dandi upload --allow-any-path)
 
 # The capsule runs inside this array task rather than as a job of its own, so this task
 # finishing is the work finishing and the array's throttle limits concurrent pipeline runs
@@ -50,13 +59,40 @@ CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%j/${SLURM_JOB_ID}}"
 CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%A/${SLURM_ARRAY_JOB_ID}}"
 CAPSULE_LOG_FILE_PATH="${CAPSULE_LOG_FILE_PATH//%a/${SLURM_ARRAY_TASK_ID}}"
 
+# The capsule runs in the background so that this shell is free to act on a signal. A capsule
+# that asks to be warned ahead of its time limit (`#SBATCH --signal`) has that warning sent here
+# by SLURM, never to the capsule itself, so it is passed on.
+#
+# When SLURM stops the task early (preemption, `scancel`), it sends TERM to every process in it.
+# This shell and the `tee` keeping the capsule's log then stay up until the capsule exits, so
+# the capsule has its grace period to wrap up and what it writes meanwhile is still logged. The
+# log is appended to so that a requeued attempt adds to the earlier one's rather than replacing it.
 if [ -n "$CAPSULE_LOG_FILE_PATH" ]; then
     mkdir -p "$(dirname "$CAPSULE_LOG_FILE_PATH")"
     echo "Writing the capsule's SLURM log to ${CAPSULE_LOG_FILE_PATH}."
-    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" 2>&1 | tee "$CAPSULE_LOG_FILE_PATH"
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" > >(trap '' TERM; exec tee -a "$CAPSULE_LOG_FILE_PATH") 2>&1 &
 else
     echo "Capsule ${CODE_DIR_PATH} declares no SLURM output path; its log stays with this array task."
-    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh"
+    bash "${CAPSULE_CODE_DIRECTORY}/submit.sh" &
+fi
+CAPSULE_PID=$!
+{% if signal %}
+SIGNAL_NAME="{{ signal }}"
+SIGNAL_NAME="${SIGNAL_NAME#*:}"
+SIGNAL_NAME="${SIGNAL_NAME%%@*}"
+trap 'echo "Passing ${SIGNAL_NAME} on to the capsule ahead of the time limit."; kill -s "$SIGNAL_NAME" "$CAPSULE_PID" 2>/dev/null || true' "$SIGNAL_NAME"
+{% endif %}
+trap 'echo "Stopped by SLURM; waiting for the capsule to wrap up."; kill -s TERM "$CAPSULE_PID" 2>/dev/null || true' TERM
+# A trapped signal interrupts `wait` early, so it is repeated until the capsule has exited.
+CAPSULE_STATUS=0
+wait "$CAPSULE_PID" || CAPSULE_STATUS=$?
+while kill -0 "$CAPSULE_PID" 2>/dev/null; do
+    CAPSULE_STATUS=0
+    wait "$CAPSULE_PID" || CAPSULE_STATUS=$?
+done
+if [ "$CAPSULE_STATUS" -ne 0 ]; then
+    echo "Capsule ${CODE_DIR_PATH} exited with status ${CAPSULE_STATUS}."
+    exit "$CAPSULE_STATUS"
 fi
 {% if keep_task_directory %}
 echo "Leaving task directory in place: ${TASK_DIRECTORY}"

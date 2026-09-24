@@ -10,11 +10,15 @@ Each array task then:
 
 1. reads its capsule out of the manifest by `SLURM_ARRAY_TASK_ID`, which is why array indices are one-based
 2. downloads that capsule's `code/` tree with `dandi download --preserve-tree`
-3. claims it by writing a `submitted_date-*` marker and uploading that marker back
+3. claims it by writing a `submitted_date-*` marker holding its own array job and task IDs, and uploading that marker back
 4. runs the capsule's `submit.sh`
 5. removes its working tree, unless `--test` was passed
 
 The capsule is claimed before it runs, so a dispatch that overlaps a live array sees it as submitted and does not place it in a second one.
+
+A capsule someone else has claimed is left alone. A task SLURM requeued, after preemption for example, keeps its IDs. It finds its own claim from before the requeue and runs the capsule again, and the AIND pipeline resumes from the steps that had already finished.
+
+Each task is warned before it is stopped, so its capsule can upload its logs and read as `failed` rather than `stalled`. A capsule that asks for a warning ahead of its time limit (`#SBATCH --signal`, which the AIND template sets) has that signal passed on by the task's batch shell. When SLURM stops the task outright, with preemption or `scancel`, the batch shell and the task's log stay up until the capsule has wrapped up.
 
 ## The concurrency limit
 
@@ -44,7 +48,7 @@ Pipelines differ here for real reasons:
 
 | pipeline | its `submit.sh` | resulting array |
 |---|---|---|
-| `aind+ephys` | a Nextflow driver that dispatches the heavy work to its own jobs, so it needs very little itself | 1GB / 1 CPU / `mit_normal` / 12h |
+| `aind+ephys` | a Nextflow driver that dispatches the heavy work to its own jobs, so it needs very little itself | 1GB / 1 CPU / `mit_preemptable` / 48h |
 | `lfp` | does its work in process via `datalad containers-run` | 16GB / 1 CPU / `mit_preemptable` / 48h |
 
 Capsules of one pipeline normally agree, since one template renders them all, so this is one array per pipeline in practice. They can diverge when a template changed between the releases that prepared them, and a capsule needing more than its neighbours would otherwise be truncated by an array sized for them.
@@ -102,7 +106,7 @@ The output reports what each pipeline dispatched, with one line per array naming
 
 ```
 aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requested resources.
-  array 900: 12 capsules requesting 1GB / 1 CPU / mit_normal / 12:00:00, at most 2 at a time
+  array 900: 12 capsules requesting 1GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
   array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
 
   logs, manifests and scripts: processing/derivatives/logs/dandicompute-dispatch-aind-ephys

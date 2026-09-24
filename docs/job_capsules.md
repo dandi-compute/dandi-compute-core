@@ -129,7 +129,7 @@ stateDiagram-v2
 | Status | Observed on the archive | Meaning |
 |---|---|---|
 | `pending` | `code/` but no submitted marker | Formed and waiting for a dispatcher. |
-| `stalled` | A `code/submitted*` marker, but no logs | Claimed by an array task, with no logs uploaded yet. Logs are uploaded when a run finishes, so a capsule sits here for its whole run. It also stays here if its task died before uploading anything. |
+| `stalled` | A `code/submitted*` marker, but no logs | Claimed by an array task, with no logs uploaded yet. Logs are uploaded when a run finishes, so a capsule sits here for its whole run. It also stays here if its task died before uploading anything. An AIND run cut short by its time limit, preemption or `scancel` uploads its logs first, so it moves on to `failed`. |
 | `failed` | Logs, but no `derivatives/` | Logs were uploaded without outputs. A run that uploads its logs part way through reads the same, and nothing on the archive tells the two apart, so they share one status. |
 | `successful` | `derivatives/` | Outputs were uploaded. |
 | `unknown` | None of the above | Also the fallback for a status cell in `jobs.tsv` that is empty or unrecognised. |

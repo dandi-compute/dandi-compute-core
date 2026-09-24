@@ -13,13 +13,13 @@ flowchart TB
     subgraph slurm["SLURM"]
         direction TB
         subgraph normal["mit_normal"]
-            AARR["aind+ephys array tasks<br/>1 CPU / 1 GB / 12 h"]
             NF["Nextflow process jobs<br/>up to 16 CPU / 128 GB"]
         end
         subgraph gpu["mit_normal_gpu"]
             KS["Kilosort jobs<br/>1 GPU / 16 CPU / 64 GB"]
         end
         subgraph pre["mit_preemptable"]
+            AARR["aind+ephys array tasks<br/>1 CPU / 1 GB / 48 h"]
             LARR["lfp array tasks<br/>1 CPU / 16 GB / 48 h"]
         end
     end
@@ -102,7 +102,7 @@ Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow env
 | `spikesort_spykingcircus2` | 16 | 64 GB | `mit_normal` |
 | `postprocessing` | 16 | 64 GB | `mit_normal` |
 
-These figures come from `configs/name-mit+engaging_revision-2.config`, which the `default` config key points to. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition.
+These figures come from `configs/name-mit+engaging_revision-2.config`, which the `default` config key points to. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
 
 When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule.
 

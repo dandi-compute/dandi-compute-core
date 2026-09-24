@@ -19,6 +19,7 @@ def generate_array_dispatch_script(
     array_specification: str,
     dandiset_id: str,
     manifest_file_path: str,
+    signal: str = "",
     keep_task_directory: bool = False,
 ) -> None:
     """
@@ -53,6 +54,10 @@ def generate_array_dispatch_script(
     manifest_file_path : str
         File listing one capsule ``code`` directory per line, read by array task
         index.
+    signal : str, optional
+        The ``--signal`` the capsule asks for, so that it is warned ahead of its time limit.
+        SLURM sends it to the array task's batch shell, which passes it on to the capsule.
+        Left out of the array's header when empty.
     keep_task_directory : bool, optional
         When ``True``, each task leaves its working tree on disk for debugging
         instead of removing it.
@@ -70,6 +75,7 @@ def generate_array_dispatch_script(
         array_specification=array_specification,
         dandiset_id=dandiset_id,
         manifest_file_path=manifest_file_path,
+        signal=signal,
         keep_task_directory=keep_task_directory,
     )
     script_file_path.write_text(data=f"{script}\n")
