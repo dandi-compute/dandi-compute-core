@@ -9,7 +9,7 @@ from dandi_compute_code.lfp_pipeline import build_lfp_job_hash, build_lfp_pipeli
 def test_build_pipeline_path_layout() -> None:
     pipeline_path = build_lfp_pipeline_path(dandiset_id="000409", output_within_dandiset_path="sub-01/sub-01_ecephys")
 
-    assert pipeline_path == "derivatives/dandiset-000409/sub-01/sub-01_ecephys/pipeline-lfp"
+    assert pipeline_path == "derivatives/dandisets-000/dandiset-000409/sub-01/sub-01_ecephys/pipeline-lfp"
 
 
 @pytest.mark.ai_generated

@@ -709,6 +709,15 @@ def _issues_summarize_command(
     default=None,
 )
 @click.option(
+    "--pipeline",
+    "pipeline",
+    help="Archive every job capsule of this pipeline (e.g. 'lfp' or 'aind+ephys'), whatever its status. "
+    "Combine with --status to archive only that pipeline's capsules with that status. Mutually exclusive with --job.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
     "--job",
     "capsule_path",
     help="Path of a single job capsule folder (relative to the source Dandiset root) to archive directly. "
@@ -753,6 +762,7 @@ def _issues_summarize_command(
 )
 def _archive_command(
     status: str | None,
+    pipeline: str | None,
     capsule_path: str | None,
     dandiset_id: str,
     archive_dandiset_id: str,
@@ -760,9 +770,10 @@ def _archive_command(
     test: bool = False,
     silent: bool = False,
 ) -> None:
-    """Archive one job capsule (--job) or every capsule with a --status."""
-    if (status is None) == (capsule_path is None):
-        message = "Provide exactly one of --status (failed|pending|stalled) or --job PATH."
+    """Archive one capsule (--job) or every capsule matching --status or --pipeline."""
+    has_filter = status is not None or pipeline is not None
+    if has_filter == (capsule_path is not None):
+        message = "Provide either --job PATH, or at least one of --status (failed|pending|stalled) and --pipeline NAME."
         raise click.UsageError(message)
 
     _configure_logging(silent=silent)
@@ -782,8 +793,9 @@ def _archive_command(
         return
 
     state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
-    archived = state.archive_by_status(
+    archived = state.archive_capsules(
         status=status,
+        pipeline=pipeline,
         dandiset_id=dandiset_id,
         archive_dandiset_id=archive_dandiset_id,
         base_directory=base_directory,
@@ -791,9 +803,10 @@ def _archive_command(
     )
 
     if not silent:
+        description = " ".join(part for part in (status, pipeline) if part is not None)
         if archived:
-            _styled_echo(text=f"\nArchived {len(archived)} {status} job capsule(s):", color="green")
+            _styled_echo(text=f"\nArchived {len(archived)} {description} job capsule(s):", color="green")
             for capsule_path in archived:
                 _styled_echo(text=f"  {capsule_path}", color="green")
         else:
-            _styled_echo(text=f"\nNo {status} job capsules to archive.", color="yellow")
+            _styled_echo(text=f"\nNo {description} job capsules to archive.", color="yellow")

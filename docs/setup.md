@@ -102,6 +102,8 @@ These are uploaded into the Dandiset's `derivatives/` directory, so the state of
 ```bash
 dandicompute archive --status failed      # every capsule with logs but no output
 dandicompute archive --status stalled     # claimed, but nothing was ever logged
+dandicompute archive --pipeline lfp       # every capsule of one pipeline, whatever its status
+dandicompute archive --pipeline lfp --status failed   # only that pipeline's failed capsules
 dandicompute archive --job derivatives/dandisets-000/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-260916a1b2c3
 ```
 

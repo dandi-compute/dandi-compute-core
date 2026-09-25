@@ -20,6 +20,7 @@ from ._handle_template import generate_lfp_submission_script
 from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
+from ..dandiset._globals import _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
     _capsule_names_from_asset_paths,
@@ -46,7 +47,8 @@ def build_lfp_pipeline_path(*, dandiset_id: str, output_within_dandiset_path: st
     str
         The pipeline directory path under the job capsules Dandiset.
     """
-    pipeline_path = f"derivatives/dandiset-{dandiset_id}/{output_within_dandiset_path}/pipeline-lfp"
+    derivatives_relative_dir = _dandiset_derivatives_relative_dir(dandiset_id)
+    pipeline_path = f"derivatives/{derivatives_relative_dir}/{output_within_dandiset_path}/pipeline-lfp"
     return pipeline_path
 
 

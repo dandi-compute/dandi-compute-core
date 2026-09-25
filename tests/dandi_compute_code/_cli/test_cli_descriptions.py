@@ -28,7 +28,7 @@ from dandi_compute_code._cli import _dandicompute_group
         (["issues", "summarize", "--help"], "Summarize discovered issue lines by descending occurrence count."),
         (
             ["archive", "--help"],
-            "Archive one job capsule (--job) or every capsule with a --status.",
+            "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
         ),
     ],
 )
