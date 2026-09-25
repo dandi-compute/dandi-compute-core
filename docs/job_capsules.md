@@ -180,6 +180,78 @@ sequenceDiagram
 
 The submission script refers to the preparation tree by absolute path. That tree, `processing/prepare-job-*/001697/{capsule}/`, is where the pipeline writes its intermediate results, logs and outputs, and where its closing `dandi upload` uploads them from. The copy an array task downloads is used only to read `submit.sh` and to claim the capsule. Preparation trees therefore have to outlive the capsule's run, and nothing removes them automatically. `processing/done.txt` lists the ones whose script ran to completion.
 
+## Curating a successful run
+
+A successful `aind+ephys` capsule holds one SortingAnalyzer per recorded stream, under `derivatives/postprocessed/`. Each is a Zarr asset, so [SpikeInterface GUI](https://github.com/SpikeInterface/spikeinterface-gui) can open it straight from the archive's public S3 bucket. Nothing is downloaded up front. The GUI fetches only what each view needs.
+
+### Generate the script
+
+`dandicompute curate` looks up the capsule's Zarr IDs and prints a ready-to-run script. Pass the job ID, or the capsule's path relative to the Dandiset root when a job ID is ambiguous.
+
+```bash
+dandicompute curate --job job-260612eac7ed > curate.py
+```
+
+The command needs no API key, as it reads the job capsules Dandiset's public `assets.jsonld`. It fails when the capsule has no postprocessed outputs, which is the case for every capsule that is not `successful`.
+
+### What the script does
+
+For `job-260612eac7ed` the body of the script comes out as follows.
+
+```python
+import json
+import pathlib
+
+import spikeinterface
+import spikeinterface_gui
+
+ANALYZERS = {
+    "block0_acquisition-ElectricalSeriesRaw_recording1": "s3://dandiarchive/zarr/cc0f0a1e-f69e-489c-8501-255c20f83068/",
+}
+STREAM = "block0_acquisition-ElectricalSeriesRaw_recording1"
+CURATION_FILE = pathlib.Path(f"job-260612eac7ed_{STREAM}_curation.json")
+
+
+def save_curation(curation_data: dict) -> None:
+    CURATION_FILE.write_text(json.dumps(curation_data, indent=4, default=str))
+    print(f"Saved curation to {CURATION_FILE.absolute()}")
+
+
+analyzer = spikeinterface.load_sorting_analyzer(ANALYZERS[STREAM], load_extensions=False)
+
+# The GUI would otherwise read and write its curation inside the analyzer, which is read-only on the archive.
+if CURATION_FILE.exists():
+    curation_dict = json.loads(CURATION_FILE.read_text())
+else:
+    curation_dict = {"format_version": "2", "unit_ids": analyzer.unit_ids.tolist()}
+
+spikeinterface_gui.run_mainwindow(
+    analyzer,
+    mode="web",
+    curation=True,
+    curation_dict=curation_dict,
+    curation_callback=save_curation,
+    skip_extensions=["waveforms", "principal_components"],
+)
+```
+
+- `ANALYZERS` maps each stream to the S3 URL of its Zarr asset, `s3://dandiarchive/zarr/{zarr ID}/`. The Zarr ID is the last segment of the asset's `contentUrl`, not its asset ID. A capsule with several probes lists one entry per probe, and `STREAM` picks which one to curate.
+- `load_sorting_analyzer` falls back to anonymous S3 access on its own, so no AWS credentials are needed.
+- Curation is kept in a local JSON file beside the script. **Save curation** in the curation view writes it, and the next launch picks up where the last one left off. The GUI's usual **Save in analyzer** cannot work here, because the analyzer on the archive is read-only.
+- `waveforms` and `principal_components` are the largest extensions, so they are skipped to keep start-up fast. The waveform heatmap and the PC scatter view are hidden as a result. Remove them from `skip_extensions` to bring those views back.
+- The analyzer has no recording attached, because it pointed at the NWB file on the compute cluster. The trace views are hidden as well.
+
+### Run it
+
+```bash
+pip install "spikeinterface-gui[web]" s3fs
+python curate.py
+```
+
+The GUI opens in a browser tab. Loading the extensions takes around half a minute on a typical connection. For the desktop app instead, install `spikeinterface-gui[desktop]` and change `mode="web"` to `mode="desktop"`.
+
+The saved JSON follows SpikeInterface's curation format. Pass it to `spikeinterface.curation.apply_curation`, together with the analyzer or its sorting, to get the curated units.
+
 ## Formation rules
 
 - A capsule is never formed twice. Before preparing, the code lists existing capsules under the asset's `pipeline-{name}/` directory in `001697` and stops if one has the same hash, whatever its date or status.

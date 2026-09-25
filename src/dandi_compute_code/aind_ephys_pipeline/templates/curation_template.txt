@@ -1,0 +1,47 @@
+"""
+Curate the spike sorting of {{ job_id }} in SpikeInterface GUI.
+
+Job capsule: DANDI:{{ dandiset_id }} {{ capsule_path }}/
+
+The postprocessed SortingAnalyzer is streamed from the DANDI Archive, so nothing is downloaded up front.
+Curation is saved to a local JSON file and picked up again on the next launch.
+
+Requires: pip install "spikeinterface-gui[web]" s3fs
+"""
+
+import json
+import pathlib
+
+import spikeinterface
+import spikeinterface_gui
+
+ANALYZERS = {
+{%- for stream_name, zarr_id in analyzers.items() %}
+    "{{ stream_name }}": "s3://dandiarchive/zarr/{{ zarr_id }}/",
+{%- endfor %}
+}
+STREAM = "{{ analyzers | first }}"
+CURATION_FILE = pathlib.Path(f"{{ job_id }}_{STREAM}_curation.json")
+
+
+def save_curation(curation_data: dict) -> None:
+    CURATION_FILE.write_text(json.dumps(curation_data, indent=4, default=str))
+    print(f"Saved curation to {CURATION_FILE.absolute()}")
+
+
+analyzer = spikeinterface.load_sorting_analyzer(ANALYZERS[STREAM], load_extensions=False)
+
+# The GUI would otherwise read and write its curation inside the analyzer, which is read-only on the archive.
+if CURATION_FILE.exists():
+    curation_dict = json.loads(CURATION_FILE.read_text())
+else:
+    curation_dict = {"format_version": "2", "unit_ids": analyzer.unit_ids.tolist()}
+
+spikeinterface_gui.run_mainwindow(
+    analyzer,
+    mode="web",
+    curation=True,
+    curation_dict=curation_dict,
+    curation_callback=save_curation,
+    skip_extensions=["waveforms", "principal_components"],
+)
