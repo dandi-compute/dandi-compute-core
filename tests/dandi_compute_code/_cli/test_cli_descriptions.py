@@ -27,10 +27,6 @@ from dandi_compute_code._cli import _dandicompute_group
         (["issues", "dump", "--help"], "Scan nextflow and slurm logs and write per-capsule issue records."),
         (["issues", "summarize", "--help"], "Summarize discovered issue lines by descending occurrence count."),
         (
-            ["curate", "--help"],
-            "Print a SpikeInterface GUI curation script for a successful AIND capsule.",
-        ),
-        (
             ["archive", "--help"],
             "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
         ),

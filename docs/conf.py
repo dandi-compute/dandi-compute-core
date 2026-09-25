@@ -69,6 +69,9 @@ html_theme_options = {
 }
 
 html_static_path = ["_static"]
+# Fills in the curation walkthrough on the job capsules page for a capsule the reader enters.
+html_js_files = ["curation_widget.js"]
+html_css_files = ["curation_widget.css"]
 
 # Top-level pages with no subpages would only show an empty "Section Navigation", so the primary
 # sidebar is kept only for pages in a section with subpages, and for the API reference.

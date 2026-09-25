@@ -8,7 +8,7 @@ from ._clean_work_directory import clean_work_directory
 from ._styled_echo import _styled_echo
 from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from .._configure_logging import _configure_logging
-from ..aind_ephys_pipeline import generate_curation_script, prepare_aind_ephys_job, submit_job
+from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
 from ..queue import TEST_QUEUE_CONTENT_ID, PipelineQueue, clean_dispatch_directories
@@ -660,40 +660,6 @@ def _issues_summarize_command(
     )
     if not silent:
         _styled_echo(text=f"\nWrote derivatives/issues_summary.json to Dandiset {dandiset_id}.", color="green")
-
-
-# dandicompute curate [OPTIONS]
-@_dandicompute_group.command(name="curate")
-@click.option(
-    "--job",
-    "capsule",
-    help="Job ID of a successful AIND capsule (e.g. 'job-260916a1b2c3'), or its path relative to the Dandiset root.",
-    required=True,
-    type=str,
-)
-@click.option(
-    "--dandiset-id",
-    "dandiset_id",
-    help="Dandiset ID holding the capsule.",
-    required=False,
-    type=str,
-    default=_JOB_CAPSULES_DANDISET_ID,
-    show_default=True,
-)
-def _curate_command(capsule: str, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> None:
-    """Print a SpikeInterface GUI curation script for a successful AIND capsule.
-
-    Redirect the output to a file and run it, for example:
-
-    \b
-        dandicompute curate --job job-260916a1b2c3 > curate.py
-        python curate.py
-    """
-    try:
-        script = generate_curation_script(capsule=capsule, dandiset_id=dandiset_id)
-    except ValueError as exception:
-        raise click.ClickException(str(exception)) from exception
-    click.echo(script, nl=False)
 
 
 # dandicompute archive [OPTIONS]

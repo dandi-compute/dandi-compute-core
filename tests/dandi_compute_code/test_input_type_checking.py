@@ -8,7 +8,6 @@ import pytest
 
 from dandi_compute_code.aind_ephys_pipeline import (
     generate_aind_ephys_submission_script,
-    generate_curation_script,
     prepare_aind_ephys_job,
     submit_job,
 )
@@ -100,7 +99,6 @@ _CASES = [
     pytest.param(
         generate_aind_ephys_submission_script, (), _AIND_SCRIPT_KWARGS, id="generate_aind_ephys_submission_script"
     ),
-    pytest.param(generate_curation_script, (), {"capsule": 260916}, id="generate_curation_script-int-capsule"),
     pytest.param(
         build_lfp_pipeline_path,
         (),

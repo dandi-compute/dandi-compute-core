@@ -1,0 +1,72 @@
+.curation-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: end;
+  padding: 1rem;
+  border: 1px solid var(--pst-color-border);
+  border-radius: 0.25rem;
+  background: var(--pst-color-surface);
+}
+
+.curation-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.curation-form label[hidden] {
+  display: none;
+}
+
+.curation-form label:first-child {
+  flex: 1 1 22rem;
+}
+
+.curation-form input,
+.curation-form select {
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--pst-color-border);
+  border-radius: 0.25rem;
+  background: var(--pst-color-background);
+  color: var(--pst-color-text-base);
+  font-weight: normal;
+  font-family: var(--pst-font-family-monospace);
+  font-size: 0.85rem;
+}
+
+.curation-form button,
+.curation-copy {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--pst-color-primary);
+  border-radius: 0.25rem;
+  background: var(--pst-color-primary);
+  color: var(--pst-color-primary-text, #fff);
+  cursor: pointer;
+}
+
+.curation-status {
+  margin-top: 0.5rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.curation-status.curation-error {
+  color: var(--pst-color-danger);
+}
+
+div.highlight.curation-code {
+  position: relative;
+}
+
+.curation-copy {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+}

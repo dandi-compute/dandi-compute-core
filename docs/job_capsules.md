@@ -178,34 +178,34 @@ The submission script refers to the preparation tree by absolute path. That tree
 
 ## Curating a successful run
 
-A successful `aind+ephys` capsule holds one SortingAnalyzer per recorded stream, under `derivatives/postprocessed/`. Each is a Zarr asset, so [SpikeInterface GUI](https://github.com/SpikeInterface/spikeinterface-gui) can open it straight from the archive's public S3 bucket. Nothing is downloaded up front. The GUI fetches only what each view needs.
+A successful `aind+ephys` capsule holds one SortingAnalyzer per recorded stream, under `derivatives/postprocessed/`. [SpikeInterface GUI](https://github.com/SpikeInterface/spikeinterface-gui) can open these straight from the archive's S3 bucket. Nothing is downloaded up front, and no AWS credentials are needed.
 
-### Generate the script
+The steps below curate one stream, export the curated units to a new NWB file and upload that file to DANDI. They are written for `job-260612eac7ed`. Enter any other successful capsule to fill in its values. A job ID, a capsule path or a DANDI link to the capsule all work.
 
-`dandicompute curate` looks up the capsule's Zarr IDs and prints a ready-to-run script. Pass the job ID, or the capsule's path relative to the Dandiset root when a job ID is ambiguous.
+<div id="curation-widget"></div>
+
+The code blocks are Bash. On Windows, run them in WSL or Git Bash.
+
+### 1. Set up an environment
 
 ```bash
-dandicompute curate --job job-260612eac7ed > curate.py
+conda create --yes --name dandi-curation python=3.12
+conda activate dandi-curation
+pip install "spikeinterface-gui[web]" s3fs neuroconv remfile dandi
 ```
 
-The command needs no API key, as it reads the job capsules Dandiset's public `assets.jsonld`. It fails when the capsule has no postprocessed outputs, which is the case for every capsule that is not `successful`.
+### 2. Curate in the web GUI
 
-### What the script does
-
-For `job-260612eac7ed` the body of the script comes out as follows.
-
-```python
+```bash
+cat > curate_job-260612eac7ed.py << 'EOF'
 import json
 import pathlib
 
 import spikeinterface
 import spikeinterface_gui
 
-ANALYZERS = {
-    "block0_acquisition-ElectricalSeriesRaw_recording1": "s3://dandiarchive/zarr/cc0f0a1e-f69e-489c-8501-255c20f83068/",
-}
-STREAM = "block0_acquisition-ElectricalSeriesRaw_recording1"
-CURATION_FILE = pathlib.Path(f"job-260612eac7ed_{STREAM}_curation.json")
+ANALYZER_URL = "s3://dandiarchive/zarr/cc0f0a1e-f69e-489c-8501-255c20f83068/"
+CURATION_FILE = pathlib.Path("job-260612eac7ed_block0_acquisition-ElectricalSeriesRaw_recording1_curation.json")
 
 
 def save_curation(curation_data: dict) -> None:
@@ -213,9 +213,7 @@ def save_curation(curation_data: dict) -> None:
     print(f"Saved curation to {CURATION_FILE.absolute()}")
 
 
-analyzer = spikeinterface.load_sorting_analyzer(ANALYZERS[STREAM], load_extensions=False)
-
-# The GUI would otherwise read and write its curation inside the analyzer, which is read-only on the archive.
+analyzer = spikeinterface.load_sorting_analyzer(ANALYZER_URL, load_extensions=False)
 if CURATION_FILE.exists():
     curation_dict = json.loads(CURATION_FILE.read_text())
 else:
@@ -229,24 +227,88 @@ spikeinterface_gui.run_mainwindow(
     curation_callback=save_curation,
     skip_extensions=["waveforms", "principal_components"],
 )
+EOF
+python curate_job-260612eac7ed.py
 ```
 
-- `ANALYZERS` maps each stream to the S3 URL of its Zarr asset, `s3://dandiarchive/zarr/{zarr ID}/`. The Zarr ID is the last segment of the asset's `contentUrl`, not its asset ID. A capsule with several probes lists one entry per probe, and `STREAM` picks which one to curate.
-- `load_sorting_analyzer` falls back to anonymous S3 access on its own, so no AWS credentials are needed.
-- Curation is kept in a local JSON file beside the script. **Save curation** in the curation view writes it, and the next launch picks up where the last one left off. The GUI's usual **Save in analyzer** cannot work here, because the analyzer on the archive is read-only.
-- `waveforms` and `principal_components` are the largest extensions, so they are skipped to keep start-up fast. The waveform heatmap and the PC scatter view are hidden as a result. Remove them from `skip_extensions` to bring those views back.
-- The analyzer has no recording attached, because it pointed at the NWB file on the compute cluster. The trace views are hidden as well.
+Open the `http://localhost:…` link it prints. Loading takes about half a minute. Press **Save curation** in the curation view to write the JSON file, then stop the script with `Ctrl+C`. Running the same command again picks up where the saved file left off.
 
-### Run it
+The analyzer on the archive is read-only, so the curation is kept in that local JSON file rather than inside it. The `waveforms` and `principal_components` extensions are the largest, so they are skipped to keep loading fast. That hides the waveform heatmap and the PC scatter view. The trace views are hidden too, because the analyzer has no recording attached.
+
+### 3. Export the curated units to NWB
 
 ```bash
-pip install "spikeinterface-gui[web]" s3fs
-python curate.py
+cat > export_job-260612eac7ed.py << 'EOF'
+import json
+import pathlib
+import uuid
+
+import h5py
+import hdmf.utils
+import neuroconv.tools.spikeinterface
+import numpy
+import pynwb
+import remfile
+import spikeinterface
+import spikeinterface.curation
+
+ANALYZER_URL = "s3://dandiarchive/zarr/cc0f0a1e-f69e-489c-8501-255c20f83068/"
+SOURCE_NWB_URL = "https://dandiarchive.s3.amazonaws.com/blobs/a05/ac4/a05ac4e6-030f-49b7-ac62-e1aa74e54dcb"
+CURATION_FILE = pathlib.Path("job-260612eac7ed_block0_acquisition-ElectricalSeriesRaw_recording1_curation.json")
+OUTPUT_FILE = pathlib.Path("000397/sub-Pt03/sub-Pt03_desc-curated_ecephys.nwb")
+UNITS_DESCRIPTION = (
+    "Units sorted by the AIND ephys pipeline in DANDI Compute job-260612eac7ed "
+    "(block0_acquisition-ElectricalSeriesRaw_recording1), then curated in SpikeInterface GUI."
+)
+
+analyzer = spikeinterface.load_sorting_analyzer(ANALYZER_URL, load_extensions=False)
+curation = json.loads(CURATION_FILE.read_text())
+curated_sorting = spikeinterface.curation.apply_curation(analyzer.sorting, curation)
+
+# Merged and split units are new, so they get no quality metrics.
+quality_metrics = analyzer.load_extension("quality_metrics").get_data()
+for metric in quality_metrics.columns:
+    values = [quality_metrics[metric].get(unit_id, numpy.nan) for unit_id in curated_sorting.unit_ids]
+    curated_sorting.set_property(metric, numpy.asarray(values, dtype=float))
+
+with h5py.File(remfile.File(SOURCE_NWB_URL), "r") as file, pynwb.NWBHDF5IO(file=file, load_namespaces=True) as io:
+    source = io.read()
+    subject = None
+    if source.subject is not None:
+        # Some sources use a Subject extension, so only the base Subject's fields are copied.
+        subject_fields = {argument["name"] for argument in hdmf.utils.get_docval(pynwb.file.Subject.__init__)}
+        subject = pynwb.file.Subject(**{k: v for k, v in source.subject.fields.items() if k in subject_fields})
+    nwbfile = pynwb.NWBFile(
+        session_description=source.session_description,
+        identifier=str(uuid.uuid4()),
+        session_start_time=source.session_start_time,
+        session_id=source.session_id,
+        subject=subject,
+    )
+
+neuroconv.tools.spikeinterface.add_sorting_to_nwbfile(
+    sorting=curated_sorting, nwbfile=nwbfile, units_description=UNITS_DESCRIPTION
+)
+OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+with pynwb.NWBHDF5IO(OUTPUT_FILE, "w") as io:
+    io.write(nwbfile)
+print(f"Wrote {len(curated_sorting.unit_ids)} curated units to {OUTPUT_FILE.absolute()}")
+EOF
+python export_job-260612eac7ed.py
 ```
 
-The GUI opens in a browser tab. Loading the extensions takes around half a minute on a typical connection. For the desktop app instead, install `spikeinterface-gui[desktop]` and change `mode="web"` to `mode="desktop"`.
+The new file holds only the curated units. Removed units are dropped, merges and splits are applied, and each label becomes a column such as `quality`. The quality metrics of the original sort are carried over as columns. Session and subject metadata are copied from the source NWB file, which is streamed rather than downloaded.
 
-The saved JSON follows SpikeInterface's curation format. Pass it to `spikeinterface.curation.apply_curation`, together with the analyzer or its sorting, to get the curated units.
+### 4. Upload to DANDI
+
+```bash
+dandi download --download dandiset.yaml --existing refresh DANDI:000397
+cd 000397
+dandi upload sub-Pt03/sub-Pt03_desc-curated_ecephys.nwb
+cd ..
+```
+
+This uploads next to the source asset, in the Dandiset it came from. Change **Upload to Dandiset** above to send it to another Dandiset you own. `dandi upload` asks for your API key from [dandiarchive.org](https://dandiarchive.org) unless `DANDI_API_KEY` is set. It validates the file before uploading it. Problems it reports in the session or subject metadata, such as a missing species, come from the source NWB file.
 
 ## Formation rules
 

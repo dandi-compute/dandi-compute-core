@@ -97,14 +97,6 @@ dandicompute issues summarize   # issues_dump.json + issues_summary.json
 
 These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md). Aggregate figures, such as the number of capsules, the bytes processed or the total compute time, are sums over the columns of `jobs.tsv`.
 
-### Curate a successful run
-
-```bash
-dandicompute curate --job job-260916a1b2c3 > curate.py   # streams the sorting into SpikeInterface GUI
-```
-
-This runs anywhere, not only on the cluster. See [Curating a successful run](job_capsules.md#curating-a-successful-run).
-
 ### Clear out failures
 
 ```bash
