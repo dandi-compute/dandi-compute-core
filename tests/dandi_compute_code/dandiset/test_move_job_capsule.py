@@ -352,7 +352,7 @@ def test_cli_archive_rejects_both_job_and_status(base_directory: pathlib.Path) -
             ["archive", "--job", _EXAMPLE_CAPSULE_PATH, "--status", "failed", "--base", str(base_directory)],
         )
     assert result.exit_code != 0
-    assert "exactly one of --status" in result.output
+    assert "Provide either --job PATH" in result.output
 
 
 @pytest.mark.ai_generated
@@ -362,4 +362,4 @@ def test_cli_archive_rejects_neither_job_nor_status(base_directory: pathlib.Path
     with mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key"}):
         result = runner.invoke(_dandicompute_group, ["archive", "--base", str(base_directory)])
     assert result.exit_code != 0
-    assert "exactly one of --status" in result.output
+    assert "Provide either --job PATH" in result.output

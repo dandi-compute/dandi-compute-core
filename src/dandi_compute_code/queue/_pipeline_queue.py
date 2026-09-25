@@ -541,22 +541,25 @@ class PipelineQueue:
 
         return removed
 
-    def archive_by_status(
+    def archive_capsules(
         self,
         *,
-        status: Literal["failed", "pending", "stalled"],
+        status: Literal["failed", "pending", "stalled"] | None = None,
+        pipeline: str | None = None,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
         base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> list[str]:
         """
-        Move every entry with the given *status* into the failed runs archive.
+        Move every entry matching *status* and *pipeline* into the failed runs archive.
 
         *status* is the recorded :attr:`~._job_capsule.JobCapsule.status` selecting the
         entries to archive: ``"failed"`` (logs present, no output), ``"pending"`` (code
         prepared but never submitted), or ``"stalled"`` (submitted to the scheduler but
-        no logs or output ever appeared). For each matching entry, resolves its capsule path
+        no logs or output ever appeared). *pipeline* selects the entries of one pipeline,
+        such as ``"lfp"`` or ``"aind+ephys"``, whatever their status. When both are given,
+        an entry must match both. For each matching entry, resolves its capsule path
         against *dandiset_id*'s remote ``assets.jsonld`` (see
         :meth:`JobCapsule.resolve_capsule_path`) and moves the
         corresponding capsule from *dandiset_id* to *archive_dandiset_id* via
@@ -566,8 +569,10 @@ class PipelineQueue:
 
         Parameters
         ----------
-        status : {"failed", "pending", "stalled"}
-            Which subset of entries to archive.
+        status : {"failed", "pending", "stalled"}, optional
+            Archive only the entries with this status.
+        pipeline : str, optional
+            Archive only the entries of this pipeline.
         dandiset_id : str, optional
             Dandiset entries are archived *from*. Defaults to the job capsules
             Dandiset.
@@ -589,16 +594,25 @@ class PipelineQueue:
 
         Raises
         ------
+        ValueError
+            If neither *status* nor *pipeline* is given.
         RuntimeError
             If ``DANDI_API_KEY`` is unset or blank, or if archiving any
             individual capsule fails (see :func:`move_job_capsule`). A failure
             leaves entries processed so far archived and stops before the rest.
         """
+        if status is None and pipeline is None:
+            message = "Provide at least one of `status` or `pipeline` to select the capsules to archive."
+            raise ValueError(message)
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)
 
-        entries = self.with_status(status)
+        entries = [
+            entry
+            for entry in self.entries
+            if (status is None or entry.status == status) and (pipeline is None or entry.job.pipeline == pipeline)
+        ]
         archived: list[str] = []
         if not entries:
             return archived

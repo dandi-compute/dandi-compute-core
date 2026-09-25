@@ -88,7 +88,7 @@ def test_with_status_selects_only_that_status(status: str) -> None:
     ],
 )
 def test_named_selectors_read_the_status_field(selector: str, expected_status: str) -> None:
-    """The named queue properties are the status subsets ``archive_by_status`` acts on."""
+    """The named queue properties are the status subsets ``archive_capsules`` acts on."""
     queue = PipelineQueue(entries=[_entry(each) for each in JOB_STATUSES])
 
     selected = getattr(queue, selector)
