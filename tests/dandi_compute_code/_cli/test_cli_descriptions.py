@@ -32,7 +32,7 @@ from dandi_compute_code._cli import _dandicompute_group
         ),
         (
             ["archive", "--help"],
-            "Archive one job capsule (--job) or every capsule with a --status.",
+            "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
         ),
     ],
 )
