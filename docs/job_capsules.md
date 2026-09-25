@@ -35,10 +35,6 @@ derivatives/dandisets-000/dandiset-000409/sub-mouse01/sub-mouse01_ecephys/pipeli
 
 The `dandisets-{first 3 digits}` level keeps any one directory from holding thousands of Dandisets.
 
-:::{note}
-LFP capsules are currently formed one level shallower, under `derivatives/dandiset-{dandiset_id}/` with no `dandisets-` bucket (see `build_lfp_pipeline_path`). The queue parses both layouts, because it locates capsules by their `dandiset-` and `pipeline-` segments rather than by a fixed depth.
-:::
-
 ### What each pipeline puts in a capsule
 
 | Path | `aind+ephys` | `lfp` |
