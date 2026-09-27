@@ -14,9 +14,14 @@
     "md5": "7940dfd1ae0c2ea43de6651aa3be9b18",
     "description": "Revised configuration to increase memory limits for job_dispatch and preprocessing."
   },
+  "v3": {
+    "path": "name-mit+engaging_revision-3.config",
+    "md5": "7299e706de214cad9378b977abef6408",
+    "description": "Revised configuration to double the memory limit for preprocessing, from 128 GB to 256 GB. Hopefully temporary, until a pipeline release ships a SpikeInterface version (0.105.0 or later) with online batching for DREDge motion estimation."
+  },
   "default": {
-    "path": "name-mit+engaging_revision-2.config",
-    "md5": "7940dfd1ae0c2ea43de6651aa3be9b18",
+    "path": "name-mit+engaging_revision-3.config",
+    "md5": "7299e706de214cad9378b977abef6408",
     "description": "The current recommended configuration."
   }
 }

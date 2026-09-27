@@ -9,7 +9,7 @@
     "md5": "d460cf8b358cb7484acd8ad2be164bb9",
     "description": "The first attempt to disable motion correction from being applied during processing."
   },
-  "no-motion-v1.1.0-r0": {
+  "no-motion-v1.1.0-r1": {
     "path": "name-no+motion_revision-1.json",
     "md5": "b6ed9dd7557ed149b7f7d57918632716",
     "description": "A revision of `name-no+motion_revision-0.json` which disables motion correction native to the spike sorters. Also clamps the seeds similarly to `name-determinstic.json`."
@@ -31,22 +31,27 @@
   },
   "original-v1.2.2": {
     "path": "name-original_version-1+2+2.json",
-    "md5": "1cbdbee7d92874823027ceca08415e32",
+    "md5": "0435b9987e8c37b3337e54b7c63c1926",
     "description": "A new default params file added in pipeline v1.2.2."
   },
   "deterministic-v1.2.2": {
     "path": "name-deterministic_version-1+2+2.json",
-    "md5": "63a9a9d6aa9d09ece4baf53996986d0e",
+    "md5": "2980d7ec033767bf07d9f8bda3d17ae7",
     "description": "Same as the `name-original_version-1+2+2.json`, but all `seed` entries are set to `0` instead of `null` or some other value."
   },
   "deterministic-v1.2.4": {
     "path": "name-original_version-1+2+4.json",
-    "md5": "4e89ec786dc28fe28dda5a8cf5d9ad3a",
+    "md5": "d2c652a1da83f2dd844a3d07c5347b75",
     "description": "Same as the `name-original_version-1+2+2.json`, but all the proportion of bad channels to not skip is raised to 1 (no skipping)."
   },
+  "default-v1.3.3": {
+    "path": "name-default_version-1+3+3.json",
+    "md5": "440c8c2a327305ab6989852735293f26",
+    "description": "The upstream v1.3.3 defaults with the DANDI overrides carried over from `name-original_version-1+2+4.json` (NWB input, HDF5 backend, no skipping on bad channels, Spyking Circus 2 seed of 0)."
+  },
   "default": {
-    "path": "name-original_version-1+2+4.json",
-    "md5": "4e89ec786dc28fe28dda5a8cf5d9ad3a",
+    "path": "name-default_version-1+3+3.json",
+    "md5": "440c8c2a327305ab6989852735293f26",
     "description": "The current recommended default parameter set."
   }
 }

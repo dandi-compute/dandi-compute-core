@@ -17,6 +17,7 @@ from unittest import mock
 import pytest
 
 import dandi_compute_code
+from dandi_compute_code.aind_ephys_pipeline import InvalidParametersError
 from dandi_compute_code.aind_ephys_pipeline._prepare_job import prepare_aind_ephys_job
 
 # ---------------------------------------------------------------------------
@@ -414,7 +415,7 @@ def test_prepare_aind_ephys_job_accepts_matching_minor_version_params(
 
 
 @pytest.mark.ai_generated
-def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version_for_default_params(
+def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version(
     tmp_path: pathlib.Path,
     fake_base_directory: pathlib.Path,
 ) -> None:
@@ -440,10 +441,10 @@ def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version_for_default
         mock_client.return_value.get_dandiset.return_value = mock_dandiset
 
         script_path = prepare_aind_ephys_job(
-            pipeline_version="v1.3.1",
+            pipeline_version="v1.2.4",
             content_id=content_id,
             config_key="default",
-            parameters_key="default",
+            parameters_key="original",
             base_directory=fake_base_directory,
         )
 
@@ -490,6 +491,36 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
 
     mock_client.assert_not_called()
     mock_urlopen.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("pipeline_version", ["v1.3.0", "v1.3.3", "1.3.3"])
+def test_params_invalid_against_the_pipeline_schema_are_rejected_before_any_capsule_work(
+    pipeline_version: str, tmp_path: pathlib.Path
+) -> None:
+    """Parameters that break the schema of the requested pipeline version never reach capsule creation."""
+    dandi_module = "dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi"
+    with (
+        mock.patch(f"{dandi_module}.dandiapi.DandiAPIClient") as mock_client,
+        mock.patch(f"{dandi_module}.download.download") as mock_download,
+        mock.patch(f"{dandi_module}.upload.upload") as mock_upload,
+        mock.patch("tempfile.mkdtemp") as mock_mkdtemp,
+        pytest.raises(InvalidParametersError, match="NO JOB CAPSULE WAS CREATED") as error_info,
+    ):
+        prepare_aind_ephys_job(
+            pipeline_version=pipeline_version,
+            content_id="048d1ee9-83b7-491f-8f02-1ca615b1d455",
+            config_key="default",
+            parameters_key="deterministic-v1.2.4",
+            base_directory=tmp_path,
+        )
+
+    assert "name-original_version-1+2+4.json" in str(error_info.value)
+    assert "$.pipeline_version" in str(error_info.value)
+    mock_client.assert_not_called()
+    mock_download.assert_not_called()
+    mock_upload.assert_not_called()
+    mock_mkdtemp.assert_not_called()
 
 
 _PACKAGE_DIRECTORY = pathlib.Path(dandi_compute_code.__file__).parent
