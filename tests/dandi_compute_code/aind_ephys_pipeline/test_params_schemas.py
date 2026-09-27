@@ -93,9 +93,9 @@ def test_a_pipeline_version_without_an_upstream_schema_is_refused() -> None:
 
 
 @pytest.mark.ai_generated
-@pytest.mark.parametrize("pipeline_version", ["v1.1.0", "v1.2.4", "v1.0.0-fixes"])
-def test_pipeline_versions_before_1_3_0_are_not_validated(pipeline_version: str) -> None:
-    """Versions before v1.3.0 skip validation."""
+@pytest.mark.parametrize("pipeline_version", ["v1.1.0", "1.1.1", "v1.0.0-fixes"])
+def test_pipeline_versions_before_the_upstream_schema_are_not_validated(pipeline_version: str) -> None:
+    """Versions before v1.2.0, the first release to ship a parameters schema, skip validation."""
     validate_aind_ephys_parameters(
         parameters={"not": "valid"}, pipeline_version=pipeline_version, parameters_file_name="name-x.json"
     )

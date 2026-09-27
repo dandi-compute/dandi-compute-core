@@ -102,7 +102,7 @@ Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow env
 | `spikesort_spykingcircus2` | 16 | 64 GB | `mit_normal` |
 | `postprocessing` | 16 | 64 GB | `mit_normal` |
 
-These figures come from `configs/name-mit+engaging_revision-3.config`, which the `default` config key points to. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
+These figures come from `configs/name-mit+engaging_revision-3.config`, which the `default` config key points to. Its 256 GB for `preprocessing` doubles the previous revision and is hopefully temporary. Motion estimation with DREDGE can run in an online batching mode that bounds its memory use on long recordings. That mode needs SpikeInterface 0.105.0, and pipeline v1.3.3 still runs 0.104.9. Once a pipeline release ships a SpikeInterface version with online batching, preprocessing should go back to online DREDGE and a smaller memory request. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
 
 When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule.
 

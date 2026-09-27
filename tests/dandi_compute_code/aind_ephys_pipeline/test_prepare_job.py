@@ -516,7 +516,7 @@ def test_params_invalid_against_the_pipeline_schema_are_rejected_before_any_caps
         )
 
     assert "name-original_version-1+2+4.json" in str(error_info.value)
-    assert "$.preprocessing.motion_correction" in str(error_info.value)
+    assert "$.pipeline_version" in str(error_info.value)
     mock_client.assert_not_called()
     mock_download.assert_not_called()
     mock_upload.assert_not_called()

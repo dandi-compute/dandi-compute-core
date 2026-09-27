@@ -13,9 +13,8 @@ from ._pipeline_version import _parse_pipeline_version
 _log = logging.getLogger(__name__)
 
 _PARAMS_SCHEMA_URL_TEMPLATE = "https://raw.githubusercontent.com/AllenNeuralDynamics/aind-ephys-pipeline/{ref}/pipeline/default_params_schema.json"
-# Releases before v1.3.0 ship a schema that rejects `motion_correction.compute` and `apply`,
-# which their preprocessing capsule accepts and the legacy parameter files rely on.
-_MINIMUM_VALIDATED_PIPELINE_VERSION = (1, 3, 0)
+# The pipeline repository first shipped `default_params_schema.json` in v1.2.0.
+_FIRST_PIPELINE_VERSION_WITH_SCHEMA = (1, 2, 0)
 _BANNER_RULE = "!" * 100
 
 
@@ -67,8 +66,8 @@ def validate_aind_ephys_parameters(*, parameters: dict, pipeline_version: str, p
 
     The schema is fetched from the pipeline repository at that release tag, which is the source of
     truth for what the pipeline accepts. This runs before any job capsule is formed, so parameters
-    the pipeline would reject or crash on never reach the queue. Versions before v1.3.0 are not
-    validated.
+    the pipeline would reject or crash on never reach the queue. Versions before v1.2.0 predate
+    the upstream schema and are not validated.
 
     Parameters
     ----------
@@ -88,9 +87,9 @@ def validate_aind_ephys_parameters(*, parameters: dict, pipeline_version: str, p
     urllib.error.URLError
         If the schema could not be fetched for any other reason.
     """
-    if _parse_pipeline_version(pipeline_version, label="requested pipeline") < _MINIMUM_VALIDATED_PIPELINE_VERSION:
+    if _parse_pipeline_version(pipeline_version, label="requested pipeline") < _FIRST_PIPELINE_VERSION_WITH_SCHEMA:
         _log.warning(
-            f"Pipeline version {pipeline_version!r} predates v1.3.0. "
+            f"Pipeline version {pipeline_version!r} predates the upstream parameters schema, added in v1.2.0. "
             f"Skipping schema validation of '{parameters_file_name}'."
         )
         return

@@ -123,7 +123,7 @@ def prepare_aind_ephys_job(
         - The parameters file ``pipeline_version`` is newer than the requested
           ``pipeline_version``.
         - The pipeline repository has no parameters schema at ``pipeline_version``,
-          for versions from v1.3.0 onward.
+          for versions from v1.2.0 onward.
         - The MD5 checksum of the resolved config or parameters file does not
           match its registry entry.
         - ``content_id`` is not present in the content-id-to-Dandiset mapping.
