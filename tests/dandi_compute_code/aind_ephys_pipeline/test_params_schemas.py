@@ -73,21 +73,10 @@ def test_default_params_conform_to_the_newest_registered_schema() -> None:
 
 
 @pytest.mark.ai_generated
-def test_default_params_estimate_motion_online_in_one_hour_chunks() -> None:
-    """The default parameters run DREDGE motion estimation in online batching mode over one hour chunks."""
-    estimate_motion_kwargs = _load_params("default")["preprocessing"]["motion_correction"]["estimate_motion_kwargs"]
-
-    assert estimate_motion_kwargs["batching_mode"] == "online"
-    assert estimate_motion_kwargs["chunk_len_s"] == 3600
-
-
-@pytest.mark.ai_generated
 @pytest.mark.parametrize(
     ("path", "value", "expected_json_path"),
     [
         (("preprocessing", "motion_correction", "compute"), True, "$.preprocessing.motion_correction"),
-        (("preprocessing", "motion_correction", "estimate_motion_kwargs", "batching_mode"), "offline", "batching_mode"),
-        (("preprocessing", "motion_correction", "estimate_motion_kwargs", "chunk_len_s"), 0, "chunk_len_s"),
         (("preprocessing", "motion_correction", "preset"), "not_a_preset", "$.preprocessing.motion_correction.preset"),
         (("pipeline_version",), "1.2.4", "$.pipeline_version"),
     ],
@@ -108,18 +97,6 @@ def test_invalid_params_raise_an_obvious_error(path: tuple[str, ...], value: obj
     assert "NO JOB CAPSULE WAS CREATED" in str(error_info.value)
     assert "name-example.json" in str(error_info.value)
     assert expected_json_path in str(error_info.value)
-
-
-@pytest.mark.ai_generated
-def test_online_batching_without_a_chunk_length_is_invalid() -> None:
-    """Online batching needs a chunk length, which SpikeInterface would otherwise reject at run time."""
-    parameters = copy.deepcopy(_load_params("default"))
-    del parameters["preprocessing"]["motion_correction"]["estimate_motion_kwargs"]["chunk_len_s"]
-
-    with pytest.raises(InvalidParametersError, match="'chunk_len_s' is a required property"):
-        validate_aind_ephys_parameters(
-            parameters=parameters, pipeline_version="v1.3.3", parameters_file_name="name-example.json"
-        )
 
 
 @pytest.mark.ai_generated

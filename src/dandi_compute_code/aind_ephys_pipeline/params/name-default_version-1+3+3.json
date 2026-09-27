@@ -64,9 +64,7 @@
             "localize_peaks_kwargs": {},
             "estimate_motion_kwargs": {
                 "win_step_norm": 0.1,
-                "win_scale_norm": 0.1,
-                "batching_mode": "online",
-                "chunk_len_s": 3600
+                "win_scale_norm": 0.1
             },
             "interpolate_motion_kwargs": {}
         }

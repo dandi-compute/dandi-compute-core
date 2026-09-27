@@ -2,7 +2,7 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://github.com/AllenNeuralDynamics/aind-ephys-pipeline/pipeline/default_params_schema.json",
     "title": "AIND Ephys Pipeline Parameters",
-    "description": "Configuration schema for the AIND electrophysiology analysis pipeline. See https://aind-ephys-pipeline.readthedocs.io/en/latest/parameters.html for documentation. DANDI Compute extends the upstream v1.3.3 schema by declaring the SpikeInterface DREDGE keyword arguments `batching_mode` and `chunk_len_s` under `preprocessing.motion_correction.estimate_motion_kwargs`.",
+    "description": "Configuration schema for the AIND electrophysiology analysis pipeline. See https://aind-ephys-pipeline.readthedocs.io/en/latest/parameters.html for documentation.",
     "type": "object",
     "additionalProperties": false,
     "properties": {
@@ -377,36 +377,7 @@
                                 "win_scale_norm": {
                                     "type": "number",
                                     "description": "Normalized window scale."
-                                },
-                                "batching_mode": {
-                                    "type": "string",
-                                    "enum": [
-                                        "full",
-                                        "online"
-                                    ],
-                                    "default": "full",
-                                    "description": "DANDI Compute extension. How the DREDGE (`dredge_ap`) displacement is solved. 'full' solves the whole recording at once. 'online' solves it chunk by chunk, each of `chunk_len_s` seconds, which bounds memory use on long recordings. Requires SpikeInterface >= 0.105.0."
-                                },
-                                "chunk_len_s": {
-                                    "type": "number",
-                                    "exclusiveMinimum": 0,
-                                    "description": "DANDI Compute extension. Length in seconds of each chunk when `batching_mode` is 'online'. This trades accuracy against memory, not speed. Longer chunks give the solver more context and a more accurate displacement estimate, at the cost of more RAM. Keep it at least as long as `time_horizon_s`. Requires SpikeInterface >= 0.105.0."
                                 }
-                            },
-                            "if": {
-                                "properties": {
-                                    "batching_mode": {
-                                        "const": "online"
-                                    }
-                                },
-                                "required": [
-                                    "batching_mode"
-                                ]
-                            },
-                            "then": {
-                                "required": [
-                                    "chunk_len_s"
-                                ]
                             }
                         },
                         "interpolate_motion_kwargs": {

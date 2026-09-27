@@ -110,8 +110,6 @@ Every AIND pipeline version from the oldest registered schema onward must have i
 2. Register it in `aind_ephys_pipeline/registries/registered_params_schemas.json`, keyed by the bare version such as `1.3.3`.
 3. Make sure `default` still conforms to it. The tests will fail otherwise.
 
-A schema may be extended to declare keyword arguments that upstream passes through without describing. Name such a file `name-dandi+extended_version-{version}.json` and say what was added in its registry description. The v1.3.3 schema declares the SpikeInterface DREDGE arguments `batching_mode` and `chunk_len_s` this way. Note that `chunk_len_s` trades accuracy against memory, not speed. Longer chunks give a more accurate displacement estimate but use more RAM.
-
 Never edit a registered file in place to change what it does. Add a new file under a new key and, if it should become the recommendation, re-point `default` at it. Existing capsules keep pointing at the old file's checksum.
 
 ## Adding a Nextflow config

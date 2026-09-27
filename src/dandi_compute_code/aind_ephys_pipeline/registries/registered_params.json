@@ -46,12 +46,12 @@
   },
   "default-v1.3.3": {
     "path": "name-default_version-1+3+3.json",
-    "md5": "be4f7ad1ca164b1d9ac3b3a751254bf1",
-    "description": "The upstream v1.3.3 defaults with the DANDI overrides carried over from `name-original_version-1+2+4.json` (NWB input, HDF5 backend, no skipping on bad channels, Spyking Circus 2 seed of 0). Motion estimation uses DREDGE in 'online' batching mode with one hour chunks (`chunk_len_s` of 3600). Chunk length trades accuracy against memory, not speed. Longer chunks give a more accurate displacement estimate but use more RAM. The online keyword arguments need SpikeInterface >= 0.105.0."
+    "md5": "440c8c2a327305ab6989852735293f26",
+    "description": "The upstream v1.3.3 defaults with the DANDI overrides carried over from `name-original_version-1+2+4.json` (NWB input, HDF5 backend, no skipping on bad channels, Spyking Circus 2 seed of 0)."
   },
   "default": {
     "path": "name-default_version-1+3+3.json",
-    "md5": "be4f7ad1ca164b1d9ac3b3a751254bf1",
+    "md5": "440c8c2a327305ab6989852735293f26",
     "description": "The current recommended default parameter set."
   }
 }
