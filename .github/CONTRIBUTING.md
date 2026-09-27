@@ -78,7 +78,6 @@ Each pipeline keeps its non-code files in subdirectories of its package, `src/da
 | `templates/` | The Jinja2 submission script template, `submission_template.txt` |
 | `params/` | Parameter files, named `name-{id}.json`. The LFP pipeline also keeps `parameter_schema.json` here, the hand-written JSON Schema its parameters are validated against. |
 | `configs/` | Nextflow configs for a compute environment, named `name-{environment}_revision-{n}.config` (AIND only) |
-| `params_schemas/` | The upstream parameters schema of each pipeline release, which AIND parameters are validated against (AIND only) |
 | `registries/` | The registries mapping short keys to those files and their MD5 checksums |
 
 The LFP pipeline's scientific dependencies (SpikeInterface, neuroconv, pynwb) are kept out of the base install. They are declared in `src/dandi_compute_code/lfp_pipeline/envs/pyproject.toml` and baked into the container built from `src/dandi_compute_code/lfp_pipeline/containers/lfp.Dockerfile`, which the manually dispatched `Build and upload LFP container image` workflow pushes to the GitHub Container Registry.
@@ -100,15 +99,7 @@ The LFP pipeline's scientific dependencies (SpikeInterface, neuroconv, pynwb) ar
 
 LFP parameter files must also satisfy `lfp_pipeline/params/parameter_schema.json`.
 
-AIND parameter files must conform to the parameters schema registered for every pipeline version they are run with. `prepare_aind_ephys_job` checks this before it downloads, writes or uploads anything. A file that fails raises `InvalidParametersError` with a banner listing each problem, and no job capsule is formed. The tests in `tests/dandi_compute_code/aind_ephys_pipeline/test_params_schemas.py` check every registered file against the schema of its own `pipeline_version`, and check `default` against the newest registered schema.
-
-## Adding an AIND pipeline version
-
-Every AIND pipeline version from the oldest registered schema onward must have its parameters schema registered. Capsule formation refuses a newer version until it is. Older versions predate the upstream schema and are not validated.
-
-1. Copy `pipeline/default_params_schema.json` from that release of the pipeline into `aind_ephys_pipeline/params_schemas/`. Name it `name-upstream_version-{version}.json`, or reuse an existing file when the schema is unchanged.
-2. Register it in `aind_ephys_pipeline/registries/registered_params_schemas.json`, keyed by the bare version such as `1.3.3`.
-3. Make sure `default` still conforms to it. The tests will fail otherwise.
+AIND parameter files must conform to the parameters schema the pipeline ships at every version they are run with, from v1.3.0 onward. `prepare_aind_ephys_job` fetches `pipeline/default_params_schema.json` from the pipeline repository at the requested release tag, so the upstream repository stays the only source of truth. It checks the parameters before it downloads, writes or uploads anything. A file that fails raises `InvalidParametersError` with a banner listing each problem, and no job capsule is formed. The tests in `tests/dandi_compute_code/aind_ephys_pipeline/test_params_schemas.py` check every registered file against the upstream schema of its own `pipeline_version`.
 
 Never edit a registered file in place to change what it does. Add a new file under a new key and, if it should become the recommendation, re-point `default` at it. Existing capsules keep pointing at the old file's checksum.
 

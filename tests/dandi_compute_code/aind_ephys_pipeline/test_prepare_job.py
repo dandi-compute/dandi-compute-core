@@ -501,7 +501,6 @@ def test_params_invalid_against_the_pipeline_schema_are_rejected_before_any_caps
     """Parameters that break the schema of the requested pipeline version never reach capsule creation."""
     dandi_module = "dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi"
     with (
-        mock.patch("urllib.request.urlopen") as mock_urlopen,
         mock.patch(f"{dandi_module}.dandiapi.DandiAPIClient") as mock_client,
         mock.patch(f"{dandi_module}.download.download") as mock_download,
         mock.patch(f"{dandi_module}.upload.upload") as mock_upload,
@@ -519,7 +518,6 @@ def test_params_invalid_against_the_pipeline_schema_are_rejected_before_any_caps
     assert "name-original_version-1+2+4.json" in str(error_info.value)
     assert "$.preprocessing.motion_correction" in str(error_info.value)
     mock_client.assert_not_called()
-    mock_urlopen.assert_not_called()
     mock_download.assert_not_called()
     mock_upload.assert_not_called()
     mock_mkdtemp.assert_not_called()

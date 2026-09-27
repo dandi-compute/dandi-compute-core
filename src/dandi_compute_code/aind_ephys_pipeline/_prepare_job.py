@@ -105,9 +105,9 @@ def prepare_aind_ephys_job(
     Raises
     ------
     InvalidParametersError
-        The parameters file does not conform to the parameters schema registered for
-        ``pipeline_version``. This is checked before anything is downloaded, written or
-        uploaded, so no job capsule is formed.
+        The parameters file does not conform to the parameters schema the pipeline ships
+        at ``pipeline_version``, fetched from the pipeline repository. This is checked
+        before anything is downloaded, written or uploaded, so no job capsule is formed.
     ValueError
         Raised in any of the following situations.
 
@@ -122,8 +122,8 @@ def prepare_aind_ephys_job(
           series than the requested ``pipeline_version``.
         - The parameters file ``pipeline_version`` is newer than the requested
           ``pipeline_version``.
-        - No parameters schema is registered for ``pipeline_version`` although it
-          is at least as new as the oldest registered schema.
+        - The pipeline repository has no parameters schema at ``pipeline_version``,
+          for versions from v1.3.0 onward.
         - The MD5 checksum of the resolved config or parameters file does not
           match its registry entry.
         - ``content_id`` is not present in the content-id-to-Dandiset mapping.

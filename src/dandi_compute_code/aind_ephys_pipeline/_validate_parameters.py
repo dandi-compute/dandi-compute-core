@@ -1,18 +1,21 @@
-import hashlib
+import functools
 import json
 import logging
-import pathlib
+import urllib.error
+import urllib.parse
+import urllib.request
 
 import beartype
 import jsonschema.validators
 
 from ._pipeline_version import _parse_pipeline_version
-from ..schemas import validate_registry
 
 _log = logging.getLogger(__name__)
 
-_PARAMS_SCHEMAS_DIRECTORY = pathlib.Path(__file__).parent / "params_schemas"
-_PARAMS_SCHEMAS_REGISTRY_FILE_PATH = pathlib.Path(__file__).parent / "registries" / "registered_params_schemas.json"
+_PARAMS_SCHEMA_URL_TEMPLATE = "https://raw.githubusercontent.com/AllenNeuralDynamics/aind-ephys-pipeline/{ref}/pipeline/default_params_schema.json"
+# Releases before v1.3.0 ship a schema that rejects `motion_correction.compute` and `apply`,
+# which their preprocessing capsule accepts and the legacy parameter files rely on.
+_MINIMUM_VALIDATED_PIPELINE_VERSION = (1, 3, 0)
 _BANNER_RULE = "!" * 100
 
 
@@ -26,67 +29,53 @@ def _banner(*, title: str, body: str) -> str:
     return message
 
 
+@functools.lru_cache(maxsize=None)
 @beartype.beartype
-def _load_params_schema(pipeline_version: str, /) -> tuple[str, dict] | None:
+def _fetch_params_schema(pipeline_version: str, /) -> tuple[str, dict]:
     """
-    The name and contents of the parameters schema registered for *pipeline_version*.
+    The URL and contents of the parameters schema the AIND ephys pipeline ships at *pipeline_version*.
 
-    Returns ``None`` for versions older than every registered schema, which predate the
-    upstream schema. A newer version with no registered schema is an error, so that a
-    pipeline release cannot be run without first registering the schema it ships.
+    Upstream tags carry no ``v`` prefix while callers often pass one, so both spellings are tried.
     """
-    registry = json.loads(_PARAMS_SCHEMAS_REGISTRY_FILE_PATH.read_text())
-    validate_registry(registry, description=f"registry '{_PARAMS_SCHEMAS_REGISTRY_FILE_PATH.name}'")
-    registered_versions = {
-        _parse_pipeline_version(version, label="registered parameters schema"): entry
-        for version, entry in registry.items()
-    }
+    bare_version = pipeline_version.removeprefix("v")
+    refs = dict.fromkeys([pipeline_version, bare_version, f"v{bare_version}"])
+    for ref in refs:
+        url = _PARAMS_SCHEMA_URL_TEMPLATE.format(ref=urllib.parse.quote(ref, safe=""))
+        try:
+            with urllib.request.urlopen(url=url) as response:
+                schema = json.loads(response.read().decode())
+            return url, schema
+        except urllib.error.HTTPError as error:
+            if error.code != 404:
+                raise
 
-    requested_version = _parse_pipeline_version(pipeline_version, label="requested pipeline")
-    if requested_version < min(registered_versions):
-        return None
-    if requested_version not in registered_versions:
-        body = (
-            f"No parameters schema is registered for pipeline version {pipeline_version!r}.\n"
-            f"Registered versions are: {sorted(registry)}.\n\n"
-            "Every pipeline version from the oldest registered one onward must have its parameters schema "
-            "registered before any job capsule can be formed against it.\n"
-            "Copy `pipeline/default_params_schema.json` from that release of the AIND ephys pipeline into "
-            "`params_schemas/` and add an entry to `registries/registered_params_schemas.json`."
-        )
-        message = _banner(title="UNREGISTERED AIND EPHYS PARAMETERS SCHEMA. NO JOB CAPSULE WAS CREATED.", body=body)
-        raise ValueError(message)
-
-    entry = registered_versions[requested_version]
-    schema_file_path = _PARAMS_SCHEMAS_DIRECTORY / entry["path"]
-    actual_md5 = hashlib.md5(schema_file_path.read_bytes()).hexdigest()
-    if actual_md5 != entry["md5"]:
-        message = (
-            f"MD5 mismatch for parameters schema file '{schema_file_path.name}': "
-            f"expected {entry['md5']!r}, got {actual_md5!r}. "
-            "The file may have been modified. Update the `md5` in `registries/registered_params_schemas.json` "
-            "to reflect the new file contents."
-        )
-        raise ValueError(message)
-    schema = json.loads(schema_file_path.read_text())
-    return schema_file_path.name, schema
+    body = (
+        f"Could not find `pipeline/default_params_schema.json` for pipeline version {pipeline_version!r} "
+        "in the AIND ephys pipeline repository.\n"
+        f"Tried refs: {list(refs)}.\n\n"
+        "Parameters cannot be checked against a release without its schema. "
+        "Make sure the version names a release tag of https://github.com/AllenNeuralDynamics/aind-ephys-pipeline."
+    )
+    message = _banner(title="AIND EPHYS PARAMETERS SCHEMA NOT FOUND. NO JOB CAPSULE WAS CREATED.", body=body)
+    raise ValueError(message)
 
 
 @beartype.beartype
 def validate_aind_ephys_parameters(*, parameters: dict, pipeline_version: str, parameters_file_name: str) -> None:
     """
-    Validate AIND ephys parameters against the schema registered for a pipeline version.
+    Validate AIND ephys parameters against the schema the pipeline ships at a version.
 
-    This runs before any job capsule is formed, so parameters the pipeline would reject or crash
-    on never reach the queue. Versions older than every registered schema predate the upstream
-    schema and are not validated.
+    The schema is fetched from the pipeline repository at that release tag, which is the source of
+    truth for what the pipeline accepts. This runs before any job capsule is formed, so parameters
+    the pipeline would reject or crash on never reach the queue. Versions before v1.3.0 are not
+    validated.
 
     Parameters
     ----------
     parameters : dict
         The loaded contents of the parameters file.
     pipeline_version : str
-        The pipeline version the parameters will be run with, such as ``"v1.3.3"``.
+        The pipeline version the parameters will be run with, such as ``"1.3.3"``.
     parameters_file_name : str
         The name of the parameters file, used in the error message.
 
@@ -95,17 +84,17 @@ def validate_aind_ephys_parameters(*, parameters: dict, pipeline_version: str, p
     InvalidParametersError
         If the parameters do not conform to the schema. The message lists every problem found.
     ValueError
-        If no schema is registered for a version at or after the oldest registered one, or the
-        registered schema file does not match its MD5.
+        If the pipeline repository has no parameters schema at that version.
+    urllib.error.URLError
+        If the schema could not be fetched for any other reason.
     """
-    loaded_schema = _load_params_schema(pipeline_version)
-    if loaded_schema is None:
+    if _parse_pipeline_version(pipeline_version, label="requested pipeline") < _MINIMUM_VALIDATED_PIPELINE_VERSION:
         _log.warning(
-            f"Pipeline version {pipeline_version!r} predates every registered parameters schema. "
+            f"Pipeline version {pipeline_version!r} predates v1.3.0. "
             f"Skipping schema validation of '{parameters_file_name}'."
         )
         return
-    schema_file_name, schema = loaded_schema
+    schema_url, schema = _fetch_params_schema(pipeline_version)
 
     validator_class = jsonschema.validators.validator_for(schema)
     validator_class.check_schema(schema)
@@ -117,7 +106,8 @@ def validate_aind_ephys_parameters(*, parameters: dict, pipeline_version: str, p
     problems = "\n".join(f"  {index}. At '{error.json_path}': {error.message}" for index, error in enumerate(errors, 1))
     body = (
         f"Parameters file '{parameters_file_name}' does not conform to the parameters schema for pipeline "
-        f"version {pipeline_version!r} ('{schema_file_name}').\n"
+        f"version {pipeline_version!r}.\n"
+        f"Schema: {schema_url}\n"
         f"Found {len(errors)} problem(s).\n\n"
         f"{problems}\n\n"
         "Write a parameters file for this pipeline version and register it under a new key in "

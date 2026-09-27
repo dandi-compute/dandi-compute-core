@@ -70,7 +70,6 @@ The registries in use are:
 |---|---|---|
 | `aind_ephys_pipeline/registries/registered_params.json` | `aind_ephys_pipeline/params/*.json` | `--params`, `pipeline_configs.json` |
 | `aind_ephys_pipeline/registries/registered_configs.json` | `aind_ephys_pipeline/configs/*.config` | `--config` |
-| `aind_ephys_pipeline/registries/registered_params_schemas.json` | `aind_ephys_pipeline/params_schemas/*.json` | Validating AIND parameters before a capsule is formed |
 | `lfp_pipeline/registries/registered_params.json` | `lfp_pipeline/params/*.json` | `pipeline_configs.json`, `python -m dandi_compute_code.lfp_pipeline --params` |
 
 Several keys may point at one file, which is how `default` tracks the current recommendation while versioned keys such as `deterministic-v1.2.4` stay fixed. Because a capsule records the file's MD5 prefix rather than its key, re-pointing `default` at a new file forms new capsules, while adding an alias for an existing file does not.
