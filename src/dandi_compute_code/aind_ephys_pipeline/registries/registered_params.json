@@ -9,7 +9,7 @@
     "md5": "d460cf8b358cb7484acd8ad2be164bb9",
     "description": "The first attempt to disable motion correction from being applied during processing."
   },
-  "no-motion-v1.1.0-r0": {
+  "no-motion-v1.1.0-r1": {
     "path": "name-no+motion_revision-1.json",
     "md5": "b6ed9dd7557ed149b7f7d57918632716",
     "description": "A revision of `name-no+motion_revision-0.json` which disables motion correction native to the spike sorters. Also clamps the seeds similarly to `name-determinstic.json`."
