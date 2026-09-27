@@ -30,7 +30,7 @@ from ._globals import (
 )
 from ._job_capsule import _derive_job_status
 from ._job_info import JobInfo
-from ..aind_ephys_pipeline._prepare_job import _parse_pipeline_version
+from ..aind_ephys_pipeline._pipeline_version import _parse_pipeline_version
 from ..dandiset._job_id import _JOB_ID_RE, _PROVENANCE_KEY
 from ..dandiset._load_assets_jsonld_metadata import (
     AssetMetadata,

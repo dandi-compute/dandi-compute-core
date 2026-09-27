@@ -18,6 +18,8 @@ import dandi.download
 import dandi.upload
 
 from ._handle_template import generate_aind_ephys_submission_script
+from ._pipeline_version import _parse_pipeline_version
+from ._validate_parameters import validate_aind_ephys_parameters
 from .._base_directory import (
     _DEFAULT_BASE_DIRECTORY,
     _aind_pipeline_directory,
@@ -43,15 +45,6 @@ _log = logging.getLogger(__name__)
 
 class UnmappedContentIDError(ValueError):
     """Raised when a content ID cannot be resolved to a unique Dandiset path."""
-
-
-@beartype.beartype
-def _parse_pipeline_version(version: str, *, label: str) -> tuple[int, int, int]:
-    match = re.fullmatch(r"v?(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:[-+][0-9A-Za-z.+-]+)?", version)
-    if match is None:
-        message = f"Unexpected {label} version format: {version!r}"
-        raise ValueError(message)
-    return int(match["major"]), int(match["minor"]), int(match["patch"])
 
 
 @beartype.beartype
@@ -111,6 +104,10 @@ def prepare_aind_ephys_job(
 
     Raises
     ------
+    InvalidParametersError
+        The parameters file does not conform to the parameters schema registered for
+        ``pipeline_version``. This is checked before anything is downloaded, written or
+        uploaded, so no job capsule is formed.
     ValueError
         Raised in any of the following situations.
 
@@ -125,6 +122,8 @@ def prepare_aind_ephys_job(
           series than the requested ``pipeline_version``.
         - The parameters file ``pipeline_version`` is newer than the requested
           ``pipeline_version``.
+        - No parameters schema is registered for ``pipeline_version`` although it
+          is at least as new as the oldest registered schema.
         - The MD5 checksum of the resolved config or parameters file does not
           match its registry entry.
         - ``content_id`` is not present in the content-id-to-Dandiset mapping.
@@ -209,6 +208,11 @@ def prepare_aind_ephys_job(
             "parameters file version."
         )
         raise ValueError(message)
+    validate_aind_ephys_parameters(
+        parameters=parameters,
+        pipeline_version=pipeline_version,
+        parameters_file_name=parameters_file_path.name,
+    )
     params_id = actual_md5[0:7]
 
     if content_id is None:

@@ -1,0 +1,22 @@
+{
+  "1.3.0": {
+    "path": "name-upstream_version-1+3+0.json",
+    "md5": "7e780228bd90af6860815f65e028a195",
+    "description": "The upstream `pipeline/default_params_schema.json` at pipeline v1.3.0, unchanged."
+  },
+  "1.3.1": {
+    "path": "name-upstream_version-1+3+0.json",
+    "md5": "7e780228bd90af6860815f65e028a195",
+    "description": "Pipeline v1.3.1 ships the same schema as v1.3.0."
+  },
+  "1.3.2": {
+    "path": "name-dandi+extended_version-1+3+3.json",
+    "md5": "86eaabd7f68a97644ac35455d1a886d0",
+    "description": "Pipeline v1.3.2 ships the same upstream schema as v1.3.3, so it shares the extended v1.3.3 schema."
+  },
+  "1.3.3": {
+    "path": "name-dandi+extended_version-1+3+3.json",
+    "md5": "86eaabd7f68a97644ac35455d1a886d0",
+    "description": "The upstream `pipeline/default_params_schema.json` at pipeline v1.3.3, extended to declare the SpikeInterface DREDGE keyword arguments `batching_mode` and `chunk_len_s` under `preprocessing.motion_correction.estimate_motion_kwargs`. Upstream leaves those arguments open, so the extension only adds type checks and requires `chunk_len_s` whenever `batching_mode` is 'online'."
+  }
+}

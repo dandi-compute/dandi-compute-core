@@ -34,6 +34,7 @@ _PACKAGE_ROOT = _REPOSITORY_ROOT / "src" / "dandi_compute_code"
 _REGISTRY_FILE_PATHS = [
     _PACKAGE_ROOT / "aind_ephys_pipeline" / "registries" / "registered_configs.json",
     _PACKAGE_ROOT / "aind_ephys_pipeline" / "registries" / "registered_params.json",
+    _PACKAGE_ROOT / "aind_ephys_pipeline" / "registries" / "registered_params_schemas.json",
     _PACKAGE_ROOT / "lfp_pipeline" / "registries" / "registered_params.json",
 ]
 
