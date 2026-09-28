@@ -24,9 +24,14 @@
     "md5": "ccc54dc8e48f2c68db4b6ad084513f66",
     "description": "Revised configuration to quadruple the memory limit for nwb_ecephys, from 64 GB to 256 GB."
   },
+  "v5": {
+    "path": "name-mit+engaging_revision-5.config",
+    "md5": "7092ab8e27569611d657c8200bb081e9",
+    "description": "Revised configuration to lower the CPU request for nwb_ecephys, from 16 to 4. Its LFP export holds about three minutes of padded data per worker, so memory scales with the worker count and not the recording length."
+  },
   "default": {
-    "path": "name-mit+engaging_revision-4.config",
-    "md5": "ccc54dc8e48f2c68db4b6ad084513f66",
+    "path": "name-mit+engaging_revision-5.config",
+    "md5": "7092ab8e27569611d657c8200bb081e9",
     "description": "The current recommended configuration."
   }
 }
