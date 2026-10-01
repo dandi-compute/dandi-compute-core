@@ -52,7 +52,7 @@ jobs:
           echo "repository=${repository}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ inputs.context || '.' }}
           file: ${{ inputs.dockerfile || 'src/dandi_compute_code/lfp_pipeline/containers/lfp.Dockerfile' }}
