@@ -494,7 +494,7 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
 
 
 @pytest.mark.ai_generated
-@pytest.mark.parametrize("pipeline_version", ["v1.3.0", "v1.3.3", "1.3.3"])
+@pytest.mark.parametrize("pipeline_version", ["v1.3.0", "v1.3.3", "1.3.3", "1.4.0"])
 def test_params_invalid_against_the_pipeline_schema_are_rejected_before_any_capsule_work(
     pipeline_version: str, tmp_path: pathlib.Path
 ) -> None:

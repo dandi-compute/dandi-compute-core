@@ -66,7 +66,7 @@ def test_invalid_params_raise_an_obvious_error(path: tuple[str, ...], value: obj
 
     with pytest.raises(InvalidParametersError, match="INVALID AIND EPHYS PARAMETERS") as error_info:
         validate_aind_ephys_parameters(
-            parameters=parameters, pipeline_version="1.3.3", parameters_file_name="name-example.json"
+            parameters=parameters, pipeline_version="1.4.0", parameters_file_name="name-example.json"
         )
 
     assert "NO JOB CAPSULE WAS CREATED" in str(error_info.value)
@@ -75,7 +75,7 @@ def test_invalid_params_raise_an_obvious_error(path: tuple[str, ...], value: obj
 
 
 @pytest.mark.ai_generated
-@pytest.mark.parametrize("pipeline_version", ["1.3.3", "v1.3.3"])
+@pytest.mark.parametrize("pipeline_version", ["1.4.0", "v1.4.0"])
 def test_the_schema_is_fetched_with_or_without_a_v_prefix(pipeline_version: str) -> None:
     """Upstream tags carry no ``v`` prefix, but a prefixed version still finds the schema."""
     validate_aind_ephys_parameters(
