@@ -141,7 +141,7 @@ Capsules never download their input. The cluster keeps a mirror of the archive's
 | DANDI S3 bucket | `dandiarchive.s3.amazonaws.com/dandisets/{id}/draft/assets.jsonld` | The full asset listing of a Dandiset, read by every queue command |
 | `dandi-cache/qualifying-aind-content-ids` | GitHub raw, `qualifying_aind_content_ids.jsonl.gz` | Which assets qualify for `aind+ephys` |
 | `dandi-cache/qualifying-lfp-content-ids` | GitHub raw, `qualifying_lfp_content_ids.jsonl` | Which assets qualify for `lfp`. A looser superset of the AIND list. |
-| `dandi-cache/content-id-to-usage-dandiset-path` | GitHub raw, `content_id_to_usage_dandiset_path.jsonl` | Resolving a content ID to the Dandiset and path it is used at |
+| `dandi-cache/content-id-to-usage-dandiset-path` | GitHub raw, `content_id_to_usage_dandiset_path.jsonl.gz` | Resolving a content ID to the Dandiset and path it is used at |
 | GitHub Container Registry | `ghcr.io/dandi-compute` | The LFP container image |
 
 The login node therefore needs outbound HTTPS to GitHub and to the DANDI Archive and its bucket. The compute nodes need the DANDI Archive, and GHCR for LFP capsules.
