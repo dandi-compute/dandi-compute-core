@@ -6,6 +6,7 @@ logic that resolves the ``sub-`` label used in the output directory hierarchy.
 """
 
 import datetime
+import gzip
 import importlib.metadata
 import json
 import os
@@ -28,12 +29,14 @@ _FAKE_COMMIT_HASH = "a" * 40
 
 
 def _make_urlopen_mock(mapping: dict) -> mock.MagicMock:
-    """Build an ``urllib.request.urlopen`` mock returning the mapping as JSON Lines.
+    """Build an ``urllib.request.urlopen`` mock returning the mapping as gzipped JSON Lines.
 
     Each content ID becomes its own single-entry ``{content_id: {...}}`` line,
     matching the remote content-id-to-usage-dandiset-path cache format.
     """
-    payload = "\n".join(json.dumps({content_id: value}) for content_id, value in mapping.items()).encode()
+    payload = gzip.compress(
+        "\n".join(json.dumps({content_id: value}) for content_id, value in mapping.items()).encode()
+    )
     response = mock.MagicMock()
     response.read.return_value = payload
     response.__enter__ = lambda s: s
@@ -431,6 +434,7 @@ def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version(
 
     with (
         mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.validate_aind_ephys_parameters"),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),

@@ -3,8 +3,8 @@ import beartype
 _JOB_CAPSULES_DANDISET_ID = "001697"
 _FAILED_RUNS_ARCHIVE_DANDISET_ID = "001873"
 _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL = (
-    "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/derivatives/"
-    "derivatives/content_id_to_usage_dandiset_path.jsonl"
+    "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/dist/"
+    "derivatives/content_id_to_usage_dandiset_path.jsonl.gz"
 )
 _ASSETS_JSONLD_URL_TEMPLATE = "https://dandiarchive.s3.amazonaws.com/dandisets/{dandiset_id}/draft/assets.jsonld"
 _ASSETS_JSONLD_URL = _ASSETS_JSONLD_URL_TEMPLATE.format(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
