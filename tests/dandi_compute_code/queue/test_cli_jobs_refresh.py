@@ -82,3 +82,21 @@ def test_cli_jobs_refresh_fails_without_dandi_devel(base_directory: pathlib.Path
         result = runner.invoke(_dandicompute_group, ["jobs", "refresh", "--base", str(base_directory)])
     assert result.exit_code != 0
     assert "DANDI_DEVEL" in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_jobs_refresh_reports_what_was_uploaded(base_directory: pathlib.Path) -> None:
+    """dandicompute jobs refresh names the tables it uploaded, and says when a Dandiset was already up to date."""
+    runner = CliRunner()
+    uploaded_by_dandiset_id = {
+        _JOB_CAPSULES_DANDISET_ID: ["derivatives/jobs.tsv"],
+        _FAILED_RUNS_ARCHIVE_DANDISET_ID: [],
+    }
+    with mock.patch(
+        "dandi_compute_code.queue._pipeline_queue.PipelineQueue.write_dandiset_jobs_table",
+        side_effect=lambda *, dandiset_id, **_: uploaded_by_dandiset_id[dandiset_id],
+    ):
+        result = runner.invoke(_dandicompute_group, ["jobs", "refresh", "--base", str(base_directory)], env=_DANDI_ENV)
+    assert result.exit_code == 0, result.output
+    assert f"Wrote derivatives/jobs.tsv to Dandiset {_JOB_CAPSULES_DANDISET_ID}." in result.output
+    assert f"Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID} is already up to date." in result.output
