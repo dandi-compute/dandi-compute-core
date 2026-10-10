@@ -273,6 +273,8 @@ def test_cli_jobs_dispatch_rejects_a_missing_base_directory(tmp_path: pathlib.Pa
         pytest.param(["--test"], {"test": True}, id="test"),
         pytest.param(["--jitter", "120.0"], {"jitter_seconds": 120.0}, id="jitter"),
         pytest.param(["--jitter", "0"], {"jitter_seconds": 0.0}, id="zero-jitter"),
+        pytest.param(["--record"], {"record": True}, id="record"),
+        pytest.param(["--refresh"], {}, id="refresh"),
     ],
 )
 def test_cli_jobs_dispatch_forwards_its_options(
@@ -295,6 +297,7 @@ def test_cli_jobs_dispatch_forwards_its_options(
             "only_pipeline": None,
             "max_concurrent": None,
             "jitter_seconds": 30.0,
+            "record": False,
             "test": False,
             **expected_keyword_arguments,
         }
@@ -513,3 +516,35 @@ def test_cli_clean_still_cleans_a_work_directory_on_its_own(base_directory: path
     assert result.exit_code == 0, result.output
     mock_work.assert_called_once_with(base_directory)
     mock_dispatch.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("statuses", "expected_refreshed_dandiset_ids"),
+    [
+        pytest.param(["no-pending", "dispatcher-active"], ["001697", "001873"], id="attempted"),
+        pytest.param(["dispatcher-active", "dispatcher-active"], [], id="every-array-churning"),
+    ],
+)
+def test_cli_jobs_dispatch_refreshes_both_dandisets_after_an_attempt(
+    base_directory: pathlib.Path, statuses: list[str], expected_refreshed_dandiset_ids: list[str]
+) -> None:
+    """--refresh rewrites jobs.tsv after a real attempt, but not after one that found every array churning."""
+    results = {
+        pipeline: DispatchResult(pipeline=pipeline, status=status)
+        for pipeline, status in zip(["aind+ephys", "lfp"], statuses)
+    }
+    runner = CliRunner()
+    with (
+        mock.patch(f"{_GROUP}.PipelineQueue.dispatch_jobs", return_value=results),
+        mock.patch(f"{_GROUP}.PipelineQueue.write_dandiset_jobs_table") as mock_refresh,
+    ):
+        result = runner.invoke(
+            _dandicompute_group,
+            ["jobs", "dispatch", "--base", str(base_directory), "--refresh", "--silent"],
+            env={"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"},
+        )
+
+    assert result.exit_code == 0, result.output
+    refreshed = [call.kwargs["dandiset_id"] for call in mock_refresh.call_args_list]
+    assert refreshed == expected_refreshed_dandiset_ids
