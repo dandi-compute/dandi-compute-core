@@ -1,4 +1,5 @@
 import contextlib
+import gzip
 import hashlib
 import importlib.metadata
 import io
@@ -28,6 +29,7 @@ from .._base_directory import (
 )
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..dandiset._globals import (
+    _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL,
     _JOB_CAPSULES_DANDISET_ID,
     _dandiset_derivatives_relative_dir,
 )
@@ -233,12 +235,8 @@ def prepare_aind_ephys_job(
         raise ValueError(message)
     config_id = actual_config_md5[0:7]
 
-    content_id_to_usage_dandiset_path_url = (
-        "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/derivatives/"
-        "derivatives/content_id_to_usage_dandiset_path.jsonl"
-    )
-    with urllib.request.urlopen(url=content_id_to_usage_dandiset_path_url) as response:
-        decoded = response.read().decode()
+    with urllib.request.urlopen(url=_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL) as response:
+        decoded = gzip.decompress(response.read()).decode()
     content_id_to_usage_dandiset_path = {
         content_id_key: dandiset_path
         for line in decoded.splitlines()

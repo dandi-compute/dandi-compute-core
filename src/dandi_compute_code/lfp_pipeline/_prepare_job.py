@@ -1,4 +1,5 @@
 import contextlib
+import gzip
 import hashlib
 import importlib.metadata
 import io
@@ -20,7 +21,7 @@ from ._handle_template import generate_lfp_submission_script
 from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
-from ..dandiset._globals import _dandiset_derivatives_relative_dir
+from ..dandiset._globals import _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL, _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
     _capsule_names_from_asset_paths,
@@ -30,11 +31,6 @@ from ..dandiset._job_id import (
 )
 
 _log = logging.getLogger(__name__)
-
-_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL = (
-    "https://raw.githubusercontent.com/dandi-cache/content-id-to-usage-dandiset-path/derivatives/"
-    "derivatives/content_id_to_usage_dandiset_path.jsonl"
-)
 
 
 @beartype.beartype
@@ -180,7 +176,7 @@ def prepare_lfp_job(
         content_id = metadata["contentUrl"][1].split("/")[-1]
 
     with urllib.request.urlopen(url=_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL) as response:
-        decoded = response.read().decode()
+        decoded = gzip.decompress(response.read()).decode()
     content_id_to_usage_dandiset_path = {
         content_id_key: usage_dandiset_path
         for line in decoded.splitlines()

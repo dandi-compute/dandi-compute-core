@@ -1,4 +1,5 @@
 import functools
+import gzip
 import json
 import urllib.request
 
@@ -10,7 +11,7 @@ def _load_content_id_to_usage_dandiset_path() -> dict[str, dict[str, str]]:
     """
     Load the content ID to usage Dandiset path mapping.
 
-    The remote cache is a JSON Lines file where each line is a single-entry
+    The remote cache is a gzip-compressed JSON Lines file where each line is a single-entry
     ``{content_id: {dandiset_id: path}}`` object; the lines are merged into one
     mapping.
 
@@ -22,7 +23,7 @@ def _load_content_id_to_usage_dandiset_path() -> dict[str, dict[str, str]]:
     """
     try:
         with urllib.request.urlopen(url=_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL) as response:
-            decoded = response.read().decode()
+            decoded = gzip.decompress(response.read()).decode()
         return {
             content_id: dandiset_path
             for line in decoded.splitlines()
