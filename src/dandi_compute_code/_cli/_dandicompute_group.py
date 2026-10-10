@@ -434,6 +434,8 @@ def _jobs_refresh_command(
     """
     Rewrite jobs.tsv into both Dandisets.
 
+    Only the tables whose content changed are uploaded.
+
     Ephemerally rebuilds and rewrites derivatives/jobs.tsv within both the source and
     archived Dandisets themselves (see PipelineQueue.write_dandiset_jobs_table), so each always
     reflects its current state fetched fresh from its own assets.jsonld. The asset paths of
@@ -445,19 +447,20 @@ def _jobs_refresh_command(
     _require_dandi_devel()
 
     for target_dandiset_id in (dandiset_id, archive_dandiset_id):
-        PipelineQueue.write_dandiset_jobs_table(
+        uploaded_relative_paths = PipelineQueue.write_dandiset_jobs_table(
             dandiset_id=target_dandiset_id,
             base_directory=base_directory,
             test=test,
         )
-        if not silent:
+        if silent:
+            continue
+        if uploaded_relative_paths:
             _styled_echo(
-                text=(
-                    "\nWrote derivatives/jobs.tsv, derivatives/paths.tsv and their JSON sidecars "
-                    f"to Dandiset {target_dandiset_id}."
-                ),
+                text=f"\nWrote {', '.join(uploaded_relative_paths)} to Dandiset {target_dandiset_id}.",
                 color="green",
             )
+        else:
+            _styled_echo(text=f"\nDandiset {target_dandiset_id} is already up to date.", color="yellow")
 
 
 # dandicompute jobs pending [OPTIONS]
