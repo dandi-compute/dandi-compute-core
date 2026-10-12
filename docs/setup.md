@@ -95,7 +95,7 @@ dandicompute jobs refresh       # jobs.tsv + paths.tsv in 001697 and 001873
 dandicompute issues summarize   # issues_dump.json + issues_summary.json
 ```
 
-These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. Their formats are in [Data model](data_model.md). Aggregate figures, such as the number of capsules, the bytes processed or the total compute time, are sums over the columns of `jobs.tsv`.
+These are uploaded into the Dandiset's `derivatives/` directory, so the state of the queue can be browsed from the archive without cluster access. `jobs refresh` reads only from DANDI and uploads only the tables whose content changed, so it can run anywhere with `DANDI_API_KEY`, and as often as needed. Their formats are in [Data model](data_model.md). Aggregate figures, such as the number of capsules, the bytes processed or the total compute time, are sums over the columns of `jobs.tsv`.
 
 ### Clear out failures
 

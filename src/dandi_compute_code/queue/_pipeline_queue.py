@@ -426,7 +426,7 @@ class PipelineQueue:
         relative_path: str = _JOBS_TSV_RELATIVE_PATH,
         base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
-    ) -> None:
+    ) -> list[str]:
         """
         Write this Dandiset's queue state as a ``jobs.tsv`` table within itself.
 
@@ -446,6 +446,9 @@ class PipelineQueue:
         state file involved -- the state is always rebuilt fresh from *dandiset_id*'s remote
         ``assets.jsonld`` and rewritten directly.
 
+        A table whose content is the same as the one already in the Dandiset is not uploaded
+        again, so a refresh that finds nothing changed costs only the reads.
+
         Parameters
         ----------
         dandiset_id : str, optional
@@ -462,6 +465,12 @@ class PipelineQueue:
             When ``True``, leave the temporary working tree on disk after a
             successful upload for debugging.
 
+        Returns
+        -------
+        list[str]
+            The paths, relative to the Dandiset root, of the tables that were uploaded. Empty
+            when every table was already up to date.
+
         Raises
         ------
         RuntimeError
@@ -475,9 +484,14 @@ class PipelineQueue:
         for entry, capsule_path in zip(state, capsule_paths):
             entry.process_wall_time_seconds = process_wall_times.get(capsule_path)
 
+        uploaded_relative_paths = []
         for table_relative_path, content in state._tables_by_relative_path(
             pathlib.PurePosixPath(relative_path)
         ).items():
+            current_content = _read_text_asset_at_path(metadata=metadata, path=str(table_relative_path))
+            if current_content == content:
+                _log.info("%s in Dandiset %s is unchanged; not uploading it", table_relative_path, dandiset_id)
+                continue
             write_dandiset_file(
                 dandiset_id=dandiset_id,
                 relative_path=str(table_relative_path),
@@ -485,6 +499,8 @@ class PipelineQueue:
                 base_directory=base_directory,
                 test=test,
             )
+            uploaded_relative_paths.append(str(table_relative_path))
+        return uploaded_relative_paths
 
     def clean_unsubmitted_capsules(self, *, dandiset_id: str = _JOB_CAPSULES_DANDISET_ID) -> list[str]:
         """
