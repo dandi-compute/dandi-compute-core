@@ -47,8 +47,8 @@ _QUALIFYING_AIND_CONTENT_IDS_URL = (
     "derivatives/qualifying_aind_content_ids.jsonl.gz"
 )
 _QUALIFYING_LFP_CONTENT_IDS_URL = (
-    "https://raw.githubusercontent.com/dandi-cache/qualifying-lfp-content-ids/derivatives/"
-    "derivatives/qualifying_lfp_content_ids.jsonl"
+    "https://raw.githubusercontent.com/dandi-cache/qualifying-lfp-content-ids/dist/"
+    "derivatives/qualifying_lfp_content_ids.jsonl.gz"
 )
 
 

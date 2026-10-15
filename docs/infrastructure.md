@@ -140,7 +140,7 @@ Capsules never download their input. The cluster keeps a mirror of the archive's
 | DANDI Archive API | `dandiarchive.org` | Uploading, downloading, deleting and moving capsules, through the DANDI CLI and its Python client |
 | DANDI S3 bucket | `dandiarchive.s3.amazonaws.com/dandisets/{id}/draft/assets.jsonld` | The full asset listing of a Dandiset, read by every queue command |
 | `dandi-cache/qualifying-aind-content-ids` | GitHub raw, `qualifying_aind_content_ids.jsonl.gz` | Which assets qualify for `aind+ephys` |
-| `dandi-cache/qualifying-lfp-content-ids` | GitHub raw, `qualifying_lfp_content_ids.jsonl` | Which assets qualify for `lfp`. A looser superset of the AIND list. |
+| `dandi-cache/qualifying-lfp-content-ids` | GitHub raw, `qualifying_lfp_content_ids.jsonl.gz` | Which assets qualify for `lfp`. A looser superset of the AIND list. |
 | `dandi-cache/content-id-to-usage-dandiset-path` | GitHub raw, `content_id_to_usage_dandiset_path.jsonl.gz` | Resolving a content ID to the Dandiset and path it is used at |
 | GitHub Container Registry | `ghcr.io/dandi-compute` | The LFP container image |
 
