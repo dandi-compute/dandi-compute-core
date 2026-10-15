@@ -385,6 +385,57 @@ def _jobs_create_command(
         _styled_echo(text=f"\nCreated {created_count} {noun}.", color="green" if created_count else "yellow")
 
 
+# dandicompute jobs creatable [OPTIONS]
+@_jobs_group.command(name="creatable")
+@click.option(
+    "--pipeline",
+    "only_pipeline",
+    help="Check only the named pipeline (e.g. 'lfp' or 'aind+ephys'). Defaults to all configured pipelines.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
+    "--config",
+    "config_key",
+    help="Registered configuration key to check against.",
+    required=False,
+    type=str,
+    default="default",
+)
+@click.option(
+    "--silent",
+    help="Suppress informational log output and the printed result.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+@click.pass_context
+def _jobs_creatable_command(
+    context: click.Context, only_pipeline: str | None = None, config_key: str = "default", silent: bool = False
+) -> None:
+    """Report whether any job capsules are waiting to be created.
+
+    Prints how many and exits with code 0 when at least one qualifying asset has no job capsule
+    yet. Prints ``0`` and exits with code 1 when there is nothing to create. This lets a crontab
+    skip capsule creation entirely when there is no work, for example:
+
+        dandicompute jobs creatable --silent && dandicompute jobs create ...
+
+    Exits with code 2 when the check itself fails (for example a cache that cannot be read), so
+    a caller can tell a failure apart from there being nothing to create.
+    """
+    _configure_logging(silent=silent)
+    try:
+        labels = PipelineQueue.creatable_job_labels(only_pipeline=only_pipeline, config_key=config_key)
+    except Exception as exception:  # noqa: BLE001 -- any failure must stay distinct from "nothing to create"
+        click.echo(f"Unable to check for job capsules to create: {exception!r}", err=True)
+        context.exit(2)
+    if not silent:
+        _styled_echo(text=str(len(labels)), color="green" if labels else "yellow")
+    context.exit(0 if labels else 1)
+
+
 # dandicompute jobs refresh [OPTIONS]
 @_jobs_group.command(name="refresh")
 @click.option(

@@ -180,6 +180,7 @@ The submission script refers to the preparation tree by absolute path. That tree
 
 - A capsule is never formed twice. Before preparing, the code lists existing capsules under the asset's `pipeline-{name}/` directory in `001697` and stops if one has the same hash, whatever its date or status.
 - `jobs create` additionally skips any asset whose `(pipeline, params, config, content_id)` already has a capsule of any pipeline version. New pipeline versions are only rolled out with `--latest`.
+- `jobs creatable` runs the same check without forming anything, also skipping content IDs that map to no Dandiset path, as creation does. It prints how many capsules creation would form and exits 0 when there are any, 1 when there are none and 2 when the check fails, so a crontab can gate creation on it: `dandicompute jobs creatable --silent && dandicompute jobs create ...`.
 - New capsules always target the latest version available on the machine. For `aind+ephys` that is the highest `vX.Y.Z` tag in the local pipeline checkout. For `lfp` it is this package's own version, which also picks the container tag.
 - An AIND parameter file declares the pipeline version it was written for. Preparation refuses a requested version in a different major series, or one older than the file's.
 - An asset whose content ID is missing from the `content-id-to-usage-dandiset-path` cache is skipped with a warning. When a content ID is used at several paths, the first one listed is used.
