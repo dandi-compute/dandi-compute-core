@@ -513,3 +513,49 @@ def test_cli_clean_still_cleans_a_work_directory_on_its_own(base_directory: path
     assert result.exit_code == 0, result.output
     mock_work.assert_called_once_with(base_directory)
     mock_dispatch.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("labels", "expected_exit_code", "expected_output"),
+    [
+        pytest.param(["aind+ephys/default/a", "lfp/default/b"], 0, "2", id="creatable-exits-zero"),
+        pytest.param([], 1, "0", id="nothing-creatable-exits-one"),
+    ],
+)
+def test_cli_jobs_creatable_reports_and_sets_exit_code(
+    labels: list[str], expected_exit_code: int, expected_output: str
+) -> None:
+    """dandicompute jobs creatable prints how many capsules are waiting to be created, and exits 0 only if any."""
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.PipelineQueue.creatable_job_labels", return_value=labels) as mock_creatable:
+        result = runner.invoke(_dandicompute_group, ["jobs", "creatable", "--pipeline", "lfp"])
+
+    assert result.exit_code == expected_exit_code, result.output
+    mock_creatable.assert_called_once_with(only_pipeline="lfp", config_key="default")
+    assert expected_output in result.output
+
+
+@pytest.mark.ai_generated
+def test_cli_jobs_creatable_silent_suppresses_output() -> None:
+    """dandicompute jobs creatable --silent still sets the exit code but prints nothing."""
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.PipelineQueue.creatable_job_labels", return_value=[]):
+        result = runner.invoke(_dandicompute_group, ["jobs", "creatable", "--silent"])
+
+    assert result.exit_code == 1
+    assert result.output == ""
+
+
+@pytest.mark.ai_generated
+def test_cli_jobs_creatable_failure_exits_two() -> None:
+    """A check that fails exits 2, so it is not mistaken for there being nothing to create."""
+    runner = CliRunner()
+
+    with mock.patch(f"{_GROUP}.PipelineQueue.creatable_job_labels", side_effect=RuntimeError("cache unreachable")):
+        result = runner.invoke(_dandicompute_group, ["jobs", "creatable", "--silent"])
+
+    assert result.exit_code == 2
+    assert "cache unreachable" in result.output

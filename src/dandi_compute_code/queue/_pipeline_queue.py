@@ -74,6 +74,7 @@ from ..dandiset._load_assets_jsonld_metadata import (
     _build_asset_metadata,
     load_assets_jsonld_metadata,
 )
+from ..dandiset._load_content_id_to_usage_dandiset_path import _load_content_id_to_usage_dandiset_path
 from ..lfp_pipeline import prepare_lfp_job
 
 _log = logging.getLogger(__name__)
@@ -801,6 +802,56 @@ class PipelineQueue:
             content_ids=queue_class._fetch_qualifying_content_ids()
         )
         return ordered_content_ids
+
+    @classmethod
+    def creatable_job_labels(cls, *, only_pipeline: str | None = None, config_key: str = "default") -> list[str]:
+        """
+        Labels of the job capsules :meth:`create_job_capsules` would form, without forming any.
+
+        Lightweight check intended to gate capsule creation, as :meth:`has_pending_jobs` gates
+        dispatch: it crosses every pipeline and parameters combination with the qualifying
+        content IDs, as creation does, and keeps those that have no capsule yet and that resolve
+        to a Dandiset path (an unmapped content ID is skipped by creation too). It reads only
+        from the network, so it needs no local pipeline checkout and no SLURM access.
+
+        Parameters
+        ----------
+        only_pipeline : str, optional
+            Check only this pipeline instead of every pipeline in the configuration. Raises if
+            the name is not configured.
+        config_key : str, optional
+            Key for a registered job configuration.
+
+        Returns
+        -------
+        list[str]
+            One ``pipeline/params/content_id`` label per capsule creation would form. Empty when
+            there is nothing to create.
+        """
+        pipelines = _load_pipeline_config().get("pipelines", {})
+        if only_pipeline is not None and only_pipeline not in pipelines:
+            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {list(pipelines)}."
+            raise ValueError(message)
+
+        existing_capsule_keys = cls.from_dandi().existing_capsule_keys()
+        mapped_content_ids = _load_content_id_to_usage_dandiset_path().keys()
+
+        labels = []
+        for pipeline_name, pipeline_data in pipelines.items():
+            if only_pipeline is not None and pipeline_name != only_pipeline:
+                continue
+            config_id = cls.resolve_config_key_to_id(pipeline=pipeline_name, config_key=config_key)
+            pipeline_content_ids = cls._qualifying_content_ids(pipeline_name)
+            for params_key in pipeline_data.get("params", []):
+                params_id = cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
+                labels.extend(
+                    f"{pipeline_name}/{params_key}/{content_id}"
+                    for content_id in pipeline_content_ids
+                    if (pipeline_name, params_id, config_id, content_id) not in existing_capsule_keys
+                    and content_id in mapped_content_ids
+                )
+        _log.info("Found %d job capsules to create", len(labels))
+        return labels
 
     @classmethod
     def create_job_capsules(
