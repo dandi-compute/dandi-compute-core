@@ -1,3 +1,4 @@
+import gzip
 import json
 import urllib.request
 
@@ -8,7 +9,7 @@ def _fetch_qualifying_lfp_content_ids() -> list[str]:
     """
     Fetch the list of content IDs that currently qualify for the LFP pipeline.
 
-    The remote cache is a JSON Lines file where each line is a single-entry
+    The remote cache is a gzip-compressed JSON Lines file where each line is a single-entry
     ``{content_id: qualifies}`` object (``qualifies`` is a ``bool``). The LFP cache
     is the looser superset of the AIND cache. The lines are merged into one mapping
     and only the content IDs whose value is ``True`` are returned.
@@ -21,7 +22,7 @@ def _fetch_qualifying_lfp_content_ids() -> list[str]:
     """
     try:
         with urllib.request.urlopen(url=_QUALIFYING_LFP_CONTENT_IDS_URL) as response:
-            decoded = response.read().decode()
+            decoded = gzip.decompress(response.read()).decode()
         content_id_to_qualifies: dict[str, bool] = {}
         for line in decoded.splitlines():
             if line.strip():
