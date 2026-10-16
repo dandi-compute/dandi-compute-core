@@ -280,8 +280,10 @@ class PipelineQueue:
         Build a queue state from indexed DANDI assets metadata.
 
         Each entry represents one job capsule inferred from the
-        ``derivatives/dandiset-*/.../pipeline-*/job-*`` path structure, with ``content_id`` /
-        ``asset_size_bytes`` resolved from the upstream source Dandiset's ``assets.jsonld``.
+        ``derivatives/dandiset-*/.../pipeline-*/job-*`` path structure. Its ``content_id`` is
+        the one recorded in the capsule's provenance, and ``asset_size_bytes`` is looked up by
+        that content ID in the upstream source Dandiset's ``assets.jsonld``, so a renamed
+        source still resolves. Content no longer in that draft is sized from its blob.
 
         A job capsule directory name carries only the job ID, so the pipeline version,
         codebase version, parameters and config of each capsule are read back from the
