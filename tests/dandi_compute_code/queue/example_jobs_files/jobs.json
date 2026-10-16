@@ -24,10 +24,10 @@
     "Description": "The version of this repository that formed the capsule. Deliberately excluded from a capsule's identity, since a capsule is the same logical job regardless of which codebase version produced it. Reads `unknown` when the package is running from a source tree with no installed distribution to report a version."
   },
   "content_id": {
-    "Description": "The source asset's DANDI content identifier. Null when the capsule's upstream source could not be resolved, which is recorded rather than guessed at."
+    "Description": "The source asset's DANDI content identifier, as recorded in the capsule's provenance. Null when the capsule records none and its upstream source could not be resolved by path, which is recorded rather than guessed at."
   },
   "asset_size_bytes": {
-    "Description": "The source asset's size in bytes, or null alongside an unresolved content_id.",
+    "Description": "The source asset's size in bytes. Null alongside an unresolved content_id, or when the size of that content could not be read.",
     "Units": "B"
   },
   "status": {

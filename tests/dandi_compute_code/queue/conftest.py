@@ -39,6 +39,7 @@ def mock_dandi_assets_metadata() -> Iterator[None]:
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=empty_metadata,
         ),
+        mock.patch("dandi_compute_code.queue._queue_utils._load_blob_size", return_value=None),
     ):
         yield
 

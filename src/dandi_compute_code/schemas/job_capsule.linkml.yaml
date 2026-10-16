@@ -114,13 +114,16 @@ classes:
     attributes:
       content_id:
         description: >-
-          The source asset's DANDI content identifier. Null when the capsule's upstream
-          source could not be resolved, which is recorded rather than guessed at.
+          The source asset's DANDI content identifier, as recorded in the capsule's
+          provenance. Null when the capsule records none and its upstream source could not
+          be resolved by path, which is recorded rather than guessed at.
         range: string
         required: false
 
       asset_size_bytes:
-        description: The source asset's size in bytes, or null alongside an unresolved content_id.
+        description: >-
+          The source asset's size in bytes. Null alongside an unresolved content_id, or when
+          the size of that content could not be read.
         range: integer
         unit:
           symbol: B
