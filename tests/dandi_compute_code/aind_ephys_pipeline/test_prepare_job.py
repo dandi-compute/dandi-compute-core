@@ -44,10 +44,20 @@ def _make_urlopen_mock(mapping: dict) -> mock.MagicMock:
     return mock.MagicMock(return_value=response)
 
 
-def _git_check_output(cmd, *, cwd=None, text=False, **kwargs):
+# The files `git show {version}:{path}` finds in the fake pipeline repository.
+_FAKE_PIPELINE_FILES = {"pipeline/process_versions.env": "PREPROCESSING_VERSION=1\n"}
+
+
+def _git_check_output(cmd, *, cwd=None, text=False, pipeline_files=None, **kwargs):
     """Return plausible fake git output based on the subcommand."""
     if "describe" in cmd:
         return "v1.0.0-0-gaaaaaaa\n"
+    if "show" in cmd:
+        files = _FAKE_PIPELINE_FILES if pipeline_files is None else pipeline_files
+        path = cmd[-1].split(":", maxsplit=1)[1]
+        if path not in files:
+            raise subprocess.CalledProcessError(returncode=128, cmd=cmd)
+        return files[path]
     return _FAKE_COMMIT_HASH + "\n"
 
 
@@ -59,7 +69,6 @@ def fake_base_directory(base_directory: pathlib.Path) -> pathlib.Path:
     main_nf = pipeline_dir / "pipeline" / "main_multi_backend.nf"
     main_nf.parent.mkdir(parents=True)
     main_nf.write_text("// fake nextflow pipeline")
-    (pipeline_dir / "pipeline" / "capsule_versions.env").write_text("CAPSULE_VERSION=1\n")
     return base_directory
 
 
@@ -594,3 +603,94 @@ def test_prepare_aind_ephys_job_explains_a_codebase_that_is_not_a_git_checkout(
         _prepare_test_content_id_job(
             tmp_path=tmp_path, base_directory=fake_base_directory, check_output=_check_output_without_codebase_checkout
         )
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    "file_name",
+    [
+        pytest.param("process_versions.env", id="1.4.1-and-later"),
+        pytest.param("capsule_versions.env", id="before-1.4.1"),
+    ],
+)
+def test_prepare_aind_ephys_job_copies_the_pinned_step_versions_at_the_release(
+    file_name: str,
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """The step versions file is read at the job's release, under whichever name that release uses."""
+    content_id = "07300000-0000-0000-0000-000000000000"
+    mapping = {content_id: {"000001": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
+    pipeline_files = {f"pipeline/{file_name}": "PREPROCESSING_VERSION=abc\n"}
+
+    temp_dir = tmp_path / "tmpdir"
+    temp_dir.mkdir()
+
+    mock_dandiset = mock.MagicMock()
+    mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
+
+    def _check_output(cmd, **kwargs):
+        return _git_check_output(cmd, pipeline_files=pipeline_files, **kwargs)
+
+    with (
+        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch("subprocess.check_output", side_effect=_check_output) as mock_check_output,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.upload.upload"),
+        mock.patch("tempfile.mkdtemp", return_value=str(temp_dir)),
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "fake-key"}),
+    ):
+        mock_client.return_value.get_dandiset.return_value = mock_dandiset
+
+        script_path = prepare_aind_ephys_job(
+            pipeline_version="v1.1.0",
+            content_id=content_id,
+            config_key="default",
+            parameters_key="original",
+            base_directory=fake_base_directory,
+        )
+
+    code_directory = script_path.parent
+    assert (code_directory / file_name).read_text() == "PREPROCESSING_VERSION=abc\n"
+    assert sorted(path.name for path in code_directory.glob("*_versions.env")) == [file_name]
+    shown = [call.args[0][-1] for call in mock_check_output.call_args_list if "show" in call.args[0]]
+    assert f"v1.1.0:pipeline/{file_name}" in shown
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_without_pinned_step_versions_fails_before_any_capsule_work(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """A release with neither versions file is refused before anything is downloaded or uploaded."""
+    content_id = "07400000-0000-0000-0000-000000000000"
+    mapping = {content_id: {"000001": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
+
+    mock_dandiset = mock.MagicMock()
+    mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
+
+    def _check_output(cmd, **kwargs):
+        return _git_check_output(cmd, pipeline_files={}, **kwargs)
+
+    with (
+        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch("subprocess.check_output", side_effect=_check_output),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download") as mock_download,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.upload.upload") as mock_upload,
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "fake-key"}),
+    ):
+        mock_client.return_value.get_dandiset.return_value = mock_dandiset
+
+        with pytest.raises(FileNotFoundError, match="process_versions.env or pipeline/capsule_versions.env"):
+            prepare_aind_ephys_job(
+                pipeline_version="v1.1.0",
+                content_id=content_id,
+                config_key="default",
+                parameters_key="original",
+                base_directory=fake_base_directory,
+            )
+
+    mock_download.assert_not_called()
+    mock_upload.assert_not_called()

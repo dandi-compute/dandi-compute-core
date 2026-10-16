@@ -330,6 +330,12 @@ def prepare_aind_ephys_job(
     # TODO: figure out if Zarr or not - only supports blobs ATM
 
     # Create an empty copy of Dandiset
+    # The commits each step is pinned to, read at the release the job runs (the shared checkout is
+    # only moved to it when the job starts). Release 1.4.1 renamed the file from capsule_versions.env.
+    versions_file_name, versions_file_content = _read_pinned_step_versions(
+        pipeline_directory=pipeline_directory, pipeline_version=pipeline_version
+    )
+
     processing_directory = _processing_directory(base_directory)
     temporary_processing_directory = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="prepare-job-"))
     dandi.download.download(
@@ -347,7 +353,6 @@ def prepare_aind_ephys_job(
     code_config_file_path = code_dir / config_file_path.name
     code_parameters_file_path = code_dir / parameters_file_path.name
     code_pipeline_file_path = code_dir / pipeline_file_path.name
-    code_capsule_versions_file_path = code_dir / "capsule_versions.env"
     dataset_description_file_path = dandiset_output_dir / "dataset_description.json"
 
     log_directory = dandiset_output_dir / "logs"
@@ -366,7 +371,6 @@ def prepare_aind_ephys_job(
     done_tracker_file_path = processing_directory / "done.txt"
 
     pipeline_repo_directory = pipeline_file_path.parent.parent
-    capsule_versions_file_path = pipeline_repo_directory / "pipeline" / "capsule_versions.env"
 
     # TODO: could look up description, authors, license, etc. from source dandiset metadata
     pipeline_url = (
@@ -428,7 +432,7 @@ def prepare_aind_ephys_job(
     )
     code_config_file_path.write_text(data=config_file_path.read_text())
     code_parameters_file_path.write_text(data=parameters_file_path.read_text())
-    code_capsule_versions_file_path.write_text(data=capsule_versions_file_path.read_text())
+    (code_dir / versions_file_name).write_text(data=versions_file_content)
     code_pipeline_file_path.write_text(data=pipeline_file_path.read_text())
     dataset_description_file_path.write_text(data=json.dumps(obj=dataset_description, indent=2))
 
@@ -448,3 +452,27 @@ def prepare_aind_ephys_job(
         )
 
     return script_file_path
+
+
+_PINNED_STEP_VERSIONS_FILE_NAMES = ("process_versions.env", "capsule_versions.env")
+
+
+def _read_pinned_step_versions(*, pipeline_directory: pathlib.Path, pipeline_version: str) -> tuple[str, str]:
+    """Return the name and content of the pipeline's pinned step versions file at a release."""
+    for file_name in _PINNED_STEP_VERSIONS_FILE_NAMES:
+        try:
+            content = subprocess.check_output(
+                ["git", "show", f"{pipeline_version}:pipeline/{file_name}"],
+                cwd=pipeline_directory,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+        except subprocess.CalledProcessError:
+            continue
+        return file_name, content
+    message = (
+        f"The pipeline at {pipeline_version} has no "
+        + " or ".join(f"pipeline/{file_name}" for file_name in _PINNED_STEP_VERSIONS_FILE_NAMES)
+        + "."
+    )
+    raise FileNotFoundError(message)
