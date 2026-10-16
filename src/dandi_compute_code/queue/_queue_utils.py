@@ -43,6 +43,7 @@ from ..schemas import validate_against_schema
 _log = logging.getLogger(__name__)
 
 _UPSTREAM_JSONLD_URL_TEMPLATE = "https://dandiarchive.s3.amazonaws.com/dandisets/{dandiset_id}/draft/assets.jsonld"
+_BLOB_URL_TEMPLATE = "https://dandiarchive.s3.amazonaws.com/blobs/{prefix}/{infix}/{content_id}"
 
 
 @beartype.beartype
@@ -157,16 +158,47 @@ def _load_upstream_assets_jsonld_metadata(dandiset_id: str) -> AssetsJsonldMetad
 
 
 @beartype.beartype
+def _load_blob_size(content_id: str, /) -> int | None:
+    """The size in bytes of the DANDI blob *content_id*, or ``None`` when it cannot be read."""
+    url = _BLOB_URL_TEMPLATE.format(prefix=content_id[0:3], infix=content_id[3:6], content_id=content_id)
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=30) as response:
+            content_length = response.headers.get("Content-Length")
+    except (urllib.error.URLError, TimeoutError) as exception:
+        _log.warning("Unable to read the size of blob %s: %s", url, exception)
+        return None
+    blob_size = int(content_length) if content_length is not None and content_length.isdigit() else None
+    return blob_size
+
+
+@beartype.beartype
 class _UpstreamMetadataCache:
     """Per-call cache of upstream ``assets.jsonld`` lookups, keyed by dandiset id."""
 
     def __init__(self) -> None:
         self._cache: dict[str, AssetsJsonldMetadata] = {}
+        self._content_id_index: dict[str, dict[str, AssetMetadata]] = {}
+        self._blob_sizes: dict[str, int | None] = {}
 
     def get(self, dandiset_id: str) -> AssetsJsonldMetadata:
         if dandiset_id not in self._cache:
             self._cache[dandiset_id] = _load_upstream_assets_jsonld_metadata(dandiset_id)
         return self._cache[dandiset_id]
+
+    def get_by_content_id(self, dandiset_id: str, /) -> dict[str, AssetMetadata]:
+        """The upstream assets of *dandiset_id* keyed by content ID, which survives a rename."""
+        if dandiset_id not in self._content_id_index:
+            path_to_asset_metadata = self.get(dandiset_id).path_to_asset_metadata
+            self._content_id_index[dandiset_id] = {
+                asset_metadata.content_id: asset_metadata for asset_metadata in path_to_asset_metadata.values()
+            }
+        return self._content_id_index[dandiset_id]
+
+    def get_blob_size(self, content_id: str, /) -> int | None:
+        """The size of a blob read from the archive itself, for content no longer in a draft."""
+        if content_id not in self._blob_sizes:
+            self._blob_sizes[content_id] = _load_blob_size(content_id)
+        return self._blob_sizes[content_id]
 
 
 @beartype.beartype
@@ -248,6 +280,42 @@ def _resolve_job_info(*, location: _CapsuleLocation, provenance_cache: _CapsuleP
         codebase=str(fields.get("codebase") or ""),
     )
     return job_info
+
+
+@beartype.beartype
+def _resolve_source_asset(
+    *,
+    job_info: JobInfo,
+    recorded_content_id: str | None,
+    upstream_cache: _UpstreamMetadataCache,
+) -> tuple[str | None, int | None]:
+    """
+    The content ID and size in bytes of the source asset a capsule's job ran on.
+
+    The content ID recorded in the capsule's provenance names exactly what the job ran on and
+    never changes. A path in a draft Dandiset does not have that guarantee. It can be renamed,
+    or overwritten with new content. So the recorded content ID wins, and its size is found
+    wherever that content now sits upstream. Content no longer in the draft at all is still in
+    the archive's blob store, which gives its size. Capsules formed before provenance recorded
+    a content ID fall back to the asset currently at their path.
+    """
+    if recorded_content_id is None:
+        upstream_metadata = upstream_cache.get(job_info.dandiset_id)
+        source_metadata = upstream_metadata.path_to_asset_metadata.get(job_info.within_dandiset_path)
+        if source_metadata is None:
+            _log.warning(
+                "Source asset not found in upstream dandiset %s for within_dandiset_path=%s; "
+                "emitting record with null content_id/asset_size_bytes",
+                job_info.dandiset_id,
+                job_info.within_dandiset_path,
+            )
+            return None, None
+        return source_metadata.content_id, source_metadata.content_size
+
+    source_metadata = upstream_cache.get_by_content_id(job_info.dandiset_id).get(recorded_content_id)
+    if source_metadata is None:
+        return recorded_content_id, upstream_cache.get_blob_size(recorded_content_id)
+    return recorded_content_id, source_metadata.content_size
 
 
 #: Presence markers accumulated while walking the assets, collapsed into ``status`` once
@@ -337,7 +405,7 @@ def _finalize_job_capsule_records(
 ) -> list[dict[str, object]]:
     """
     Resolve each capsule's full identity, then attach source-asset fields (``content_id``,
-    ``asset_size_bytes``) from the upstream dandiset's ``assets.jsonld``, and ``created_at`` /
+    ``asset_size_bytes``, see :func:`_resolve_source_asset`), and ``created_at`` /
     ``job_submission_time`` / ``job_completion_time`` from local timestamps.
 
     The presence markers gathered during the walk are collapsed into the single ``status``
@@ -351,21 +419,14 @@ def _finalize_job_capsule_records(
         job_info = _resolve_job_info(location=location, provenance_cache=provenance_cache)
         record.update(job_info.to_dict())
 
-        upstream_metadata = upstream_cache.get(job_info.dandiset_id)
-        source_metadata = upstream_metadata.path_to_asset_metadata.get(job_info.within_dandiset_path)
-
-        if source_metadata is None:
-            _log.warning(
-                "Source asset not found in upstream dandiset %s for within_dandiset_path=%s; "
-                "emitting record with null content_id/asset_size_bytes",
-                job_info.dandiset_id,
-                job_info.within_dandiset_path,
-            )
-            content_id: str | None = None
-            asset_size_bytes: int | None = None
-        else:
-            content_id = source_metadata.content_id
-            asset_size_bytes = source_metadata.content_size
+        recorded_content_id = provenance_cache.get(capsule_path).get("content_id")
+        if not isinstance(recorded_content_id, str) or not recorded_content_id:
+            recorded_content_id = None
+        content_id, asset_size_bytes = _resolve_source_asset(
+            job_info=job_info,
+            recorded_content_id=recorded_content_id,
+            upstream_cache=upstream_cache,
+        )
 
         completion_times = collection.log_timestamps_by_capsule.get(capsule_path, [])
         # A capsule can carry several submitted markers (e.g. a resubmission); the earliest

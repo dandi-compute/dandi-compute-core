@@ -65,7 +65,7 @@ def _source_metadata() -> AssetsJsonldMetadata:
     )
 
 
-def _build_state(*, dataset_description: dict) -> PipelineQueue:
+def _build_state(*, dataset_description: dict, source_metadata: AssetsJsonldMetadata | None = None) -> PipelineQueue:
     with (
         mock.patch(
             "dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata",
@@ -73,7 +73,7 @@ def _build_state(*, dataset_description: dict) -> PipelineQueue:
         ),
         mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
-            return_value=_source_metadata(),
+            return_value=source_metadata if source_metadata is not None else _source_metadata(),
         ),
         mock.patch.object(
             dandi_compute_code.queue._queue_utils,
@@ -103,6 +103,48 @@ def test_from_dandi_reads_identity_from_capsule_provenance() -> None:
     assert entry.content_id == "source-asset"
     assert entry.asset_size_bytes == 512
     assert entry.status == "pending"
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("upstream_path", "upstream_content_id", "blob_size", "expected_asset_size_bytes"),
+    [
+        pytest.param(_SOURCE_PATH, "recorded-content", 2048, 512, id="unchanged"),
+        pytest.param("sourcedata/sub-mouse01/sub-mouse01_ecephys.nwb", "recorded-content", 2048, 512, id="renamed"),
+        pytest.param(_SOURCE_PATH, "replacement-content", 2048, 2048, id="overwritten"),
+        pytest.param("sub-other/sub-other_ecephys.nwb", "unrelated-content", 2048, 2048, id="removed"),
+        pytest.param(_SOURCE_PATH, "replacement-content", None, None, id="overwritten_blob_unreadable"),
+    ],
+)
+def test_from_dandi_identifies_source_by_provenance_content_id(
+    upstream_path: str, upstream_content_id: str, blob_size: int | None, expected_asset_size_bytes: int | None
+) -> None:
+    """
+    The source is the content ID the capsule's provenance recorded, wherever that content now sits upstream.
+
+    Content no longer in the draft is sized from its blob in the archive.
+    """
+    source_metadata = AssetsJsonldMetadata(
+        content_id_to_asset={},
+        path_to_asset_metadata={
+            upstream_path: AssetMetadata(
+                path=upstream_path,
+                date_modified="2024-01-01T00:00:00+00:00",
+                content_size=512,
+                content_id=upstream_content_id,
+            )
+        },
+    )
+    provenance = {**_PROVENANCE, "content_id": "recorded-content"}
+
+    with mock.patch.object(dandi_compute_code.queue._queue_utils, "_load_blob_size", return_value=blob_size):
+        state = _build_state(dataset_description={"DandiCompute": provenance}, source_metadata=source_metadata)
+
+    entry = state.entries[0]
+    assert entry.content_id == "recorded-content"
+    assert entry.asset_size_bytes == expected_asset_size_bytes
+    assert entry.job.within_dandiset_path == _SOURCE_PATH
+    assert state.existing_capsule_keys() == {("test", "abc1234", "def5678", "recorded-content")}
 
 
 @pytest.mark.ai_generated
