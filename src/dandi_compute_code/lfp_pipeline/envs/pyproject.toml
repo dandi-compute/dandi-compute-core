@@ -8,6 +8,9 @@ requires-python = ">=3.10"
 dependencies = [
     "spikeinterface",
     "neuroconv",
+    # neuroconv reads `zarr.codec_registry`, which zarr 3 removed. Without this, pip takes the newest
+    # zarr and backtracks to a neuroconv old enough not to forbid it, which then fails on import.
+    "zarr<3",
     "pynwb",
     "numpy",
     "jsonschema",
