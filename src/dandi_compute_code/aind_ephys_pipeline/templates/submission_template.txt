@@ -54,7 +54,9 @@ stop_nextflow_and_upload_logs() {
 trap 'stop_nextflow_and_upload_logs "Time limit is near" 300' USR1
 trap 'stop_nextflow_and_upload_logs "Stopped by SLURM" 10' TERM
 
-DATA_PATH="$DATA_PATH" RESULTS_PATH="$RESULTS_PATH" NXF_APPTAINER_CACHEDIR="$NXF_APPTAINER_CACHEDIR" nextflow \
+# The pipeline and its config are written for the first Nextflow syntax parser, which the
+# releases from 26.04 replace by default with a stricter one.
+DATA_PATH="$DATA_PATH" RESULTS_PATH="$RESULTS_PATH" NXF_APPTAINER_CACHEDIR="$NXF_APPTAINER_CACHEDIR" NXF_SYNTAX_PARSER=v1 nextflow \
     -C "{{ config_file_path }}" \
     -log "{{ log_directory }}/nextflow.log" \
     run "{{ pipeline_file_path }}" \
@@ -78,6 +80,8 @@ find quality_control/ -type f -name "*.png" -exec mv -t visualization/ {} +
 mv visualization/ ../derivatives/
 mv postprocessed/ ../derivatives/
 mv nextflow/* ../logs/
+# From release 1.5.0: the step commits, container tag and effective parameters of this run
+if [ -f provenance.json ]; then mv provenance.json ../logs/; fi
 cd ..
 rm -rf $RESULTS_PATH  # Clean up intermediate values
 

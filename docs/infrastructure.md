@@ -47,7 +47,8 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 /orcd/data/dandi/001/dandi-compute/
 ├── dandi-compute-core/          # checkout of this repository, installed with pip -e (not read by path)
 ├── aind-ephys-pipeline/         # checkout of the AIND ephys pipeline, tags checked out per job
-├── work/                        # Nextflow work directory
+├── work/                        # Nextflow work directories
+│   ├── job-{id}/                # one per AIND capsule
 │   └── apptainer_cache/         # container images, kept by `clean --work`
 └── processing/
     ├── prepare-job-XXXXXXXX/    # one preparation tree per capsule (see below)
@@ -82,17 +83,19 @@ Because the AIND submission script checks out a tag in the shared `aind-ephys-pi
 | Component | Where | Used for |
 |---|---|---|
 | Environment modules | `/etc/profile.d/modules.sh` | Loading `miniforge` and `apptainer` in every submission script |
-| Conda environment `name-nextflow_environment` | `/orcd/data/dandi/001/environments/` | Nextflow and the DANDI CLI for AIND capsules |
+| Conda environment `name-nextflow_version-25+10+4_environment` | `/orcd/data/dandi/001/environments/` | Nextflow 25.10.4 and the DANDI CLI for AIND capsules. The Update codebase workflow of dandi-compute-runner provisions it and installs the `nf-schema` plugin. Capsules formed before it keep the older `name-nextflow_environment` their `submit.sh` names. |
 | Conda environment `name-lfp_environment` | `/orcd/data/dandi/001/environments/` | DataLad, `datalad-container` and `duct` for LFP capsules |
 | Apptainer | module | Running every pipeline container |
 | DANDI CLI | the environment running `dandicompute`, and each pipeline environment | Every download, upload and delete against the archive. AIND capsules upgrade it with `pip install -U dandi` before uploading. |
 | `sbatch`, `squeue` | SLURM | Submitting arrays, detecting live dispatchers |
 
-The AIND ephys pipeline also needs `NUMBA_CACHE_DIR` to be set in `~/.bashrc` to the same value as the Nextflow work directory. Its Nextflow config passes `KACHERY_ZONE`, `KACHERY_API_KEY`, `NUMBA_CACHE_DIR`, `HDF5_USE_FILE_LOCKING` and `HF_HOME` through to the containers when they are set.
+The AIND ephys pipeline also needs `NUMBA_CACHE_DIR` to be set in `~/.bashrc` to the shared `work/` directory, which holds each capsule's own Nextflow work directory. Its Nextflow config passes `KACHERY_ZONE`, `KACHERY_API_KEY`, `NUMBA_CACHE_DIR`, `HDF5_USE_FILE_LOCKING` and `HF_HOME` through to the containers when they are set.
 
 ### AIND ephys execution
 
-Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow environment, checks out the capsule's pipeline version, and runs `main_multi_backend.nf` with the capsule's `.config` and parameter file. Nextflow then submits each pipeline step as its own SLURM job using the resources in the registered config.
+Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow environment, checks out the capsule's pipeline version, and runs the release's SLURM entry point with the capsule's `.config` and parameter file. That entry point is `main_multi_backend.nf` up to v1.4.1 and `main.nf` from v1.5.0, which merged the two. Nextflow then submits each pipeline step as its own SLURM job using the resources in the registered config.
+
+Each capsule has its own Nextflow work directory, `work/job-{id}/`. From v1.5.0 the pipeline writes the job's full parameters, input path included, to the top of its work directory, so capsules running at the same time cannot share one. A requeued capsule finds its own work directory again and resumes from the steps already finished. Release v1.5.0 also validates the parameters with the `nf-schema` plugin before any step runs, which needs Nextflow 25.10 or later.
 
 | Nextflow process | CPUs | Memory | Partition |
 |---|---|---|---|
@@ -103,9 +106,9 @@ Each AIND capsule's `submit.sh` is a small driver. It activates the Nextflow env
 | `postprocessing` | 16 | 64 GB | `mit_normal` |
 | `nwb_ecephys` | 4 | 256 GB | `mit_normal` |
 
-These figures come from `configs/name-mit+engaging_revision-5.config`, which the `default` config key points to. It runs `nwb_ecephys` on 4 CPUs instead of 16. The capsule starts one worker per CPU, and each worker holds about three minutes of padded data while it filters the LFP, because the 0.1 Hz highpass pads every 60 second chunk with 50 seconds on each side. Memory therefore grows with the worker count, not the recording length. Fewer workers keep this step well inside its 256 GB, which the previous revision raised from 64 GB. Its 256 GB for `preprocessing` doubles the revision before that and is hopefully temporary. Motion estimation with DREDge can run in an online batching mode that bounds its memory use on long recordings. Pipeline v1.4.0 supports that mode, and the `default` parameters for v1.4.0 turn it on with one hour chunks. Once runs confirm the lower memory use, preprocessing should go back to a smaller memory request. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
+These figures come from `configs/name-mit+engaging_revision-6.config`, which the `default` config key points to. It loads the `nf-schema` plugin, sets `PYTHONNOUSERSITE` so the containers ignore packages in the user's home, and otherwise keeps the resources of revision 5. That revision runs `nwb_ecephys` on 4 CPUs instead of 16. The capsule starts one worker per CPU, and each worker holds about three minutes of padded data while it filters the LFP, because the 0.1 Hz highpass pads every 60 second chunk with 50 seconds on each side. Memory therefore grows with the worker count, not the recording length. Fewer workers keep this step well inside its 256 GB, which the previous revision raised from 64 GB. Its 256 GB for `preprocessing` doubles the revision before that and is hopefully temporary. Motion estimation with DREDge can run in an online batching mode that bounds its memory use on long recordings. Pipeline v1.4.0 supports that mode, and the `default` parameters from v1.4.0 turn it on with one hour chunks. Once runs confirm the lower memory use, preprocessing should go back to a smaller memory request. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
 
-When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule.
+When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule. From v1.5.0 the pipeline also writes `provenance.json`, with the commit of every step, the container tag and the effective parameters. It goes into `logs/` too.
 
 ### LFP execution
 

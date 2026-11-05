@@ -45,7 +45,8 @@ def _make_urlopen_mock(mapping: dict) -> mock.MagicMock:
 
 
 # The files `git show {version}:{path}` finds in the fake pipeline repository.
-_FAKE_PIPELINE_FILES = {"pipeline/process_versions.env": "PREPROCESSING_VERSION=1\n"}
+_FAKE_ENTRY_POINT = {"pipeline/main_multi_backend.nf": "// fake nextflow pipeline\n"}
+_FAKE_PIPELINE_FILES = {"pipeline/process_versions.env": "PREPROCESSING_VERSION=1\n", **_FAKE_ENTRY_POINT}
 
 
 def _git_check_output(cmd, *, cwd=None, text=False, pipeline_files=None, **kwargs):
@@ -63,12 +64,9 @@ def _git_check_output(cmd, *, cwd=None, text=False, pipeline_files=None, **kwarg
 
 @pytest.fixture()
 def fake_base_directory(base_directory: pathlib.Path) -> pathlib.Path:
-    """Create a base directory holding a minimal fake pipeline directory structure."""
+    """Create a base directory holding an empty pipeline checkout, whose files are read through the git mock."""
     pipeline_dir = base_directory / "aind-ephys-pipeline"
     pipeline_dir.mkdir()
-    main_nf = pipeline_dir / "pipeline" / "main_multi_backend.nf"
-    main_nf.parent.mkdir(parents=True)
-    main_nf.write_text("// fake nextflow pipeline")
     return base_directory
 
 
@@ -621,7 +619,7 @@ def test_prepare_aind_ephys_job_copies_the_pinned_step_versions_at_the_release(
     """The step versions file is read at the job's release, under whichever name that release uses."""
     content_id = "07300000-0000-0000-0000-000000000000"
     mapping = {content_id: {"000001": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
-    pipeline_files = {f"pipeline/{file_name}": "PREPROCESSING_VERSION=abc\n"}
+    pipeline_files = {f"pipeline/{file_name}": "PREPROCESSING_VERSION=abc\n", **_FAKE_ENTRY_POINT}
 
     temp_dir = tmp_path / "tmpdir"
     temp_dir.mkdir()
@@ -694,3 +692,140 @@ def test_prepare_aind_ephys_job_without_pinned_step_versions_fails_before_any_ca
 
     mock_download.assert_not_called()
     mock_upload.assert_not_called()
+
+
+def _prepare_job_at_release(
+    *, tmp_path: pathlib.Path, base_directory: pathlib.Path, pipeline_version: str, check_output
+) -> pathlib.Path:
+    """Prepare a job at *pipeline_version* with parameter validation and every external call mocked."""
+    content_id = "07500000-0000-0000-0000-000000000000"
+    mapping = {content_id: {"000001": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
+    temp_dir = tmp_path / "tmpdir"
+    temp_dir.mkdir()
+    mock_dandiset = mock.MagicMock()
+    mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
+
+    with (
+        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.validate_aind_ephys_parameters"),
+        mock.patch("subprocess.check_output", side_effect=check_output),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
+        mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.upload.upload"),
+        mock.patch("tempfile.mkdtemp", return_value=str(temp_dir)),
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "fake-key"}),
+    ):
+        mock_client.return_value.get_dandiset.return_value = mock_dandiset
+        script_path = prepare_aind_ephys_job(
+            pipeline_version=pipeline_version,
+            content_id=content_id,
+            config_key="default",
+            parameters_key="original",
+            base_directory=base_directory,
+        )
+    return script_path
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("pipeline_version", "release_files", "expected_file_name"),
+    [
+        pytest.param(
+            "1.4.1",
+            {"pipeline/main_multi_backend.nf": "// for SLURM\n", "pipeline/main.nf": "// for Code Ocean\n"},
+            "main_multi_backend.nf",
+            id="before-1.5.0",
+        ),
+        pytest.param("1.5.0", {"pipeline/main.nf": "// for every executor\n"}, "main.nf", id="1.5.0-and-later"),
+    ],
+)
+def test_prepare_aind_ephys_job_runs_the_entry_point_its_release_ships(
+    pipeline_version: str,
+    release_files: dict[str, str],
+    expected_file_name: str,
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """The Nextflow entry point is the one the job's release ships, read from git rather than the shared checkout."""
+    pipeline_files = {"pipeline/process_versions.env": "PREPROCESSING_VERSION=abc\n", **release_files}
+    shown: list[str] = []
+
+    def _check_output(cmd, **kwargs):
+        if "show" in cmd:
+            shown.append(cmd[-1])
+        return _git_check_output(cmd, pipeline_files=pipeline_files, **kwargs)
+
+    script_path = _prepare_job_at_release(
+        tmp_path=tmp_path,
+        base_directory=fake_base_directory,
+        pipeline_version=pipeline_version,
+        check_output=_check_output,
+    )
+
+    code_directory = script_path.parent
+    expected_run_path = fake_base_directory.absolute() / "aind-ephys-pipeline" / "pipeline" / expected_file_name
+    assert sorted(path.name for path in code_directory.glob("*.nf")) == [expected_file_name]
+    assert (code_directory / expected_file_name).read_text() == release_files[f"pipeline/{expected_file_name}"]
+    assert f'run "{expected_run_path}"' in script_path.read_text()
+    assert f"{pipeline_version}:pipeline/{expected_file_name}" in shown
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_without_an_entry_point_fails_before_any_capsule_work(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """A release with neither Nextflow entry point is refused before anything is prepared."""
+
+    def _check_output(cmd, **kwargs):
+        return _git_check_output(cmd, pipeline_files={"pipeline/process_versions.env": "A=1\n"}, **kwargs)
+
+    with pytest.raises(FileNotFoundError, match="pipeline/main_multi_backend.nf or pipeline/main.nf"):
+        _prepare_job_at_release(
+            tmp_path=tmp_path, base_directory=fake_base_directory, pipeline_version="1.5.0", check_output=_check_output
+        )
+
+    assert not (tmp_path / "tmpdir" / "001697").exists()
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_records_the_commit_of_its_release(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """The pipeline commit is the release's own, not whichever tag the shared checkout was left on."""
+    pipeline_directory = fake_base_directory.absolute() / "aind-ephys-pipeline"
+    resolved: list[list[str]] = []
+
+    def _check_output(cmd, *, cwd=None, **kwargs):
+        if "rev-parse" in cmd and pathlib.Path(cwd) == pipeline_directory:
+            resolved.append(cmd)
+        return _git_check_output(cmd, cwd=cwd, **kwargs)
+
+    _prepare_job_at_release(
+        tmp_path=tmp_path, base_directory=fake_base_directory, pipeline_version="1.5.0", check_output=_check_output
+    )
+
+    assert resolved == [["git", "rev-parse", "1.5.0^{commit}"]]
+
+
+@pytest.mark.ai_generated
+def test_prepare_aind_ephys_job_gives_each_job_its_own_nextflow_work_directory(
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """
+    Jobs running at the same time do not share a Nextflow work directory.
+
+    From release 1.5.0 the pipeline writes each job's full parameters to the top of its work
+    directory, so a shared one would hand one job's input path to another. The Apptainer image
+    cache is still shared.
+    """
+    script_path = _prepare_job_at_release(
+        tmp_path=tmp_path, base_directory=fake_base_directory, pipeline_version="1.5.0", check_output=_git_check_output
+    )
+
+    job_id = script_path.parent.parent.name
+    script = script_path.read_text()
+    assert f'WORKDIR="{fake_base_directory / "work" / job_id}"' in script
+    assert f'NXF_APPTAINER_CACHEDIR="{fake_base_directory / "work" / "apptainer_cache"}"' in script
