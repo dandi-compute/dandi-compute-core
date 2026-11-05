@@ -26,9 +26,14 @@ from dandi_compute_code._cli import _dandicompute_group
         (["issues", "--help"], "Scan logs and write per-capsule and aggregate issue reports."),
         (["issues", "dump", "--help"], "Scan nextflow and slurm logs and write per-capsule issue records."),
         (["issues", "summarize", "--help"], "Summarize discovered issue lines by descending occurrence count."),
+        (["archive", "--help"], "Move capsules into the failed runs archive (001873) or delete them from it."),
         (
-            ["archive", "--help"],
+            ["archive", "add", "--help"],
             "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
+        ),
+        (
+            ["archive", "delete", "--help"],
+            "Delete every capsule of a pipeline version from the failed runs archive.",
         ),
     ],
 )
@@ -44,10 +49,16 @@ def test_cli_help_includes_descriptions(args: list[str], expected_text: str) -> 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
     "args",
-    [["queue", "--help"], ["jobs", "stats", "--help"], ["jobs", "clean", "--help"], ["jobs", "process", "--help"]],
+    [
+        ["queue", "--help"],
+        ["jobs", "stats", "--help"],
+        ["jobs", "clean", "--help"],
+        ["jobs", "process", "--help"],
+        ["delete", "--help"],
+    ],
 )
 def test_cli_removed_commands_are_gone(args: list[str]) -> None:
-    """The retired queue group, its stats and clean commands, and the old process name are no longer registered."""
+    """The retired queue group, its stats and clean commands, and the old process and delete names are gone."""
     runner = CliRunner()
     result = runner.invoke(_dandicompute_group, args)
 
