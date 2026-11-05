@@ -716,8 +716,15 @@ def _issues_summarize_command(
         _styled_echo(text=f"\nWrote derivatives/issues_summary.json to Dandiset {dandiset_id}.", color="green")
 
 
-# dandicompute archive [OPTIONS]
-@_dandicompute_group.command(name="archive")
+# dandicompute archive
+@_dandicompute_group.group(name="archive")
+def _archive_group() -> None:
+    """Move capsules into the failed runs archive (001873) or delete them from it."""
+    pass
+
+
+# dandicompute archive add [OPTIONS]
+@_archive_group.command(name="add")
 @click.option(
     "--status",
     "status",
@@ -778,7 +785,7 @@ def _issues_summarize_command(
     is_flag=True,
     default=False,
 )
-def _archive_command(
+def _archive_add_command(
     status: str | None,
     pipeline: str | None,
     capsule_path: str | None,
@@ -828,3 +835,78 @@ def _archive_command(
                 _styled_echo(text=f"  {capsule_path}", color="green")
         else:
             _styled_echo(text=f"\nNo {description} job capsules to archive.", color="yellow")
+
+
+# dandicompute archive delete [OPTIONS]
+@_archive_group.command(name="delete")
+@click.option(
+    "--version",
+    "version",
+    help="Delete every capsule recorded with this pipeline version (e.g. 'v1.4.0'). "
+    "A version without build metadata also selects its builds, such as 'v1.4.0+b268fd2'.",
+    required=True,
+    type=str,
+)
+@click.option(
+    "--pipeline",
+    "pipeline",
+    help="Delete only the capsules of this pipeline (e.g. 'lfp' or 'aind+ephys').",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
+    "--preview",
+    "dry_run",
+    help="List the capsules that would be deleted without deleting them.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+@click.option(
+    "--silent",
+    help="Suppress informational log output.",
+    required=False,
+    is_flag=True,
+    default=False,
+)
+def _archive_delete_command(
+    version: str,
+    pipeline: str | None,
+    dry_run: bool = False,
+    silent: bool = False,
+) -> None:
+    """Delete every capsule of a pipeline version from the failed runs archive."""
+    _configure_logging(silent=silent)
+    if not dry_run:
+        _require_dandi_api_key()
+
+    state = PipelineQueue.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
+    try:
+        deleted = state.delete_capsules(
+            version=version,
+            pipeline=pipeline,
+            dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
+            dry_run=dry_run,
+        )
+    except ValueError as exception:
+        raise click.UsageError(str(exception)) from exception
+
+    if silent:
+        return
+    description = " ".join(part for part in (pipeline, version) if part is not None)
+    if not deleted:
+        _styled_echo(
+            text=f"\nNo {description} job capsules in Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}.", color="yellow"
+        )
+        return
+
+    verb = "Would delete" if dry_run else "Deleted"
+    _styled_echo(
+        text=f"\n{verb} {len(deleted)} {description} job capsule(s) from Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}:",
+        color="yellow" if dry_run else "green",
+    )
+    for capsule_path in deleted:
+        _styled_echo(text=f"  {capsule_path}", color="yellow" if dry_run else "green")
+    if not dry_run:
+        _styled_echo(text="\nRun `dandicompute jobs refresh` to update the archive's jobs.tsv.", color="yellow")

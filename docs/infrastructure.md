@@ -55,7 +55,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
     │   └── 001697/
     │       ├── dandiset.yaml
     │       └── derivatives/.../job-{id}/
-    ├── move-capsule-XXXXXXXX/   # temporary, while `archive` moves a capsule
+    ├── move-capsule-XXXXXXXX/   # temporary, while `archive add` moves a capsule
     ├── dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}/   # one per dispatch
     │   └── task-{array job}-{task}/
     ├── derivatives/logs/dandicompute-dispatch-{pipeline}/   # manifests, scripts, array logs
@@ -70,7 +70,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | `processing/prepare-job-*` | `prepare aind`, `jobs create` | Nothing automatic |
 | `processing/dandicompute-dispatch-*` | `jobs dispatch` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
 | `processing/derivatives/logs/` | `jobs dispatch` and its array tasks | Never. It is the permanent dispatch record. |
-| temporary trees from `jobs refresh`, `issues`, `archive` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
+| temporary trees from `jobs refresh`, `issues`, `archive add` | Those commands | The same command on success. Kept with `--test`, or when a step fails. |
 
 :::{important}
 A capsule's `submit.sh` runs against its **preparation tree**, by absolute path. The pipeline writes its intermediate results, logs and outputs there, and its closing `dandi upload` uploads from there. The copy of `code/` an array task downloads is used only to claim the capsule and read the script. A preparation tree must therefore stay in place until its capsule has run.

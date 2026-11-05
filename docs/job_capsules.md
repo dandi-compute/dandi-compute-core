@@ -115,9 +115,9 @@ stateDiagram-v2
     stalled --> failed: a log appears<br/>(logs/ holds a file)
     failed --> successful: outputs appear<br/>(derivatives/ exists)
     pending --> [*]: clean --unsubmitted<br/>(deleted)
-    pending --> archived: archive --status pending
-    stalled --> archived: archive --status stalled
-    failed --> archived: archive --status failed
+    pending --> archived: archive add --status pending
+    stalled --> archived: archive add --status stalled
+    failed --> archived: archive add --status failed
     archived --> [*]
     successful --> [*]
 ```
