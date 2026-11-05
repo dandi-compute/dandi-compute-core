@@ -30,6 +30,7 @@ from dandi_compute_code._cli import _dandicompute_group
             ["archive", "--help"],
             "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
         ),
+        (["delete", "--help"], "Delete every capsule of a pipeline version from the failed runs archive."),
     ],
 )
 def test_cli_help_includes_descriptions(args: list[str], expected_text: str) -> None:

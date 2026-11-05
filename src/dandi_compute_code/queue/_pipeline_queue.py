@@ -560,6 +560,84 @@ class PipelineQueue:
 
         return removed
 
+    def delete_capsules(
+        self,
+        *,
+        version: str,
+        pipeline: str | None = None,
+        dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
+        dry_run: bool = False,
+    ) -> list[str]:
+        """
+        Delete every job capsule of a pipeline version from a Dandiset on the archive.
+
+        An entry matches when its recorded version is *version*, with or without a leading
+        ``v``. A *version* without build metadata also matches its builds, so ``v1.4.0``
+        selects ``v1.4.0+b268fd2`` as well. Each matching capsule is resolved against
+        *dandiset_id*'s remote ``assets.jsonld`` and deleted by URL via ``dandi delete``, so no
+        local Dandiset clone is involved. Capsules with no assets left on the archive are skipped.
+
+        Parameters
+        ----------
+        version : str
+            The pipeline version whose capsules are deleted, as recorded in ``jobs.tsv``.
+        pipeline : str, optional
+            Delete only the capsules of this pipeline, such as ``"lfp"`` or ``"aind+ephys"``.
+        dandiset_id : str, optional
+            The Dandiset the capsules are deleted from. Defaults to the failed runs
+            archive Dandiset (``001873``).
+        dry_run : bool, optional
+            When ``True``, return the capsules that would be deleted without deleting them.
+
+        Returns
+        -------
+        list of str
+            Capsule paths (relative to the Dandiset root) that were deleted, or would be
+            when *dry_run* is ``True``.
+
+        Raises
+        ------
+        ValueError
+            If *version* is blank.
+        RuntimeError
+            If ``DANDI_API_KEY`` is not set or is blank and *dry_run* is ``False``.
+        subprocess.CalledProcessError
+            If ``dandi delete`` fails. Capsules deleted before the failure stay deleted.
+        """
+        release = version.strip().removeprefix("v")
+        if not release:
+            message = "`version` must not be blank."
+            raise ValueError(message)
+        if not dry_run and not os.environ.get("DANDI_API_KEY", "").strip():
+            message = "`DANDI_API_KEY` environment variable is not set or is blank."
+            raise RuntimeError(message)
+
+        entries = []
+        for entry in self.entries:
+            recorded = entry.job.version.removeprefix("v")
+            matches_version = recorded == release or recorded.partition("+")[0] == release
+            if matches_version and (pipeline is None or entry.job.pipeline == pipeline):
+                entries.append(entry)
+        deleted: list[str] = []
+        if not entries:
+            return deleted
+
+        asset_paths = set(load_assets_jsonld_metadata(dandiset_id=dandiset_id).path_to_asset_metadata)
+        for entry in entries:
+            capsule_path = entry.resolve_capsule_path(asset_paths)
+            if not any(path.startswith(f"{capsule_path}/") for path in asset_paths):
+                continue
+
+            if not dry_run:
+                subprocess.run(
+                    ["dandi", "delete", f"dandi://dandi/{dandiset_id}/{capsule_path}/"],
+                    input=b"y\n",
+                    check=True,
+                )
+            deleted.append(capsule_path)
+
+        return deleted
+
     def archive_capsules(
         self,
         *,

@@ -115,6 +115,16 @@ To throw away capsules that were never claimed, for example after changing a par
 dandicompute clean --unsubmitted
 ```
 
+To clear capsules out of the failed runs archive itself, delete them by pipeline version:
+
+```bash
+dandicompute delete --version v1.3.0 --preview                # list what would be deleted
+dandicompute delete --version v1.3.0                          # every capsule of that version
+dandicompute delete --version v1.3.0 --pipeline aind+ephys    # only that pipeline's
+```
+
+The command only deletes from `001873`. The version is matched against the `version` column of its `jobs.tsv`, with or without the leading `v`. A version without build metadata, such as `v1.3.0`, also selects its builds, such as `v1.3.0+b268fd2`. Run `dandicompute jobs refresh` afterwards so the archive's `jobs.tsv` drops the deleted capsules.
+
 ### Tidy the cluster
 
 ```bash
