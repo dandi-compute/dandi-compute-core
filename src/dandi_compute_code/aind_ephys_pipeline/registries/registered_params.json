@@ -54,9 +54,14 @@
     "md5": "5e4ac6fc3f275d0cc655bf0388eb0e02",
     "description": "The upstream v1.4.0 defaults with the same DANDI overrides as `name-default_version-1+3+3.json`. Also runs DREDge motion estimation in online batching mode over one hour chunks to bound its memory use."
   },
+  "default-v1.5.0": {
+    "path": "name-default_version-1+5+0.json",
+    "md5": "7ea1ac58535ec1bacb88555bc0487738",
+    "description": "The upstream v1.5.0 defaults with the same DANDI overrides as `name-default_version-1+4+0.json`. Release 1.5.0 moved the NWB settings from `nwb.ecephys` to `nwb_ecephys`, so the HDF5 backend is set there."
+  },
   "default": {
-    "path": "name-default_version-1+4+0.json",
-    "md5": "5e4ac6fc3f275d0cc655bf0388eb0e02",
+    "path": "name-default_version-1+5+0.json",
+    "md5": "7ea1ac58535ec1bacb88555bc0487738",
     "description": "The current recommended default parameter set."
   }
 }

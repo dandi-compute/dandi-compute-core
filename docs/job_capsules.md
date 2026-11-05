@@ -42,9 +42,9 @@ The `dandisets-{first 3 digits}` level keeps any one directory from holding thou
 | `code/submit.sh` | Nextflow driver script | `datalad containers-run` script |
 | `code/{parameters}.json` | The registered AIND parameter file | The registered LFP parameter file |
 | `code/{config}.config` | The registered Nextflow config | Not used |
-| `code/main_multi_backend.nf` | Copy of the pipeline entry point | Not used |
+| `code/main_multi_backend.nf` or `code/main.nf` | Copy of the pipeline entry point at the capsule's release (`main.nf` from v1.5.0) | Not used |
 | `code/process_versions.env` | Copy of the pipeline's pinned step versions (`capsule_versions.env` before release 1.4.1) | Not used |
-| `logs/` | `nextflow.log`, `job-{id}_slurm.log`, Nextflow reports such as `timeline.html` | `duct_*` resource usage, `job-{id}_slurm.log` |
+| `logs/` | `nextflow.log`, `job-{id}_slurm.log`, Nextflow reports such as `timeline.html`, and from v1.5.0 the pipeline's `provenance.json` | `duct_*` resource usage, `job-{id}_slurm.log` |
 | outputs | `derivatives/nwb/`, `derivatives/visualization/`, `derivatives/postprocessed/` | `derivatives/nwb/{asset}_desc-lfp` |
 
 ## The job ID

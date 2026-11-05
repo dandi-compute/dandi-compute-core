@@ -138,3 +138,49 @@ def test_submission_script_stops_nextflow_and_uploads_logs_when_stopped(
     dandi_calls = (capsule["records"] / "dandi_calls").read_text().splitlines()
     assert dandi_calls == [f"{capsule['capsule']} upload --validation skip"]
     assert not capsule["done_tracker"].exists()
+
+
+# Stands in for a run that finishes, leaving the outputs a 1.5.0 release publishes.
+_COMPLETING_NEXTFLOW_STUB = """#!/bin/bash
+echo "$NXF_SYNTAX_PARSER" > "$STUB_RECORD_DIRECTORY/nextflow_syntax_parser"
+mkdir -p "$RESULTS_PATH/nwb" "$RESULTS_PATH/nextflow" "$RESULTS_PATH/visualization" "$RESULTS_PATH/postprocessed"
+echo trace > "$RESULTS_PATH/nextflow/trace.txt"
+echo provenance > "$RESULTS_PATH/provenance.json"
+"""
+
+
+def _run_to_completion(capsule: dict[str, pathlib.Path], /) -> subprocess.CompletedProcess:
+    (capsule["stubs"] / "nextflow").write_text(_COMPLETING_NEXTFLOW_STUB)
+    environment = {
+        **os.environ,
+        "PATH": f"{capsule['stubs']}{os.pathsep}{os.environ['PATH']}",
+        "STUB_RECORD_DIRECTORY": str(capsule["records"]),
+    }
+    completed = subprocess.run(
+        ["bash", str(capsule["script"])], env=environment, capture_output=True, text=True, timeout=60
+    )
+    return completed
+
+
+@pytest.mark.ai_generated
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_submission_script_uploads_the_run_provenance_with_the_logs(capsule: dict[str, pathlib.Path]) -> None:
+    """The `provenance.json` releases from 1.5.0 write beside their results is kept, not deleted with them."""
+    completed = _run_to_completion(capsule)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert (capsule["capsule"] / "logs" / "provenance.json").read_text() == "provenance\n"
+    assert (capsule["capsule"] / "logs" / "trace.txt").read_text() == "trace\n"
+    assert not capsule["results"].exists()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_submission_script_runs_nextflow_with_the_syntax_parser_the_pipeline_is_written_for(
+    capsule: dict[str, pathlib.Path],
+) -> None:
+    """Nextflow 26.04 and later parse with a stricter syntax by default, which the pipeline does not follow."""
+    completed = _run_to_completion(capsule)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert (capsule["records"] / "nextflow_syntax_parser").read_text() == "v1\n"

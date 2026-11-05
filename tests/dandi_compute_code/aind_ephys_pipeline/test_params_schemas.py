@@ -58,7 +58,7 @@ def test_registered_params_conform_to_the_schema_of_their_own_pipeline_version(k
 )
 def test_invalid_params_raise_an_obvious_error(path: tuple[str, ...], value: object, expected_json_path: str) -> None:
     """Parameters that break the schema raise with a banner naming the file and where each problem is."""
-    parameters = copy.deepcopy(_load_params("default"))
+    parameters = copy.deepcopy(_load_params("default-v1.4.0"))
     container = parameters
     for part in path[:-1]:
         container = container[part]
@@ -79,7 +79,7 @@ def test_invalid_params_raise_an_obvious_error(path: tuple[str, ...], value: obj
 def test_the_schema_is_fetched_with_or_without_a_v_prefix(pipeline_version: str) -> None:
     """Upstream tags carry no ``v`` prefix, but a prefixed version still finds the schema."""
     validate_aind_ephys_parameters(
-        parameters=_load_params("default"), pipeline_version=pipeline_version, parameters_file_name="name-x.json"
+        parameters=_load_params("default-v1.4.0"), pipeline_version=pipeline_version, parameters_file_name="name-x.json"
     )
 
 
@@ -88,7 +88,7 @@ def test_a_pipeline_version_without_an_upstream_schema_is_refused() -> None:
     """A version the pipeline repository has no schema for cannot have its parameters checked, so it is refused."""
     with pytest.raises(ValueError, match="AIND EPHYS PARAMETERS SCHEMA NOT FOUND"):
         validate_aind_ephys_parameters(
-            parameters=_load_params("default"), pipeline_version="v99.0.0", parameters_file_name="name-x.json"
+            parameters=_load_params("default-v1.4.0"), pipeline_version="v99.0.0", parameters_file_name="name-x.json"
         )
 
 

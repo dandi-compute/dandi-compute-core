@@ -29,9 +29,14 @@
     "md5": "7092ab8e27569611d657c8200bb081e9",
     "description": "Revised configuration to lower the CPU request for nwb_ecephys, from 16 to 4. Its LFP export holds about three minutes of padded data per worker, so memory scales with the worker count and not the recording length."
   },
+  "v6": {
+    "path": "name-mit+engaging_revision-6.config",
+    "md5": "2078d1c549e2da98f030096fd38ff645",
+    "description": "Revised configuration for pipeline v1.5.0. Loads the nf-schema plugin the pipeline validates its parameters with, which needs Nextflow 25.10 or later. Also sets PYTHONNOUSERSITE so the containers ignore the user's own site packages, and gives the new save_provenance step a small allocation."
+  },
   "default": {
-    "path": "name-mit+engaging_revision-5.config",
-    "md5": "7092ab8e27569611d657c8200bb081e9",
+    "path": "name-mit+engaging_revision-6.config",
+    "md5": "2078d1c549e2da98f030096fd38ff645",
     "description": "The current recommended configuration."
   }
 }

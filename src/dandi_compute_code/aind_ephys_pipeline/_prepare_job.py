@@ -18,6 +18,7 @@ import dandi.dandiapi
 import dandi.download
 import dandi.upload
 
+from ._globals import _NEXTFLOW_ENVIRONMENT_DIRECTORY, _PINNED_STEP_VERSIONS_FILE_NAMES, _PIPELINE_FILE_NAMES
 from ._handle_template import generate_aind_ephys_submission_script
 from ._pipeline_version import _parse_pipeline_version
 from ._validate_parameters import validate_aind_ephys_parameters
@@ -280,10 +281,11 @@ def prepare_aind_ephys_job(
     # TODO: if first run for asset, skip below and add sourcedata
 
     pipeline_directory = _aind_pipeline_directory(base_directory).absolute()
-    pipeline_file_path = pipeline_directory / "pipeline" / "main_multi_backend.nf"
 
+    # The shared checkout sits on whichever tag the last job checked out, so the release is read
+    # from git rather than from the working tree.
     pipeline_commit_hash = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"],
+        ["git", "rev-parse", f"{pipeline_version}^{{commit}}"],
         cwd=pipeline_directory,
         text=True,
     ).strip()
@@ -329,13 +331,20 @@ def prepare_aind_ephys_job(
     nwbfile_path = f"/orcd/data/dandi/{partition}/s3dandiarchive/blobs/{content_id[0:3]}/{content_id[3:6]}/{content_id}"
     # TODO: figure out if Zarr or not - only supports blobs ATM
 
-    # Create an empty copy of Dandiset
-    # The commits each step is pinned to, read at the release the job runs (the shared checkout is
-    # only moved to it when the job starts). Release 1.4.1 renamed the file from capsule_versions.env.
-    versions_file_name, versions_file_content = _read_pinned_step_versions(
-        pipeline_directory=pipeline_directory, pipeline_version=pipeline_version
+    # The shared checkout is only moved to the release when the job starts.
+    versions_file_name, versions_file_content = _read_pipeline_file_at_release(
+        pipeline_directory=pipeline_directory,
+        pipeline_version=pipeline_version,
+        file_names=_PINNED_STEP_VERSIONS_FILE_NAMES,
     )
+    pipeline_file_name, pipeline_file_content = _read_pipeline_file_at_release(
+        pipeline_directory=pipeline_directory,
+        pipeline_version=pipeline_version,
+        file_names=_PIPELINE_FILE_NAMES,
+    )
+    pipeline_file_path = pipeline_directory / "pipeline" / pipeline_file_name
 
+    # Create an empty copy of Dandiset
     processing_directory = _processing_directory(base_directory)
     temporary_processing_directory = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="prepare-job-"))
     dandi.download.download(
@@ -364,13 +373,14 @@ def prepare_aind_ephys_job(
 
     work_directory = _work_directory(base_directory)
     apptainer_cache_directory = work_directory / "apptainer_cache"
+    # Each job gets its own Nextflow work directory. From release 1.5.0 the pipeline writes the
+    # job's full parameters, input path included, to `full_params.json` at the top of it, which
+    # jobs running at the same time would otherwise overwrite for each other.
+    job_work_directory = work_directory / job_id
     # NOTE: NUMBA_CACHE_DIR is also needed for the pipeline
-    # but must be set in `~/.bashrc`, and must be the same as WORKDIR
+    # but must be set in `~/.bashrc`, to the shared work directory above
     # NUMBA_CACHE_DIR = "/orcd/data/dandi/001/dandi-compute/work"
-    environment_directory = "/orcd/data/dandi/001/environments/name-nextflow_environment"
     done_tracker_file_path = processing_directory / "done.txt"
-
-    pipeline_repo_directory = pipeline_file_path.parent.parent
 
     # TODO: could look up description, authors, license, etc. from source dandiset metadata
     pipeline_url = (
@@ -419,12 +429,12 @@ def prepare_aind_ephys_job(
         log_directory=str(log_directory),
         nwb_file_path=nwbfile_path,
         results_directory=str(intermediate_dir),  # Start off the results in the intermediate folder and separate later
-        work_directory=str(work_directory),
+        work_directory=str(job_work_directory),
         apptainer_cache_directory=str(apptainer_cache_directory),
-        environment_directory=environment_directory,
+        environment_directory=_NEXTFLOW_ENVIRONMENT_DIRECTORY,
         config_file_path=str(code_config_file_path),
         pipeline_file_path=str(pipeline_file_path),
-        pipeline_repo_directory=str(pipeline_repo_directory.absolute()),
+        pipeline_repo_directory=str(pipeline_directory),
         pipeline_version=pipeline_version,
         temp_name=temporary_processing_directory.name,
         done_tracker_file_path=str(done_tracker_file_path),
@@ -433,7 +443,7 @@ def prepare_aind_ephys_job(
     code_config_file_path.write_text(data=config_file_path.read_text())
     code_parameters_file_path.write_text(data=parameters_file_path.read_text())
     (code_dir / versions_file_name).write_text(data=versions_file_content)
-    code_pipeline_file_path.write_text(data=pipeline_file_path.read_text())
+    code_pipeline_file_path.write_text(data=pipeline_file_content)
     dataset_description_file_path.write_text(data=json.dumps(obj=dataset_description, indent=2))
 
     # Upload preparation to 'reserve' spot during processing
@@ -454,12 +464,12 @@ def prepare_aind_ephys_job(
     return script_file_path
 
 
-_PINNED_STEP_VERSIONS_FILE_NAMES = ("process_versions.env", "capsule_versions.env")
-
-
-def _read_pinned_step_versions(*, pipeline_directory: pathlib.Path, pipeline_version: str) -> tuple[str, str]:
-    """Return the name and content of the pipeline's pinned step versions file at a release."""
-    for file_name in _PINNED_STEP_VERSIONS_FILE_NAMES:
+@beartype.beartype
+def _read_pipeline_file_at_release(
+    *, pipeline_directory: pathlib.Path, pipeline_version: str, file_names: tuple[str, ...]
+) -> tuple[str, str]:
+    """Return the name and content of the first of *file_names* under ``pipeline/`` at a release."""
+    for file_name in file_names:
         try:
             content = subprocess.check_output(
                 ["git", "show", f"{pipeline_version}:pipeline/{file_name}"],
@@ -472,7 +482,7 @@ def _read_pinned_step_versions(*, pipeline_directory: pathlib.Path, pipeline_ver
         return file_name, content
     message = (
         f"The pipeline at {pipeline_version} has no "
-        + " or ".join(f"pipeline/{file_name}" for file_name in _PINNED_STEP_VERSIONS_FILE_NAMES)
+        + " or ".join(f"pipeline/{file_name}" for file_name in file_names)
         + "."
     )
     raise FileNotFoundError(message)
