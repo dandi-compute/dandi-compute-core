@@ -716,8 +716,15 @@ def _issues_summarize_command(
         _styled_echo(text=f"\nWrote derivatives/issues_summary.json to Dandiset {dandiset_id}.", color="green")
 
 
-# dandicompute archive [OPTIONS]
-@_dandicompute_group.command(name="archive")
+# dandicompute archive
+@_dandicompute_group.group(name="archive")
+def _archive_group() -> None:
+    """Move capsules into the failed runs archive (001873) or delete them from it."""
+    pass
+
+
+# dandicompute archive add [OPTIONS]
+@_archive_group.command(name="add")
 @click.option(
     "--status",
     "status",
@@ -778,7 +785,7 @@ def _issues_summarize_command(
     is_flag=True,
     default=False,
 )
-def _archive_command(
+def _archive_add_command(
     status: str | None,
     pipeline: str | None,
     capsule_path: str | None,
@@ -830,8 +837,8 @@ def _archive_command(
             _styled_echo(text=f"\nNo {description} job capsules to archive.", color="yellow")
 
 
-# dandicompute delete [OPTIONS]
-@_dandicompute_group.command(name="delete")
+# dandicompute archive delete [OPTIONS]
+@_archive_group.command(name="delete")
 @click.option(
     "--version",
     "version",
@@ -863,7 +870,7 @@ def _archive_command(
     is_flag=True,
     default=False,
 )
-def _delete_command(
+def _archive_delete_command(
     version: str,
     pipeline: str | None,
     dry_run: bool = False,

@@ -100,11 +100,11 @@ These are uploaded into the Dandiset's `derivatives/` directory, so the state of
 ### Clear out failures
 
 ```bash
-dandicompute archive --status failed      # every capsule with logs but no output
-dandicompute archive --status stalled     # claimed, but nothing was ever logged
-dandicompute archive --pipeline lfp       # every capsule of one pipeline, whatever its status
-dandicompute archive --pipeline lfp --status failed   # only that pipeline's failed capsules
-dandicompute archive --job derivatives/dandisets-000/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-260916a1b2c3
+dandicompute archive add --status failed      # every capsule with logs but no output
+dandicompute archive add --status stalled     # claimed, but nothing was ever logged
+dandicompute archive add --pipeline lfp       # every capsule of one pipeline, whatever its status
+dandicompute archive add --pipeline lfp --status failed   # only that pipeline's failed capsules
+dandicompute archive add --job derivatives/dandisets-000/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-260916a1b2c3
 ```
 
 Archiving preserves each capsule's path exactly and deletes it from the source only after the upload to the archive succeeds. Once a failed capsule is archived, the next `jobs create` sees no capsule for that asset and forms a fresh one.
@@ -118,9 +118,9 @@ dandicompute clean --unsubmitted
 To clear capsules out of the failed runs archive itself, delete them by pipeline version:
 
 ```bash
-dandicompute delete --version v1.3.0 --preview                # list what would be deleted
-dandicompute delete --version v1.3.0                          # every capsule of that version
-dandicompute delete --version v1.3.0 --pipeline aind+ephys    # only that pipeline's
+dandicompute archive delete --version v1.3.0 --preview                # list what would be deleted
+dandicompute archive delete --version v1.3.0                          # every capsule of that version
+dandicompute archive delete --version v1.3.0 --pipeline aind+ephys    # only that pipeline's
 ```
 
 The command only deletes from `001873`. The version is matched against the `version` column of its `jobs.tsv`, with or without the leading `v`. A version without build metadata, such as `v1.3.0`, also selects its builds, such as `v1.3.0+b268fd2`. Run `dandicompute jobs refresh` afterwards so the archive's `jobs.tsv` drops the deleted capsules.

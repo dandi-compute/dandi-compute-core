@@ -1,4 +1,4 @@
-"""Unit tests for the ``dandicompute delete --version`` CLI command."""
+"""Unit tests for the ``dandicompute archive delete --version`` CLI command."""
 
 import os
 from unittest import mock
@@ -19,7 +19,7 @@ def test_cli_delete_requires_a_version() -> None:
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi:
-        result = runner.invoke(_dandicompute_group, ["delete"])
+        result = runner.invoke(_dandicompute_group, ["archive", "delete"])
 
     assert result.exit_code != 0
     assert "Missing option '--version'" in result.output
@@ -35,7 +35,7 @@ def test_cli_delete_fails_without_api_key() -> None:
         mock.patch.dict(os.environ, {}, clear=True),
         mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
     ):
-        result = runner.invoke(_dandicompute_group, ["delete", "--version", "v1.4.0"])
+        result = runner.invoke(_dandicompute_group, ["archive", "delete", "--version", "v1.4.0"])
 
     assert result.exit_code != 0
     assert "DANDI_API_KEY" in result.output
@@ -53,7 +53,9 @@ def test_cli_delete_deletes_from_the_failed_runs_archive() -> None:
     ):
         mock_delete = mock_from_dandi.return_value.delete_capsules
         mock_delete.return_value = ["derivatives/example-capsule"]
-        result = runner.invoke(_dandicompute_group, ["delete", "--version", "v1.4.0", "--pipeline", "aind+ephys"])
+        result = runner.invoke(
+            _dandicompute_group, ["archive", "delete", "--version", "v1.4.0", "--pipeline", "aind+ephys"]
+        )
 
     assert result.exit_code == 0, result.output
     assert (
@@ -81,7 +83,7 @@ def test_cli_delete_preview_lists_without_an_api_key() -> None:
     ):
         mock_delete = mock_from_dandi.return_value.delete_capsules
         mock_delete.return_value = ["derivatives/example-capsule"]
-        result = runner.invoke(_dandicompute_group, ["delete", "--version", "v1.4.0", "--preview"])
+        result = runner.invoke(_dandicompute_group, ["archive", "delete", "--version", "v1.4.0", "--preview"])
 
     assert result.exit_code == 0, result.output
     assert f"Would delete 1 v1.4.0 job capsule(s) from Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}" in result.output
@@ -104,7 +106,7 @@ def test_cli_delete_reports_when_nothing_matches() -> None:
         mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
     ):
         mock_from_dandi.return_value.delete_capsules.return_value = []
-        result = runner.invoke(_dandicompute_group, ["delete", "--version", "v1.4.0"])
+        result = runner.invoke(_dandicompute_group, ["archive", "delete", "--version", "v1.4.0"])
 
     assert result.exit_code == 0, result.output
     assert f"No v1.4.0 job capsules in Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}." in result.output
@@ -116,7 +118,7 @@ def test_cli_delete_rejects_a_blank_version_as_a_usage_error() -> None:
     runner = CliRunner()
 
     with mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=PipelineQueue(entries=[])):
-        result = runner.invoke(_dandicompute_group, ["delete", "--version", " ", "--preview"])
+        result = runner.invoke(_dandicompute_group, ["archive", "delete", "--version", " ", "--preview"])
 
     assert result.exit_code == 2
     assert "must not be blank" in result.output
