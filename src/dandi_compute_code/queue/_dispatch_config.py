@@ -1,9 +1,10 @@
 """
 Per-pipeline settings for the SLURM array dispatcher.
 
-Every pipeline is run on the cluster by exactly one array job. This module reads that
-array job's settings out of the packaged pipeline configuration, filling in defaults for
-a pipeline that declares no ``dispatch`` block of its own.
+Every pipeline is run on the cluster by one array job, plus one more for each parameter set
+the pipeline dispatches apart from the rest. This module reads those array jobs' settings out
+of the packaged pipeline configuration, filling in defaults for a pipeline that declares no
+``dispatch`` block of its own.
 
 Only the queue limits are configurable. An array task runs its capsule's ``submit.sh``
 directly, so the task's allocation is the one the capsule actually gets. Those resource
@@ -81,14 +82,17 @@ def _read_template_resources(pipeline: str, /) -> dict[str, str]:
 @dataclasses.dataclass(frozen=True)
 class DispatchConfig:
     """
-    The settings of one pipeline's array dispatcher.
+    The settings of one array dispatcher.
 
-    The two limits are configured. The resource requests are not: an array task runs its
+    A dispatcher serves a whole pipeline, or one parameter set of it when ``params_key`` is
+    set, in which case it runs apart from the pipeline's own dispatcher under limits of its
+    own. The two limits are configured. The resource requests are not: an array task runs its
     capsule's ``submit.sh`` directly, so they are read back out of the pipeline's own
     submission template by :meth:`from_pipeline_config` to match what the capsule asks for.
     """
 
     pipeline: str
+    params_key: str | None = None
     max_concurrent: int = _DEFAULT_MAX_CONCURRENT
     max_array_tasks: int | None = _DEFAULT_MAX_ARRAY_TASKS
     partition: str = _FALLBACK_PARTITION
@@ -115,6 +119,7 @@ class DispatchConfig:
         pipeline: str,
         pipeline_config: dict,
         max_concurrent: int | None = None,
+        params_key: str | None = None,
     ) -> DispatchConfig:
         """
         Read *pipeline*'s dispatcher settings out of a loaded pipeline configuration.
@@ -123,6 +128,10 @@ class DispatchConfig:
         fall back to this module's default, so a pipeline with no ``dispatch`` block still
         dispatches. The resource requests come from the pipeline's own submission template
         instead, so that an array task is allocated exactly what the capsule it runs asks for.
+
+        With *params_key*, the settings are those of the dispatcher dedicated to that
+        parameter set, read from the pipeline's ``params_dispatch`` block. A limit the entry
+        leaves out is taken from the pipeline's own ``dispatch`` block before the default.
 
         Parameters
         ----------
@@ -133,11 +142,15 @@ class DispatchConfig:
             :meth:`~dandi_compute_code.queue.PipelineQueue.load_pipeline_config`.
         max_concurrent : int, optional
             Overrides the configured concurrency limit when given.
+        params_key : str, optional
+            A parameter set the pipeline dispatches apart from the rest. Omit it
+            for the pipeline's own dispatcher.
 
         Raises
         ------
         ValueError
-            If *pipeline* is not present in *pipeline_config*.
+            If *pipeline* is not present in *pipeline_config*, or if *params_key*
+            is not in its ``params_dispatch`` block.
         """
         pipelines = pipeline_config.get("pipelines", {})
         if pipeline not in pipelines:
@@ -145,12 +158,23 @@ class DispatchConfig:
             message = f"Pipeline '{pipeline}' is not configured. Configured pipelines are: {configured}."
             raise ValueError(message)
 
-        dispatch = pipelines[pipeline].get("dispatch") or {}
+        dispatch = dict(pipelines[pipeline].get("dispatch") or {})
+        if params_key is not None:
+            params_dispatch = pipelines[pipeline].get("params_dispatch") or {}
+            if params_key not in params_dispatch:
+                configured = list(params_dispatch.keys())
+                message = (
+                    f"Pipeline '{pipeline}' has no dedicated dispatcher for parameter set '{params_key}'. "
+                    f"Parameter sets dispatched apart are: {configured}."
+                )
+                raise ValueError(message)
+            dispatch.update(params_dispatch[params_key] or {})
         configured_max_concurrent = max_concurrent if max_concurrent is not None else dispatch.get("max_concurrent")
         resources = _read_template_resources(pipeline)
         cpus_per_task = resources.get("cpus-per-task")
         dispatch_config = cls(
             pipeline=pipeline,
+            params_key=params_key,
             max_concurrent=configured_max_concurrent or _DEFAULT_MAX_CONCURRENT,
             # An explicit null means no upper bound, which is why this reads the key rather
             # than falling back on a falsy value the way max_concurrent does.
@@ -163,17 +187,77 @@ class DispatchConfig:
         )
         return dispatch_config
 
+    @classmethod
+    def all_from_pipeline_config(
+        cls,
+        *,
+        pipeline: str,
+        pipeline_config: dict,
+        max_concurrent: int | None = None,
+    ) -> list[DispatchConfig]:
+        """
+        Every dispatcher of *pipeline*: one per parameter set it dispatches apart, then its own.
+
+        The dedicated dispatchers come first so that a caller handing capsules out can give
+        each parameter set its own before the pipeline's dispatcher takes the rest.
+
+        Parameters
+        ----------
+        pipeline : str
+            The pipeline name as it appears in the pipeline configuration.
+        pipeline_config : dict
+            A loaded pipeline configuration, as returned by
+            :meth:`~dandi_compute_code.queue.PipelineQueue.load_pipeline_config`.
+        max_concurrent : int, optional
+            Overrides the configured concurrency limit of every dispatcher when
+            given.
+
+        Raises
+        ------
+        ValueError
+            If *pipeline* is not present in *pipeline_config*.
+        """
+        pipelines = pipeline_config.get("pipelines", {})
+        if pipeline not in pipelines:
+            configured = list(pipelines.keys())
+            message = f"Pipeline '{pipeline}' is not configured. Configured pipelines are: {configured}."
+            raise ValueError(message)
+
+        params_keys = [*(pipelines[pipeline].get("params_dispatch") or {}), None]
+        dispatch_configs = [
+            cls.from_pipeline_config(
+                pipeline=pipeline,
+                pipeline_config=pipeline_config,
+                max_concurrent=max_concurrent,
+                params_key=params_key,
+            )
+            for params_key in params_keys
+        ]
+        return dispatch_configs
+
+    @property
+    def label(self) -> str:
+        """
+        What this dispatcher serves, as ``pipeline`` or ``pipeline/params`` for a dedicated one.
+
+        Dispatch results are keyed by it, since a pipeline can have several dispatchers.
+        """
+        label = self.pipeline if self.params_key is None else f"{self.pipeline}/{self.params_key}"
+        return label
+
     @property
     def job_name(self) -> str:
         """
-        The SLURM job name this pipeline's array dispatcher carries.
+        The SLURM job name this array dispatcher carries.
 
         The name is what identifies a live dispatcher, so it has to survive a round trip
         through SLURM unchanged. Characters a pipeline name may carry but a job name should
-        not (``aind+ephys``) are folded to a hyphen.
+        not (``aind+ephys``) are folded to a hyphen. A dispatcher dedicated to one parameter
+        set appends that set's key, so it is told apart from the pipeline's own.
         """
-        sanitized_pipeline = _DISPATCH_JOB_NAME_SANITIZE_RE.sub("-", self.pipeline).strip("-")
-        job_name = f"{_DISPATCH_JOB_NAME_PREFIX}-{sanitized_pipeline}"
+        name_parts = [self.pipeline] if self.params_key is None else [self.pipeline, self.params_key]
+        sanitized_parts = [_DISPATCH_JOB_NAME_SANITIZE_RE.sub("-", part).strip("-") for part in name_parts]
+        job_name = "-".join([_DISPATCH_JOB_NAME_PREFIX, *sanitized_parts])
         return job_name
 
     def template_resources(self) -> CapsuleResources:

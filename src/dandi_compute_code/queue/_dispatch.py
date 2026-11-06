@@ -1,5 +1,6 @@
 """
-Array dispatch — one SLURM array job per pipeline, owning every run of that pipeline.
+Array dispatch — one SLURM array job per pipeline, owning every run of that pipeline, plus
+one per parameter set the pipeline dispatches apart from the rest.
 
 Capsules used to be submitted one ``sbatch`` at a time, with concurrency held down by
 counting running jobs before each submission. That made every cron invocation a scheduler
@@ -8,7 +9,9 @@ array job instead. SLURM holds the queue, the array's ``%n`` throttle holds the
 concurrency limit, and each array task runs one capsule.
 
 A dispatcher is identified on the cluster by its job name, so a pipeline whose array is
-still working through its tasks is left alone rather than dispatched a second time.
+still working through its tasks is left alone rather than dispatched a second time. A
+parameter set with a dispatcher of its own has its own job name and its own limits, so its
+capsules neither wait behind the pipeline's array nor count against its throttle.
 
 Every dispatcher keeps its record in one central log directory per pipeline, under the
 base directory's ``processing/derivatives/logs/``. The minted manifests, the generated array scripts and the
@@ -77,10 +80,11 @@ class DispatchedArray:
 @beartype.beartype
 @dataclasses.dataclass(frozen=True)
 class DispatchResult:
-    """The outcome of one pipeline's dispatch attempt."""
+    """The outcome of one dispatcher's dispatch attempt."""
 
     pipeline: str
     status: DispatchStatus
+    params_key: str | None = None
     arrays: tuple[DispatchedArray, ...] = ()
     active_job_ids: tuple[str, ...] = ()
     dispatch_directory: pathlib.Path | None = None
@@ -91,17 +95,23 @@ class DispatchResult:
         """How many capsules this dispatch placed in arrays, across every resource group."""
         return sum(array.task_count for array in self.arrays)
 
+    @property
+    def label(self) -> str:
+        """What was dispatched, as ``pipeline`` or ``pipeline/params`` for a dedicated dispatcher."""
+        label = self.pipeline if self.params_key is None else f"{self.pipeline}/{self.params_key}"
+        return label
+
     def summary(self) -> str:
         """A single human-readable line describing this outcome."""
         if self.status == "no-pending":
-            return f"{self.pipeline}: no capsules are waiting to be submitted."
+            return f"{self.label}: no capsules are waiting to be submitted."
         if self.status == "dispatcher-active":
-            return f"{self.pipeline}: the dispatcher is already running; its array has not been exhausted yet."
+            return f"{self.label}: the dispatcher is already running; its array has not been exhausted yet."
         noun = "capsule" if self.task_count == 1 else "capsules"
         if len(self.arrays) == 1:
-            return f"{self.pipeline}: dispatched {self.task_count} {noun} as array job {self.arrays[0].array_job_id}."
+            return f"{self.label}: dispatched {self.task_count} {noun} as array job {self.arrays[0].array_job_id}."
         return (
-            f"{self.pipeline}: dispatched {self.task_count} {noun} as {len(self.arrays)} array jobs, "
+            f"{self.label}: dispatched {self.task_count} {noun} as {len(self.arrays)} array jobs, "
             f"one per distinct set of requested resources."
         )
 
@@ -213,6 +223,29 @@ def _pending_code_dirs_for_pipeline(*, pipeline: str, code_dir_paths: list[str])
 
 
 @beartype.beartype
+def _partition_by_params(
+    *,
+    code_dir_paths: list[str],
+    capsule_params: dict[str, str],
+    params_ids_by_key: dict[str, str],
+) -> dict[str | None, list[str]]:
+    """
+    Hand capsules out to the dispatcher dedicated to their parameter set, or to ``None``.
+
+    *params_ids_by_key* maps each parameter set with a dispatcher of its own to the params ID
+    its capsules record. A capsule formed with any other parameters, or whose parameters
+    could not be read, goes under ``None``, which is the pipeline's own dispatcher. Every key
+    is present in the result, so a dispatcher with nothing to do still reports back.
+    """
+    dedicated_keys_by_id = {params_id: params_key for params_key, params_id in params_ids_by_key.items()}
+    partition: dict[str | None, list[str]] = {params_key: [] for params_key in [*params_ids_by_key, None]}
+    for code_dir_path in code_dir_paths:
+        params_key = dedicated_keys_by_id.get(capsule_params.get(code_dir_path, ""))
+        partition[params_key].append(code_dir_path)
+    return partition
+
+
+@beartype.beartype
 def _group_by_requested_resources(
     *,
     code_dir_paths: list[str],
@@ -311,6 +344,10 @@ def dispatch_pipeline_jobs(
     """
     Place *pipeline*'s pending capsules in SLURM array jobs, grouped by requested resources.
 
+    The dispatcher is *dispatch_config*. For one dedicated to a parameter set, the caller
+    hands over only the capsules of that set, since a capsule's path does not spell out its
+    parameters (see :func:`~dandi_compute_code.queue.read_capsule_params`).
+
     The capsules belonging to *pipeline* are taken out of *code_dir_paths* and grouped by
     what their submission scripts ask SLURM for. Each group gets an array of its own, sized
     for that group, because an array carries a single ``#SBATCH`` header and a task runs its
@@ -367,10 +404,11 @@ def dispatch_pipeline_jobs(
     RuntimeError
         If ``squeue`` or ``sbatch`` fails.
     """
+    params_key = dispatch_config.params_key
     pipeline_code_dir_paths = _pending_code_dirs_for_pipeline(pipeline=pipeline, code_dir_paths=code_dir_paths)
     if not pipeline_code_dir_paths:
-        _log.info("No pending capsules for pipeline %s", pipeline)
-        return DispatchResult(pipeline=pipeline, status="no-pending")
+        _log.info("No pending capsules for %s", dispatch_config.label)
+        return DispatchResult(pipeline=pipeline, status="no-pending", params_key=params_key)
 
     job_name = dispatch_config.job_name
     active_job_ids = _active_dispatcher_job_ids(job_name)
@@ -380,7 +418,12 @@ def dispatch_pipeline_jobs(
             job_name,
             ", ".join(active_job_ids),
         )
-        return DispatchResult(pipeline=pipeline, status="dispatcher-active", active_job_ids=tuple(active_job_ids))
+        return DispatchResult(
+            pipeline=pipeline,
+            status="dispatcher-active",
+            params_key=params_key,
+            active_job_ids=tuple(active_job_ids),
+        )
 
     groups = _group_by_requested_resources(
         code_dir_paths=pipeline_code_dir_paths,
@@ -389,8 +432,8 @@ def dispatch_pipeline_jobs(
     )
     if len(groups) > 1:
         _log.info(
-            "Pipeline %s has capsules asking for %d different sets of resources; dispatching one array each",
-            pipeline,
+            "%s has capsules asking for %d different sets of resources; dispatching one array each",
+            dispatch_config.label,
             len(groups),
         )
 
@@ -443,10 +486,9 @@ def dispatch_pipeline_jobs(
         )
 
         _log.info(
-            "Dispatching %d capsule(s) for pipeline %s as array %s requesting %s / %d CPU / %s / %s"
-            " (at most %d at a time)",
+            "Dispatching %d capsule(s) for %s as array %s requesting %s / %d CPU / %s / %s" " (at most %d at a time)",
             len(dispatched_code_dir_paths),
-            pipeline,
+            dispatch_config.label,
             job_name,
             resources.memory,
             resources.cpus_per_task,
@@ -468,6 +510,7 @@ def dispatch_pipeline_jobs(
     result = DispatchResult(
         pipeline=pipeline,
         status="dispatched",
+        params_key=params_key,
         arrays=tuple(dispatched_arrays),
         dispatch_directory=dispatch_directory,
         log_directory=log_directory,

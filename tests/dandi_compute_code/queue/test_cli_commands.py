@@ -51,9 +51,33 @@ def test_cli_jobs_create_forwards_pipeline_as_only_pipeline(base_directory: path
         config_key="default",
         limit=5,
         only_pipeline="lfp",
+        only_params_key=None,
         force_latest_versions=False,
         base_directory=base_directory,
     )
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize("command", ["create", "creatable"])
+def test_cli_jobs_create_and_creatable_forward_params_as_only_params_key(
+    base_directory: pathlib.Path, command: str
+) -> None:
+    """dandicompute jobs create/creatable --params <key> narrows the work to that parameter set."""
+    runner = CliRunner()
+    base_arguments = ["--base", str(base_directory)] if command == "create" else []
+
+    with (
+        mock.patch.dict("os.environ", {"DANDI_API_KEY": "test-key"}),
+        mock.patch(f"{_GROUP}.PipelineQueue.create_job_capsules", return_value=0) as mock_create,
+        mock.patch(
+            f"{_GROUP}.PipelineQueue.creatable_job_labels", return_value=["aind+ephys/lupin/x"]
+        ) as mock_creatable,
+    ):
+        result = runner.invoke(_dandicompute_group, ["jobs", command, *base_arguments, "--params", "lupin"])
+
+    assert result.exit_code == 0, result.output
+    mocked = mock_create if command == "create" else mock_creatable
+    assert mocked.call_args.kwargs["only_params_key"] == "lupin"
 
 
 @pytest.mark.ai_generated
@@ -533,7 +557,7 @@ def test_cli_jobs_creatable_reports_and_sets_exit_code(
         result = runner.invoke(_dandicompute_group, ["jobs", "creatable", "--pipeline", "lfp"])
 
     assert result.exit_code == expected_exit_code, result.output
-    mock_creatable.assert_called_once_with(only_pipeline="lfp", config_key="default")
+    mock_creatable.assert_called_once_with(only_pipeline="lfp", only_params_key=None, config_key="default")
     assert expected_output in result.output
 
 

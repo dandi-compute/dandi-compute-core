@@ -1,11 +1,17 @@
 {
     "pipelines": {
         "aind+ephys": {
-            "params": ["default"],
+            "params": ["default", "dartsort", "lupin"],
             "asset_overrides": {"048d1ee9-83b7-491f-8f02-1ca615b1d455": null},
             "dispatch": {
                 "max_concurrent": 2,
                 "max_array_tasks": 500
+            },
+            "params_dispatch": {
+                "lupin": {
+                    "max_concurrent": 10,
+                    "max_array_tasks": 500
+                }
             }
         },
         "lfp": {

@@ -63,15 +63,16 @@ dandicompute prepare aind --test
 
 ### Keep the queue full
 
-`jobs create` crosses every pipeline and parameter set in `pipeline_configs.json` with that pipeline's qualifying assets. Assets that already have a capsule for the combination are skipped.
+`jobs create` crosses every pipeline and parameter set in `pipeline_configs.json` with that pipeline's qualifying assets. Assets that already have a capsule for the combination are skipped. Each asset is given its capsules for every parameter set together, all with the one config, before the next asset is started. For `aind+ephys` that is one capsule per spike sorter.
 
 ```bash
 dandicompute jobs create                     # every configured pipeline
 dandicompute jobs create --pipeline lfp      # one pipeline
+dandicompute jobs create --params lupin      # one parameter set, here the Lupin sorter
 dandicompute jobs create --limit 20          # at most 20 new capsules
 ```
 
-`--limit` samples round-robin across Dandisets, so a small limit spreads work over many datasets rather than exhausting the first one.
+`--limit` samples round-robin across Dandisets, so a small limit spreads work over many datasets rather than exhausting the first one. Because an asset gets every parameter set before the next asset, a limit of 6 over three sorters covers two assets.
 
 `--latest` deliberately ignores existing capsules and forms a new one for every qualifying asset against the newest local pipeline version. It is how a new pipeline release is rolled out over assets that were already processed.
 

@@ -36,6 +36,10 @@ def mock_dandi_assets_metadata() -> Iterator[None]:
             return_value=empty_metadata,
         ),
         mock.patch(
+            "dandi_compute_code.queue._capsule_params.load_assets_jsonld_metadata",
+            return_value=empty_metadata,
+        ),
+        mock.patch(
             "dandi_compute_code.queue._queue_utils._load_upstream_assets_jsonld_metadata",
             return_value=empty_metadata,
         ),

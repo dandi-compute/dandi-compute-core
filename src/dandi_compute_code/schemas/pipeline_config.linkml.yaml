@@ -68,6 +68,21 @@ classes:
         inlined: true
         required: false
 
+      params_dispatch:
+        description: >-
+          Parameter sets this pipeline dispatches apart from the rest, keyed by
+          registered parameter set name. Each one is run on the cluster by an array
+          dispatcher of its own, named after the pipeline and the parameter set, under
+          its own limits. A limit it leaves out is taken from the pipeline's `dispatch`
+          block. Parameter sets not named here share the pipeline's own dispatcher. This
+          is how a parameter set that needs no GPU, such as a CPU spike sorter, runs at
+          a higher concurrency than the pipeline's GPU runs.
+        range: ParamsDispatch
+        multivalued: true
+        inlined: true
+        inlined_as_list: false
+        required: false
+
   Dispatch:
     description: >-
       Queue limits for one pipeline's array dispatcher. One array job per pipeline owns
@@ -92,6 +107,18 @@ classes:
         range: integer
         minimum_value: 1
         required: false
+
+  ParamsDispatch:
+    description: >-
+      The dispatcher limits of one parameter set run apart from the rest of its pipeline.
+      The key is the registered parameter set name, as listed in the pipeline's `params`.
+    is_a: Dispatch
+    attributes:
+      params:
+        description: The registered parameter set name this dispatcher is dedicated to.
+        identifier: true
+        range: string
+        required: true
 
   AssetOverride:
     description: >-

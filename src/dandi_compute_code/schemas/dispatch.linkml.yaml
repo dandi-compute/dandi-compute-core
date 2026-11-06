@@ -2,9 +2,10 @@ id: https://github.com/dandi-compute/dandi-compute-core/schemas/dispatch
 name: dandi_compute_dispatch
 title: DANDI Compute Dispatch
 description: >-
-  A LinkML schema describing what one pipeline's SLURM array dispatcher is configured with
-  and what one dispatch attempt produced. Every pipeline is run on the cluster by exactly
-  one array job, so these describe that job rather than any individual capsule's run.
+  A LinkML schema describing what one SLURM array dispatcher is configured with and what
+  one dispatch attempt produced. Every pipeline is run on the cluster by one array job, plus
+  one for each parameter set it dispatches apart from the rest, so these describe such a
+  job rather than any individual capsule's run.
 
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -77,10 +78,10 @@ classes:
 
   DispatchConfig:
     description: >-
-      The settings of one pipeline's array dispatcher. Only the two queue limits are
-      configured. The resource requests are read back out of the pipeline's own submission
-      template, since an array task runs its capsule's submission script directly and so
-      has to be allocated whatever that script asks for.
+      The settings of one array dispatcher. Only the two queue limits are configured. The
+      resource requests are read back out of the pipeline's own submission template, since
+      an array task runs its capsule's submission script directly and so has to be
+      allocated whatever that script asks for.
     tree_root: true
     is_a: CapsuleResources
     attributes:
@@ -88,6 +89,14 @@ classes:
         description: The pipeline name as it appears in the pipeline configuration.
         range: string
         required: true
+
+      params_key:
+        description: >-
+          The registered parameter set this dispatcher is dedicated to, as named in the
+          pipeline's `params_dispatch` block. Null for the pipeline's own dispatcher, which
+          runs every parameter set without one of its own.
+        range: string
+        required: false
 
       max_concurrent:
         description: >-
@@ -149,12 +158,19 @@ classes:
         required: true
 
   DispatchResult:
-    description: The outcome of one pipeline's dispatch attempt.
+    description: The outcome of one dispatcher's dispatch attempt.
     attributes:
       pipeline:
         description: The pipeline that was dispatched.
         range: string
         required: true
+
+      params_key:
+        description: >-
+          The parameter set the dispatcher is dedicated to, or null for the pipeline's own
+          dispatcher.
+        range: string
+        required: false
 
       status:
         description: What the attempt did.

@@ -31,6 +31,7 @@ def mock_latest_pipeline_version() -> Iterator[mock.MagicMock]:
 
 
 _AIND_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default"]}}}
+_SORTERS_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default", "dartsort", "lupin"]}}}
 _LFP_PIPELINE_CONFIG = {"pipelines": {"lfp": {"params": ["default"]}}}
 _MULTI_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default"]}, "lfp": {"params": ["default"]}}}
 
@@ -177,6 +178,81 @@ def test_does_not_force_a_new_capsule_by_default() -> None:
         PipelineQueue.create_job_capsules(content_ids=["asset-bbb"])
 
     assert mock_prepare.call_args.kwargs["force_new_capsule"] is False
+
+
+@pytest.mark.ai_generated
+def test_each_asset_gets_every_parameter_set_before_the_next_asset() -> None:
+    """With several sorters configured, an asset is given all of them together, with the one config."""
+    with (
+        mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_SORTERS_PIPELINE_CONFIG),
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
+    ):
+        created_count = PipelineQueue.create_job_capsules(content_ids=["asset-aaa", "asset-bbb"], config_key="v7")
+
+    assert created_count == 6
+    prepared = [(call.kwargs["content_id"], call.kwargs["parameters_key"]) for call in mock_prepare.call_args_list]
+    assert prepared == [
+        ("asset-aaa", "default"),
+        ("asset-aaa", "dartsort"),
+        ("asset-aaa", "lupin"),
+        ("asset-bbb", "default"),
+        ("asset-bbb", "dartsort"),
+        ("asset-bbb", "lupin"),
+    ]
+    assert {call.kwargs["config_key"] for call in mock_prepare.call_args_list} == {"v7"}
+
+
+@pytest.mark.ai_generated
+def test_limit_covers_the_same_assets_with_every_sorter() -> None:
+    """A limit is spent across the sorters of the first assets rather than on the first sorter alone."""
+    with (
+        mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_SORTERS_PIPELINE_CONFIG),
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
+    ):
+        created_count = PipelineQueue.create_job_capsules(content_ids=["asset-aaa", "asset-bbb", "asset-ccc"], limit=4)
+
+    assert created_count == 4
+    prepared = [(call.kwargs["content_id"], call.kwargs["parameters_key"]) for call in mock_prepare.call_args_list]
+    assert prepared == [
+        ("asset-aaa", "default"),
+        ("asset-aaa", "dartsort"),
+        ("asset-aaa", "lupin"),
+        ("asset-bbb", "default"),
+    ]
+
+
+@pytest.mark.ai_generated
+def test_only_params_key_creates_just_that_parameter_set() -> None:
+    """only_params_key restricts creation to one of the pipeline's parameter sets."""
+    with (
+        mock.patch(f"{_MODULE}._load_pipeline_config", return_value=_SORTERS_PIPELINE_CONFIG),
+        mock.patch(f"{_AIND_MODULE}.prepare_aind_ephys_job", return_value=_SCRIPT_FILE_PATH) as mock_prepare,
+    ):
+        created_count = PipelineQueue.create_job_capsules(
+            content_ids=["asset-aaa", "asset-bbb"], only_params_key="lupin"
+        )
+
+    assert created_count == 2
+    assert {call.kwargs["parameters_key"] for call in mock_prepare.call_args_list} == {"lupin"}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("pipeline_config", "only_pipeline", "expected_message"),
+    [
+        (_SORTERS_PIPELINE_CONFIG, None, "not configured for any pipeline"),
+        (_MULTI_PIPELINE_CONFIG, "lfp", "not configured for pipeline 'lfp'"),
+    ],
+)
+def test_only_params_key_unknown_raises(
+    pipeline_config: dict, only_pipeline: str | None, expected_message: str
+) -> None:
+    """A parameter set no selected pipeline forms capsules for is an error, naming the configured ones."""
+    with (
+        mock.patch(f"{_MODULE}._load_pipeline_config", return_value=pipeline_config),
+        pytest.raises(ValueError, match=expected_message),
+    ):
+        PipelineQueue.create_job_capsules(content_ids=["asset-1"], only_pipeline=only_pipeline, only_params_key="nope")
 
 
 @pytest.mark.ai_generated

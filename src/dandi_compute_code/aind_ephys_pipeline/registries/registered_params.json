@@ -59,9 +59,29 @@
     "md5": "7ea1ac58535ec1bacb88555bc0487738",
     "description": "The upstream v1.5.0 defaults with the same DANDI overrides as `name-default_version-1+4+0.json`. Release 1.5.0 moved the NWB settings from `nwb.ecephys` to `nwb_ecephys`, so the HDF5 backend is set there."
   },
+  "lupin-v1.5.0": {
+    "path": "name-lupin_version-1+5+0.json",
+    "md5": "1157294c6d27c1c59beabda237ccccbc",
+    "description": "Same as `name-default_version-1+5+0.json`, but selects Lupin as the spike sorter. Lupin runs on CPUs in the pipeline's base image, so it needs no GPU node."
+  },
+  "dartsort-v1.5.0": {
+    "path": "name-dartsort_version-1+5+0.json",
+    "md5": "6ba0b5b9fb65f4a941baaa8b550247fd",
+    "description": "Same as `name-default_version-1+5+0.json`, but selects DARTsort as the spike sorter. DARTsort runs on a GPU, in a container image of its own."
+  },
   "default": {
     "path": "name-default_version-1+5+0.json",
     "md5": "7ea1ac58535ec1bacb88555bc0487738",
     "description": "The current recommended default parameter set."
+  },
+  "lupin": {
+    "path": "name-lupin_version-1+5+0.json",
+    "md5": "1157294c6d27c1c59beabda237ccccbc",
+    "description": "The current recommended parameter set for the Lupin spike sorter."
+  },
+  "dartsort": {
+    "path": "name-dartsort_version-1+5+0.json",
+    "md5": "6ba0b5b9fb65f4a941baaa8b550247fd",
+    "description": "The current recommended parameter set for the DARTsort spike sorter."
   }
 }
