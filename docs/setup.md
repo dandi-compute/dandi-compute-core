@@ -115,15 +115,16 @@ To throw away capsules that were never claimed, for example after changing a par
 dandicompute clean --unsubmitted
 ```
 
-To clear capsules out of the failed runs archive itself, delete them by pipeline version:
+To clear capsules out of the failed runs archive itself, delete them by job ID, or by pipeline version:
 
 ```bash
-dandicompute archive delete --version v1.3.0 --preview                # list what would be deleted
-dandicompute archive delete --version v1.3.0                          # every capsule of that version
-dandicompute archive delete --version v1.3.0 --pipeline aind+ephys    # only that pipeline's
+dandicompute archive delete --job job-260916a1b2c3 --preview                    # show the one capsule and its provenance
+dandicompute archive delete --job job-260916a1b2c3                              # delete it
+dandicompute archive delete --version v1.3.0 --pipeline aind+ephys --preview    # list every capsule of that pipeline's version
+dandicompute archive delete --version v1.3.0 --pipeline aind+ephys              # delete them
 ```
 
-The command only deletes from `001873`. The version is matched against the `version` column of its `jobs.tsv`, with or without the leading `v`. A version without build metadata, such as `v1.3.0`, also selects its builds, such as `v1.3.0+b268fd2`. Run `dandicompute jobs refresh` afterwards so the archive's `jobs.tsv` drops the deleted capsules.
+The command only deletes from `001873`. A version must always be paired with its pipeline, so one version number cannot clobber the capsules of every pipeline that shares it. The version is matched against the `version` column of its `jobs.tsv`, with or without the leading `v`. A version without build metadata, such as `v1.3.0`, also selects its builds, such as `v1.3.0+b268fd2`. `--preview` prints the provenance of each selected capsule (its job ID, status, source asset, pipeline, exact version, params, config and codebase) so you can check the selection before deleting. Run `dandicompute jobs refresh` afterwards so the archive's `jobs.tsv` drops the deleted capsules.
 
 ### Tidy the cluster
 
