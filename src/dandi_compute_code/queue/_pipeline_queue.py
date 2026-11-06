@@ -563,26 +563,35 @@ class PipelineQueue:
     def delete_capsules(
         self,
         *,
-        version: str,
+        job_id: str | None = None,
+        version: str | None = None,
         pipeline: str | None = None,
         dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
         dry_run: bool = False,
-    ) -> list[str]:
+    ) -> dict[str, JobCapsule]:
         """
-        Delete every job capsule of a pipeline version from a Dandiset on the archive.
+        Delete one job capsule, or every capsule of one pipeline's version, from a Dandiset on the archive.
 
-        An entry matches when its recorded version is *version*, with or without a leading
-        ``v``. A *version* without build metadata also matches its builds, so ``v1.4.0``
+        Give either *job_id* alone, or *version* together with *pipeline*. A version must be
+        paired with its pipeline so that one version number cannot clobber the capsules of
+        every pipeline that happens to share it.
+
+        An entry matches *version* when its recorded version is *version*, with or without a
+        leading ``v``. A *version* without build metadata also matches its builds, so ``v1.4.0``
         selects ``v1.4.0+b268fd2`` as well. Each matching capsule is resolved against
         *dandiset_id*'s remote ``assets.jsonld`` and deleted by URL via ``dandi delete``, so no
         local Dandiset clone is involved. Capsules with no assets left on the archive are skipped.
 
         Parameters
         ----------
-        version : str
+        job_id : str, optional
+            The ``job-{YYMMDD}{hash}`` ID of the one capsule to delete, as recorded in ``jobs.tsv``.
+        version : str, optional
             The pipeline version whose capsules are deleted, as recorded in ``jobs.tsv``.
+            Requires *pipeline*.
         pipeline : str, optional
-            Delete only the capsules of this pipeline, such as ``"lfp"`` or ``"aind+ephys"``.
+            The pipeline whose capsules of *version* are deleted, such as ``"lfp"`` or
+            ``"aind+ephys"``. Requires *version*.
         dandiset_id : str, optional
             The Dandiset the capsules are deleted from. Defaults to the failed runs
             archive Dandiset (``001873``).
@@ -591,22 +600,38 @@ class PipelineQueue:
 
         Returns
         -------
-        list of str
-            Capsule paths (relative to the Dandiset root) that were deleted, or would be
-            when *dry_run* is ``True``.
+        dict of str to JobCapsule
+            Each deleted capsule's path (relative to the Dandiset root) mapped to its entry, in
+            queue order. When *dry_run* is ``True``, the capsules that would be deleted instead.
 
         Raises
         ------
         ValueError
-            If *version* is blank.
+            If neither or both of *job_id* and *version* are given, if *version* is given
+            without *pipeline* or *pipeline* without *version*, or if any of them is blank.
         RuntimeError
             If ``DANDI_API_KEY`` is not set or is blank and *dry_run* is ``False``.
         subprocess.CalledProcessError
             If ``dandi delete`` fails. Capsules deleted before the failure stay deleted.
         """
-        release = version.strip().removeprefix("v")
-        if not release:
+        if (job_id is None) == (version is None):
+            message = "Give either `job_id`, or `version` together with `pipeline`."
+            raise ValueError(message)
+        if job_id is not None and pipeline is not None:
+            message = "`pipeline` only narrows `version`, not `job_id`."
+            raise ValueError(message)
+        if version is not None and pipeline is None:
+            message = "`version` must be paired with `pipeline`, so it cannot clobber every pipeline sharing it."
+            raise ValueError(message)
+        if job_id is not None and not job_id.strip():
+            message = "`job_id` must not be blank."
+            raise ValueError(message)
+        release = None if version is None else version.strip().removeprefix("v")
+        if release is not None and not release:
             message = "`version` must not be blank."
+            raise ValueError(message)
+        if pipeline is not None and not pipeline.strip():
+            message = "`pipeline` must not be blank."
             raise ValueError(message)
         if not dry_run and not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
@@ -614,11 +639,15 @@ class PipelineQueue:
 
         entries = []
         for entry in self.entries:
-            recorded = entry.job.version.removeprefix("v")
-            matches_version = recorded == release or recorded.partition("+")[0] == release
-            if matches_version and (pipeline is None or entry.job.pipeline == pipeline):
+            if job_id is not None:
+                matches = entry.job.job_id == job_id.strip()
+            else:
+                recorded = entry.job.version.removeprefix("v")
+                matches_version = recorded == release or recorded.partition("+")[0] == release
+                matches = matches_version and entry.job.pipeline == pipeline.strip()
+            if matches:
                 entries.append(entry)
-        deleted: list[str] = []
+        deleted: dict[str, JobCapsule] = {}
         if not entries:
             return deleted
 
@@ -634,7 +663,7 @@ class PipelineQueue:
                     input=b"y\n",
                     check=True,
                 )
-            deleted.append(capsule_path)
+            deleted[capsule_path] = entry
 
         return deleted
 
