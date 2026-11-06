@@ -1,5 +1,4 @@
 import contextlib
-import gzip
 import hashlib
 import importlib.metadata
 import io
@@ -10,7 +9,6 @@ import pathlib
 import re
 import subprocess
 import tempfile
-import urllib.request
 
 import beartype
 import dandi
@@ -29,11 +27,7 @@ from .._base_directory import (
     _work_directory,
 )
 from .._codebase_commit_hash import _codebase_commit_hash
-from ..dandiset._globals import (
-    _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL,
-    _JOB_CAPSULES_DANDISET_ID,
-    _dandiset_derivatives_relative_dir,
-)
+from ..dandiset._globals import _JOB_CAPSULES_DANDISET_ID, _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
     _capsule_names_from_asset_paths,
@@ -41,6 +35,7 @@ from ..dandiset._job_id import (
     _find_existing_capsule_path,
     _next_available_job_id,
 )
+from ..dandiset._load_content_id_to_usage_dandiset_path import _load_content_id_to_usage_dandiset_path
 from ..schemas import validate_registry
 
 _log = logging.getLogger(__name__)
@@ -236,15 +231,7 @@ def prepare_aind_ephys_job(
         raise ValueError(message)
     config_id = actual_config_md5[0:7]
 
-    with urllib.request.urlopen(url=_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL) as response:
-        decoded = gzip.decompress(response.read()).decode()
-    content_id_to_usage_dandiset_path = {
-        content_id_key: dandiset_path
-        for line in decoded.splitlines()
-        if line.strip()
-        for content_id_key, dandiset_path in json.loads(line).items()
-    }
-
+    content_id_to_usage_dandiset_path = _load_content_id_to_usage_dandiset_path()
     if content_id not in content_id_to_usage_dandiset_path:
         message = (
             f"Content ID {content_id} not found in content ID to usage Dandiset path mapping. "

@@ -6,7 +6,6 @@ logic that resolves the ``sub-`` label used in the output directory hierarchy.
 """
 
 import datetime
-import gzip
 import importlib.metadata
 import json
 import os
@@ -28,20 +27,9 @@ from dandi_compute_code.aind_ephys_pipeline._prepare_job import prepare_aind_eph
 _FAKE_COMMIT_HASH = "a" * 40
 
 
-def _make_urlopen_mock(mapping: dict) -> mock.MagicMock:
-    """Build an ``urllib.request.urlopen`` mock returning the mapping as gzipped JSON Lines.
-
-    Each content ID becomes its own single-entry ``{content_id: {...}}`` line,
-    matching the remote content-id-to-usage-dandiset-path cache format.
-    """
-    payload = gzip.compress(
-        "\n".join(json.dumps({content_id: value}) for content_id, value in mapping.items()).encode()
-    )
-    response = mock.MagicMock()
-    response.read.return_value = payload
-    response.__enter__ = lambda s: s
-    response.__exit__ = mock.MagicMock(return_value=False)
-    return mock.MagicMock(return_value=response)
+# The mapping is loaded once per process and cached, so tests patch the loader where the
+# module under test binds it, rather than the download behind it.
+_LOAD_MAPPING = "dandi_compute_code.aind_ephys_pipeline._prepare_job._load_content_id_to_usage_dandiset_path"
 
 
 # The files `git show {version}:{path}` finds in the fake pipeline repository.
@@ -115,7 +103,7 @@ def test_prepare_aind_ephys_job_extracts_sub_entity_from_path(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -156,7 +144,7 @@ def test_prepare_aind_ephys_job_test_content_id_uses_sub_test(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -188,7 +176,7 @@ def test_prepare_aind_ephys_job_raises_on_missing_sub_entity(tmp_path: pathlib.P
     mapping = {content_id: {"000001": no_sub_path}}
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         pytest.raises(ValueError, match="Could not extract 'sub' BIDS entity"),
     ):
         prepare_aind_ephys_job(
@@ -216,7 +204,7 @@ def test_prepare_aind_ephys_job_uses_simplified_job_id_format(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -256,7 +244,7 @@ def test_prepare_aind_ephys_job_writes_job_provenance_in_dataset_description(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -311,7 +299,7 @@ def test_prepare_aind_ephys_job_skips_when_a_capsule_already_exists(
             [mock.MagicMock(path=path) for path in existing_asset_paths]
         )
         with (
-            mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+            mock.patch(_LOAD_MAPPING, return_value=mapping),
             mock.patch("subprocess.check_output", side_effect=_git_check_output),
             mock.patch(
                 "dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient"
@@ -357,7 +345,7 @@ def test_prepare_aind_ephys_job_writes_codebase_version_in_dataset_description(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -403,7 +391,7 @@ def test_prepare_aind_ephys_job_accepts_matching_minor_version_params(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -440,7 +428,7 @@ def test_prepare_aind_ephys_job_accepts_newer_pipeline_minor_version(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.validate_aind_ephys_parameters"),
         mock.patch("subprocess.check_output", side_effect=_git_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
@@ -467,6 +455,7 @@ def test_newer_params_rejected_early(tmp_path: pathlib.Path) -> None:
     """Newer parameters versions are rejected before any content lookup work."""
     with (
         mock.patch("urllib.request.urlopen") as mock_urlopen,
+        mock.patch(_LOAD_MAPPING) as mock_load_mapping,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         pytest.raises(ValueError, match="targets pipeline version .* newer than requested pipeline version"),
     ):
@@ -481,6 +470,7 @@ def test_newer_params_rejected_early(tmp_path: pathlib.Path) -> None:
 
     mock_client.assert_not_called()
     mock_urlopen.assert_not_called()
+    mock_load_mapping.assert_not_called()
 
 
 @pytest.mark.ai_generated
@@ -488,6 +478,7 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
     """Different-major parameters versions are rejected before any content lookup work."""
     with (
         mock.patch("urllib.request.urlopen") as mock_urlopen,
+        mock.patch(_LOAD_MAPPING) as mock_load_mapping,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         pytest.raises(ValueError, match="different major series than requested pipeline version"),
     ):
@@ -502,6 +493,7 @@ def test_different_major_params_rejected_early(tmp_path: pathlib.Path) -> None:
 
     mock_client.assert_not_called()
     mock_urlopen.assert_not_called()
+    mock_load_mapping.assert_not_called()
 
 
 @pytest.mark.ai_generated
@@ -547,7 +539,7 @@ def _prepare_test_content_id_job(*, tmp_path: pathlib.Path, base_directory: path
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -631,7 +623,7 @@ def test_prepare_aind_ephys_job_copies_the_pinned_step_versions_at_the_release(
         return _git_check_output(cmd, pipeline_files=pipeline_files, **kwargs)
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_check_output) as mock_check_output,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download"),
@@ -672,7 +664,7 @@ def test_prepare_aind_ephys_job_without_pinned_step_versions_fails_before_any_ca
         return _git_check_output(cmd, pipeline_files={}, **kwargs)
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("subprocess.check_output", side_effect=_check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.download.download") as mock_download,
@@ -706,7 +698,7 @@ def _prepare_job_at_release(
     mock_dandiset.get_assets_with_path_prefix.return_value = iter([])
 
     with (
-        mock.patch("urllib.request.urlopen", _make_urlopen_mock(mapping)),
+        mock.patch(_LOAD_MAPPING, return_value=mapping),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.validate_aind_ephys_parameters"),
         mock.patch("subprocess.check_output", side_effect=check_output),
         mock.patch("dandi_compute_code.aind_ephys_pipeline._prepare_job.dandi.dandiapi.DandiAPIClient") as mock_client,
