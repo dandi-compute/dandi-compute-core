@@ -2,6 +2,7 @@ import logging
 import os
 import pathlib
 
+import beartype
 import click
 
 from ._clean_work_directory import clean_work_directory
@@ -11,7 +12,7 @@ from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
-from ..queue import TEST_QUEUE_CONTENT_ID, PipelineQueue, clean_dispatch_directories
+from ..queue import TEST_QUEUE_CONTENT_ID, JobCapsule, PipelineQueue, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
 
@@ -867,17 +868,26 @@ def _archive_add_command(
 # dandicompute archive delete [OPTIONS]
 @_archive_group.command(name="delete")
 @click.option(
+    "--job",
+    "job_id",
+    help="Delete the one capsule with this job ID (e.g. 'job-260916a1b2c3'). Mutually exclusive with --version.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
     "--version",
     "version",
     help="Delete every capsule recorded with this pipeline version (e.g. 'v1.4.0'). "
-    "A version without build metadata also selects its builds, such as 'v1.4.0+b268fd2'.",
-    required=True,
+    "A version without build metadata also selects its builds, such as 'v1.4.0+b268fd2'. Requires --pipeline.",
+    required=False,
     type=str,
+    default=None,
 )
 @click.option(
     "--pipeline",
     "pipeline",
-    help="Delete only the capsules of this pipeline (e.g. 'lfp' or 'aind+ephys').",
+    help="The pipeline whose capsules of --version are deleted (e.g. 'lfp' or 'aind+ephys'). Required with --version.",
     required=False,
     type=str,
     default=None,
@@ -885,7 +895,7 @@ def _archive_add_command(
 @click.option(
     "--preview",
     "dry_run",
-    help="List the capsules that would be deleted without deleting them.",
+    help="List the capsules that would be deleted, with the provenance of each, without deleting them.",
     required=False,
     is_flag=True,
     default=False,
@@ -898,12 +908,24 @@ def _archive_add_command(
     default=False,
 )
 def _archive_delete_command(
-    version: str,
+    job_id: str | None,
+    version: str | None,
     pipeline: str | None,
     dry_run: bool = False,
     silent: bool = False,
 ) -> None:
-    """Delete every capsule of a pipeline version from the failed runs archive."""
+    """
+    Delete capsules from the failed runs archive (001873).
+
+    Select one capsule with --job, or every capsule of one pipeline version with --version and
+    --pipeline together. --preview lists the selection with each capsule's provenance instead.
+    """
+    selects_one_job = job_id is not None and version is None and pipeline is None
+    selects_a_pipeline_version = job_id is None and version is not None and pipeline is not None
+    if not (selects_one_job or selects_a_pipeline_version):
+        message = "Provide either --job JOB_ID, or both --version VERSION and --pipeline NAME."
+        raise click.UsageError(message)
+
     _configure_logging(silent=silent)
     if not dry_run:
         _require_dandi_api_key()
@@ -911,6 +933,7 @@ def _archive_delete_command(
     state = PipelineQueue.from_dandi(dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID)
     try:
         deleted = state.delete_capsules(
+            job_id=job_id,
             version=version,
             pipeline=pipeline,
             dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
@@ -921,19 +944,40 @@ def _archive_delete_command(
 
     if silent:
         return
-    description = " ".join(part for part in (pipeline, version) if part is not None)
+    description = job_id if job_id is not None else f"{pipeline} {version}"
     if not deleted:
         _styled_echo(
             text=f"\nNo {description} job capsules in Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}.", color="yellow"
         )
         return
 
+    color = "yellow" if dry_run else "green"
     verb = "Would delete" if dry_run else "Deleted"
     _styled_echo(
         text=f"\n{verb} {len(deleted)} {description} job capsule(s) from Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}:",
-        color="yellow" if dry_run else "green",
+        color=color,
     )
-    for capsule_path in deleted:
-        _styled_echo(text=f"  {capsule_path}", color="yellow" if dry_run else "green")
+    for capsule_path, entry in deleted.items():
+        _styled_echo(text=f"  {capsule_path}", color=color)
+        if dry_run:
+            for line in _provenance_lines(entry):
+                _styled_echo(text=f"    {line}", color=color)
     if not dry_run:
         _styled_echo(text="\nRun `dandicompute jobs refresh` to update the archive's jobs.tsv.", color="yellow")
+
+
+@beartype.beartype
+def _provenance_lines(entry: JobCapsule, /) -> list[str]:
+    """Describe where a job capsule came from and how it was run, one ``field: value`` per line."""
+    job = entry.job
+    lines = [
+        f"job_id: {job.job_id}",
+        f"status: {entry.status}",
+        f"asset: {job.dandiset_id}/{job.within_dandiset_path}",
+        f"pipeline: {job.pipeline}",
+        f"version: {job.version}",
+        f"params: {job.params}",
+        f"config: {job.config}",
+        f"codebase: {job.codebase}",
+    ]
+    return lines

@@ -33,7 +33,7 @@ from dandi_compute_code._cli import _dandicompute_group
         ),
         (
             ["archive", "delete", "--help"],
-            "Delete every capsule of a pipeline version from the failed runs archive.",
+            "Delete capsules from the failed runs archive (001873).",
         ),
     ],
 )

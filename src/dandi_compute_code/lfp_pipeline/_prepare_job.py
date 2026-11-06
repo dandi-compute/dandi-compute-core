@@ -1,5 +1,4 @@
 import contextlib
-import gzip
 import hashlib
 import importlib.metadata
 import io
@@ -8,7 +7,6 @@ import logging
 import os
 import pathlib
 import tempfile
-import urllib.request
 
 import beartype
 import dandi
@@ -21,7 +19,7 @@ from ._handle_template import generate_lfp_submission_script
 from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
-from ..dandiset._globals import _CONTENT_ID_TO_USAGE_DANDISET_PATH_URL, _dandiset_derivatives_relative_dir
+from ..dandiset._globals import _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
     _capsule_names_from_asset_paths,
@@ -29,6 +27,7 @@ from ..dandiset._job_id import (
     _find_existing_capsule_path,
     _next_available_job_id,
 )
+from ..dandiset._load_content_id_to_usage_dandiset_path import _load_content_id_to_usage_dandiset_path
 
 _log = logging.getLogger(__name__)
 
@@ -175,14 +174,7 @@ def prepare_lfp_job(
         metadata = asset.get_raw_metadata()
         content_id = metadata["contentUrl"][1].split("/")[-1]
 
-    with urllib.request.urlopen(url=_CONTENT_ID_TO_USAGE_DANDISET_PATH_URL) as response:
-        decoded = gzip.decompress(response.read()).decode()
-    content_id_to_usage_dandiset_path = {
-        content_id_key: usage_dandiset_path
-        for line in decoded.splitlines()
-        if line.strip()
-        for content_id_key, usage_dandiset_path in json.loads(line).items()
-    }
+    content_id_to_usage_dandiset_path = _load_content_id_to_usage_dandiset_path()
     if content_id not in content_id_to_usage_dandiset_path:
         message = (
             f"Content ID {content_id} not found in content ID to usage Dandiset path mapping. "
