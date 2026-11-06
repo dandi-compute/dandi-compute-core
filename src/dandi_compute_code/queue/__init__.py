@@ -1,4 +1,5 @@
 from ._aind_ephys_pipeline_queue import AindEphysPipelineQueue
+from ._capsule_params import read_capsule_params
 from ._capsule_resources import CapsuleResources, read_capsule_resources
 from ._dispatch import DispatchedArray, DispatchResult, clean_dispatch_directories, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
@@ -21,5 +22,6 @@ __all__ = [
     "PipelineQueue",
     "clean_dispatch_directories",
     "dispatch_pipeline_jobs",
+    "read_capsule_params",
     "read_capsule_resources",
 ]

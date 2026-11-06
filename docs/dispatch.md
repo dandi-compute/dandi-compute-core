@@ -1,6 +1,6 @@
 # Array dispatch
 
-Every pipeline is run on the cluster by exactly one SLURM array job, its dispatcher. This note describes how that works, why it is built the way it is, and how to operate it.
+Every pipeline is run on the cluster by one SLURM array job, its dispatcher, plus one more for each parameter set the pipeline dispatches apart from the rest. This note describes how that works, why it is built the way it is, and how to operate it.
 
 ## How a dispatch works
 
@@ -32,9 +32,19 @@ Because the throttle caps *simultaneously running* tasks and not submitted ones,
 
 A pipeline whose dispatcher is still on the cluster is skipped. That array already holds the pipeline's pending tasks, so a second one would only duplicate them.
 
-Liveness is decided by job name. Each dispatcher carries `dandicompute-dispatch-{pipeline}`, with characters a pipeline name may hold but a job name should not folded to hyphens, so `aind+ephys` becomes `dandicompute-dispatch-aind-ephys`. A `squeue --me --name <job name>` returning anything in an active state means the dispatcher still owns its array.
+Liveness is decided by job name. Each dispatcher carries `dandicompute-dispatch-{pipeline}`, with characters a pipeline name may hold but a job name should not folded to hyphens, so `aind+ephys` becomes `dandicompute-dispatch-aind-ephys`. A dispatcher dedicated to one parameter set appends that set's key, as in `dandicompute-dispatch-aind-ephys-lupin`. A `squeue --me --name <job name>` returning anything in an active state means the dispatcher still owns its array.
 
 Capsules formed after that array went out wait for it to be exhausted and go out with the next dispatch. Repeated invocations from a crontab are therefore safe: they add nothing while an array is working.
+
+## Dispatching a parameter set apart
+
+The AIND ephys pipeline forms a capsule per spike sorter, each sorter being a registered parameter set. Kilosort 4 and DARTsort need a GPU node for their sorting step, and the GPU partition is what holds the pipeline's concurrency down to two. Lupin sorts on CPUs, so it has no reason to wait behind the GPU runs or to count against their limit.
+
+A parameter set named in the pipeline's `params_dispatch` block therefore gets a dispatcher of its own. It has its own job name, its own array and its own limits, so its capsules go out while the pipeline's array is still working, and SLURM throttles the two independently. Parameter sets not named there share the pipeline's own dispatcher.
+
+Which dispatcher a pending capsule belongs to is decided by the parameters it was formed with. A capsule's path does not spell those out, so the dispatcher reads the params ID back out of each pending capsule's `dataset_description.json` provenance, the same value `jobs.tsv` reports, and matches it against the ID the dedicated parameter set's key resolves to. The match is by the parameters file, not by the key's name, so a capsule formed under an alias of the same file is dispatched with it. A capsule whose provenance cannot be read goes to the pipeline's own dispatcher.
+
+Nothing is read for a pipeline with a single dispatcher, since nothing depends on it.
 
 ## Where an array's resources come from
 
@@ -81,6 +91,12 @@ Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeli
 "dispatch": {
     "max_concurrent": 2,
     "max_array_tasks": 500
+},
+"params_dispatch": {
+    "lupin": {
+        "max_concurrent": 10,
+        "max_array_tasks": 500
+    }
 }
 ```
 
@@ -88,7 +104,9 @@ Each pipeline's dispatcher is configured in `src/dandi_compute_code/queue/pipeli
 
 `max_array_tasks` caps how many capsules one array may hold, with the rest staying pending for the next dispatch. Set it to `null` for no upper bound, which places every pending capsule in one array and relies on the cluster's own `MaxArraySize` being large enough. An omitted key is not the same as `null`: it takes the default of 500.
 
-Those two limits are the whole of what is configurable, per the section above. A pipeline that declares no `dispatch` block still dispatches, on the built-in defaults.
+`params_dispatch` names the parameter sets the pipeline dispatches apart, each with the same two limits for its own dispatcher. A limit an entry leaves out is taken from the pipeline's `dispatch` block. The keys have to be among the pipeline's `params`. It is validated by the `ParamsDispatch` class.
+
+Those limits are the whole of what is configurable, per the section above. A pipeline that declares no `dispatch` block still dispatches, on the built-in defaults.
 
 ## Running a dispatch
 
@@ -102,9 +120,13 @@ To skip the dispatch entirely when there is no queued work, gate it on `jobs pen
 dandicompute jobs pending --silent && dandicompute jobs dispatch
 ```
 
-The output reports what each pipeline dispatched, with one line per array naming that group's size, its requests and its share of the limit:
+The output reports what each dispatcher dispatched, with one line per array naming that group's size, its requests and its share of the limit. A dispatcher dedicated to one parameter set reports as `pipeline/params`:
 
 ```
+aind+ephys/lupin: dispatched 20 capsules as array job 899.
+  array 899: 20 capsules requesting 1GB / 1 CPU / mit_preemptable / 48:00:00, at most 10 at a time
+  logs, manifests and scripts: processing/derivatives/logs/dandicompute-dispatch-aind-ephys-lupin
+
 aind+ephys: dispatched 15 capsules as 2 array jobs, one per distinct set of requested resources.
   array 900: 12 capsules requesting 1GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
   array 901: 3 capsules requesting 16GB / 1 CPU / mit_preemptable / 48:00:00, at most 2 at a time
@@ -122,13 +144,13 @@ To dispatch a single pipeline, optionally overriding its configured limit for th
 dandicompute jobs dispatch --pipeline lfp --max 4
 ```
 
-The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once.
+The concurrency limit is a per-pipeline setting, so `--max` requires `--pipeline` and overrides that one pipeline's limit. It is rejected on its own rather than applied to every pipeline at once. For a pipeline with dedicated dispatchers, it overrides each of them.
 
 `--jitter` applies a random delay before processing, which spreads concurrent invocations so they do not read the cluster state at the same moment. `--test` leaves each array task's working tree on disk for debugging.
 
 ## The log directory
 
-Dispatch works inside the `processing/` directory of the base directory given by `--base` (see [Infrastructure](infrastructure.md) for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
+Dispatch works inside the `processing/` directory of the base directory given by `--base` (see [Infrastructure](infrastructure.md) for its layout). Every dispatcher keeps its record in one central place under it, `derivatives/logs/{job name}/`. So `aind+ephys` records into `derivatives/logs/dandicompute-dispatch-aind-ephys/`, and its Lupin dispatcher into `derivatives/logs/dandicompute-dispatch-aind-ephys-lupin/`. This mirrors the Dandiset layout, where `derivatives/` already holds dispatch-level records such as `jobs.tsv`.
 
 Each dispatch names its files after the moment it was formed, `{YYYYMMDD-HHMMSS}`. For resource group `n` it writes:
 
@@ -144,7 +166,7 @@ A capsule's own SLURM log does not live here. It goes to the capsule's `logs/` d
 
 ## The dispatch directory
 
-Each dispatch also creates a working directory under `processing/`, named `dandicompute-dispatch-{pipeline}-{YYYYMMDD-HHMMSS}` with the same timestamp as its records. It holds only `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into. That tree is removed when the task finishes unless `--test` is passed.
+Each dispatch also creates a working directory under `processing/`, named `{job name}-{YYYYMMDD-HHMMSS}` with the same timestamp as its records. It holds only `task-{array job id}-{task id}/`, the working tree a task downloads its capsule into. That tree is removed when the task finishes unless `--test` is passed.
 
 It has to stay reachable from the compute nodes for as long as the arrays live, so nothing in it is cleaned up at submission time.
 
@@ -156,7 +178,7 @@ Finished dispatch directories are swept up by `clean`:
 dandicompute clean --dispatch
 ```
 
-A dispatch directory is removed only once both guards pass: its pipeline has no dispatcher left on the cluster, and it is at least `--age` hours old (24 by default). The age floor covers the window between submitting an array and SLURM reporting it.
+A dispatch directory is removed only once both guards pass: the dispatcher that formed it is no longer on the cluster, and it is at least `--age` hours old (24 by default). The age floor covers the window between submitting an array and SLURM reporting it.
 
 Both matter, since removing the directory under a live array would pull the working tree out from under its running tasks. Anything in the processing directory that is not a dispatch directory is left alone. That includes the central `derivatives/logs/` directory, so the manifests, scripts and array output of a cleaned dispatch are kept.
 

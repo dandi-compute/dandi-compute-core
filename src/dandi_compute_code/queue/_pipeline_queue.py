@@ -35,8 +35,9 @@ from typing import ClassVar, Literal
 
 import beartype
 
+from ._capsule_params import read_capsule_params
 from ._capsule_resources import read_capsule_resources
-from ._dispatch import DispatchResult, dispatch_pipeline_jobs
+from ._dispatch import DispatchResult, _partition_by_params, dispatch_pipeline_jobs
 from ._dispatch_config import DispatchConfig
 from ._fetch_qualifying_lfp_content_ids import _fetch_qualifying_lfp_content_ids
 from ._globals import _CONFIGS_REGISTRIES, _PARAMS_REGISTRIES
@@ -740,14 +741,16 @@ class PipelineQueue:
         test: bool = False,
     ) -> dict[str, DispatchResult]:
         """
-        Hand every pending job capsule to its pipeline's SLURM array dispatcher.
+        Hand every pending job capsule to its SLURM array dispatcher.
 
-        Each configured pipeline is run on the cluster by exactly one array job, which is the
-        only thing that triggers actual capsule runs. How many of its tasks run at once is the
+        Each configured pipeline is run on the cluster by one array job, which is the only
+        thing that triggers actual capsule runs. How many of its tasks run at once is the
         pipeline's ``dispatch.max_concurrent`` setting in the packaged pipeline configuration,
-        applied by SLURM itself as the array's throttle. A pipeline whose dispatcher is still
-        working through its array is skipped, so repeated invocations from a crontab never
-        stack a second array on top of a live one.
+        applied by SLURM itself as the array's throttle. A parameter set named in the
+        pipeline's ``params_dispatch`` block has an array job of its own under its own
+        limits, so a CPU spike sorter can run many capsules at once while the GPU sorters
+        stay at theirs. A dispatcher that is still working through its array is skipped, so
+        repeated invocations from a crontab never stack a second array on top of a live one.
 
         The queue state is always fetched fresh. Pending capsules are read live from the DANDI
         assets metadata (see :meth:`pending_code_dirs`), so there is no local queue directory.
@@ -763,7 +766,8 @@ class PipelineQueue:
         only_pipeline : str, optional
             Dispatch only this pipeline instead of every configured one.
         max_concurrent : int, optional
-            Overrides every dispatched pipeline's configured concurrency limit.
+            Overrides the configured concurrency limit of every dispatcher of
+            every dispatched pipeline.
         jitter_seconds : float, optional
             Maximum random delay (seconds) before processing. ``0`` disables it.
             Spreads concurrent invocations out so they do not read the cluster
@@ -777,7 +781,8 @@ class PipelineQueue:
         Returns
         -------
         dict of str to DispatchResult
-            The dispatch outcome per pipeline, keyed by pipeline name.
+            The dispatch outcome per dispatcher, keyed by pipeline name, or by
+            ``pipeline/params`` for a dispatcher dedicated to one parameter set.
 
         Raises
         ------
@@ -812,21 +817,61 @@ class PipelineQueue:
         for pipeline_name in pipelines:
             if only_pipeline is not None and pipeline_name != only_pipeline:
                 continue
-            dispatch_config = DispatchConfig.from_pipeline_config(
+            dispatch_configs = DispatchConfig.all_from_pipeline_config(
                 pipeline=pipeline_name,
                 pipeline_config=pipeline_config,
                 max_concurrent=max_concurrent,
             )
-            results[pipeline_name] = dispatch_pipeline_jobs(
+            code_dir_paths_by_params_key = cls._partition_pending_by_dispatcher(
                 pipeline=pipeline_name,
                 code_dir_paths=code_dir_paths,
-                base_directory=base_directory,
-                dispatch_config=dispatch_config,
-                dandiset_id=dandiset_id,
-                capsule_resources=capsule_resources,
-                test=test,
+                dispatch_configs=dispatch_configs,
             )
+            for dispatch_config in dispatch_configs:
+                results[dispatch_config.label] = dispatch_pipeline_jobs(
+                    pipeline=pipeline_name,
+                    code_dir_paths=code_dir_paths_by_params_key[dispatch_config.params_key],
+                    base_directory=base_directory,
+                    dispatch_config=dispatch_config,
+                    dandiset_id=dandiset_id,
+                    capsule_resources=capsule_resources,
+                    test=test,
+                )
         return results
+
+    @classmethod
+    def _partition_pending_by_dispatcher(
+        cls,
+        *,
+        pipeline: str,
+        code_dir_paths: list[str],
+        dispatch_configs: list[DispatchConfig],
+    ) -> dict[str | None, list[str]]:
+        """
+        Hand *pipeline*'s pending capsules out to its dispatchers, keyed by their ``params_key``.
+
+        A pipeline with a single dispatcher gets every capsule under ``None`` without any
+        capsule being read. Otherwise each capsule's parameters ID is read back from its
+        provenance and matched against the IDs the dedicated parameter sets resolve to, so a
+        capsule is matched by the file it was formed with rather than by the key's name.
+        """
+        pipeline_code_dir_paths = [
+            code_dir_path for code_dir_path in code_dir_paths if f"/pipeline-{pipeline}/" in code_dir_path
+        ]
+        dedicated_params_keys = [config.params_key for config in dispatch_configs if config.params_key is not None]
+        if not dedicated_params_keys:
+            return {None: pipeline_code_dir_paths}
+
+        params_ids_by_key = {
+            params_key: cls.resolve_params_key_to_id(pipeline=pipeline, params_key=params_key)
+            for params_key in dedicated_params_keys
+        }
+        partition = _partition_by_params(
+            code_dir_paths=pipeline_code_dir_paths,
+            capsule_params=read_capsule_params(pipeline_code_dir_paths),
+            params_ids_by_key=params_ids_by_key,
+        )
+        return partition
 
     def existing_capsule_keys(self) -> set[tuple[str, str, str, str]]:
         """
@@ -883,8 +928,60 @@ class PipelineQueue:
         )
         return ordered_content_ids
 
+    @staticmethod
+    def _params_keys_to_create(
+        *,
+        pipelines: dict,
+        only_pipeline: str | None,
+        only_params_key: str | None,
+    ) -> dict[str, list[str]]:
+        """
+        The parameter sets creation forms capsules for, per selected pipeline.
+
+        Raises
+        ------
+        ValueError
+            If *only_pipeline* is not configured, or if *only_params_key* is not
+            among the parameter sets of any selected pipeline.
+        """
+        if only_pipeline is not None and only_pipeline not in pipelines:
+            configured = list(pipelines.keys())
+            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
+            raise ValueError(message)
+
+        params_keys_by_pipeline = {
+            pipeline_name: [
+                params_key
+                for params_key in pipeline_data.get("params", [])
+                if only_params_key is None or params_key == only_params_key
+            ]
+            for pipeline_name, pipeline_data in pipelines.items()
+            if only_pipeline is None or pipeline_name == only_pipeline
+        }
+        if only_params_key is not None and not any(params_keys_by_pipeline.values()):
+            configured = sorted(
+                {
+                    params_key
+                    for pipeline_name in params_keys_by_pipeline
+                    for params_key in pipelines[pipeline_name].get("params", [])
+                }
+            )
+            message = (
+                f"Parameter set '{only_params_key}' is not configured for "
+                f"{'pipeline ' + repr(only_pipeline) if only_pipeline is not None else 'any pipeline'}. "
+                f"Configured parameter sets are: {configured}."
+            )
+            raise ValueError(message)
+        return params_keys_by_pipeline
+
     @classmethod
-    def creatable_job_labels(cls, *, only_pipeline: str | None = None, config_key: str = "default") -> list[str]:
+    def creatable_job_labels(
+        cls,
+        *,
+        only_pipeline: str | None = None,
+        only_params_key: str | None = None,
+        config_key: str = "default",
+    ) -> list[str]:
         """
         Labels of the job capsules :meth:`create_job_capsules` would form, without forming any.
 
@@ -899,36 +996,40 @@ class PipelineQueue:
         only_pipeline : str, optional
             Check only this pipeline instead of every pipeline in the configuration. Raises if
             the name is not configured.
+        only_params_key : str, optional
+            Check only this parameter set instead of every one the pipeline forms
+            capsules for. Raises if no selected pipeline configures it.
         config_key : str, optional
             Key for a registered job configuration.
 
         Returns
         -------
         list[str]
-            One ``pipeline/params/content_id`` label per capsule creation would form. Empty when
-            there is nothing to create.
+            One ``pipeline/params/content_id`` label per capsule creation would form, in the
+            order creation would form them. Empty when there is nothing to create.
         """
         pipelines = _load_pipeline_config().get("pipelines", {})
-        if only_pipeline is not None and only_pipeline not in pipelines:
-            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {list(pipelines)}."
-            raise ValueError(message)
+        params_keys_by_pipeline = cls._params_keys_to_create(
+            pipelines=pipelines, only_pipeline=only_pipeline, only_params_key=only_params_key
+        )
 
         existing_capsule_keys = cls.from_dandi().existing_capsule_keys()
         mapped_content_ids = _load_content_id_to_usage_dandiset_path().keys()
 
         labels = []
-        for pipeline_name, pipeline_data in pipelines.items():
-            if only_pipeline is not None and pipeline_name != only_pipeline:
-                continue
+        for pipeline_name, params_keys in params_keys_by_pipeline.items():
             config_id = cls.resolve_config_key_to_id(pipeline=pipeline_name, config_key=config_key)
-            pipeline_content_ids = cls._qualifying_content_ids(pipeline_name)
-            for params_key in pipeline_data.get("params", []):
-                params_id = cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
+            params_ids = {
+                params_key: cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
+                for params_key in params_keys
+            }
+            for content_id in cls._qualifying_content_ids(pipeline_name):
+                if content_id not in mapped_content_ids:
+                    continue
                 labels.extend(
                     f"{pipeline_name}/{params_key}/{content_id}"
-                    for content_id in pipeline_content_ids
+                    for params_key, params_id in params_ids.items()
                     if (pipeline_name, params_id, config_id, content_id) not in existing_capsule_keys
-                    and content_id in mapped_content_ids
                 )
         _log.info("Found %d job capsules to create", len(labels))
         return labels
@@ -938,6 +1039,7 @@ class PipelineQueue:
         cls,
         *,
         only_pipeline: str | None = None,
+        only_params_key: str | None = None,
         config_key: str = "default",
         content_ids: list[str] | None = None,
         limit: int | None = None,
@@ -954,6 +1056,11 @@ class PipelineQueue:
         which is why creation lives on this class. New capsules are formed against the latest
         versions available locally.
 
+        Assets are taken one at a time, and each is given a capsule for every parameter set
+        of the pipeline, all with the one config, before the next asset is started. With
+        several spike sorters configured as parameter sets, a limit therefore covers the
+        same assets with every sorter rather than spending itself on the first sorter alone.
+
         ``force_latest_versions`` breaks that rule on purpose. It forms a fresh capsule against
         the latest versions for every qualifying asset, whether or not one already exists, which
         is how a new pipeline release gets rolled out over assets that have already been
@@ -964,6 +1071,10 @@ class PipelineQueue:
         only_pipeline : str, optional
             Form capsules only for this pipeline instead of every pipeline in
             the configuration. Raises if the name is not configured.
+        only_params_key : str, optional
+            Form capsules only for this parameter set instead of every one the
+            pipeline forms capsules for. Raises if no selected pipeline
+            configures it.
         config_key : str, optional
             Key for a registered job configuration.
         content_ids : list of str, optional
@@ -984,17 +1095,14 @@ class PipelineQueue:
         """
         pipeline_config = _load_pipeline_config()
         pipelines = pipeline_config.get("pipelines", {})
-        if only_pipeline is not None and only_pipeline not in pipelines:
-            configured = list(pipelines.keys())
-            message = f"Pipeline '{only_pipeline}' is not configured. Configured pipelines are: {configured}."
-            raise ValueError(message)
+        params_keys_by_pipeline = cls._params_keys_to_create(
+            pipelines=pipelines, only_pipeline=only_pipeline, only_params_key=only_params_key
+        )
 
         existing_capsule_keys = set() if force_latest_versions else cls.from_dandi().existing_capsule_keys()
 
         created_count = 0
-        for pipeline_name, pipeline_data in pipelines.items():
-            if only_pipeline is not None and pipeline_name != only_pipeline:
-                continue
+        for pipeline_name, params_keys in params_keys_by_pipeline.items():
             if limit is not None and created_count >= limit:
                 break
 
@@ -1003,11 +1111,13 @@ class PipelineQueue:
             pipeline_content_ids = (
                 content_ids if content_ids is not None else cls._qualifying_content_ids(pipeline_name)
             )
+            params_ids = {
+                params_key: cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
+                for params_key in params_keys
+            }
 
-            for params_key in pipeline_data.get("params", []):
-                params_id = cls.resolve_params_key_to_id(pipeline=pipeline_name, params_key=params_key)
-
-                for content_id in pipeline_content_ids:
+            for content_id in pipeline_content_ids:
+                for params_key, params_id in params_ids.items():
                     if limit is not None and created_count >= limit:
                         _log.info(f"Reached the creation limit of {limit} job capsules.")
                         return created_count

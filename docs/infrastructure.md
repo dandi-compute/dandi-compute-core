@@ -16,7 +16,7 @@ flowchart TB
             NF["Nextflow process jobs<br/>up to 16 CPU / 128 GB"]
         end
         subgraph gpu["mit_normal_gpu"]
-            KS["Kilosort jobs<br/>1 GPU / 16 CPU / 64 GB"]
+            KS["Kilosort and DARTsort jobs<br/>1 GPU / 16 CPU / 64 GB"]
         end
         subgraph pre["mit_preemptable"]
             AARR["aind+ephys array tasks<br/>1 CPU / 1 GB / 48 h"]
@@ -101,12 +101,14 @@ Each capsule has its own Nextflow work directory, `work/job-{id}/`. From v1.5.0 
 |---|---|---|---|
 | `job_dispatch` | 4 | 32 GB | `mit_normal` |
 | `preprocessing` | 16 | 256 GB | `mit_normal` |
-| `spikesort_kilosort4`, `spikesort_kilosort25` | 16 + 1 GPU | 64 GB | `mit_normal_gpu` |
-| `spikesort_spykingcircus2` | 16 | 64 GB | `mit_normal` |
+| `spikesort_kilosort4`, `spikesort_kilosort25`, `spikesort_dartsort` | 16 + 1 GPU | 64 GB | `mit_normal_gpu` |
+| `spikesort_spykingcircus2`, `spikesort_lupin` | 16 | 64 GB | `mit_normal` |
 | `postprocessing` | 16 | 64 GB | `mit_normal` |
 | `nwb_ecephys` | 4 | 256 GB | `mit_normal` |
 
-These figures come from `configs/name-mit+engaging_revision-6.config`, which the `default` config key points to. It loads the `nf-schema` plugin, sets `PYTHONNOUSERSITE` so the containers ignore packages in the user's home, and otherwise keeps the resources of revision 5. That revision runs `nwb_ecephys` on 4 CPUs instead of 16. The capsule starts one worker per CPU, and each worker holds about three minutes of padded data while it filters the LFP, because the 0.1 Hz highpass pads every 60 second chunk with 50 seconds on each side. Memory therefore grows with the worker count, not the recording length. Fewer workers keep this step well inside its 256 GB, which the previous revision raised from 64 GB. Its 256 GB for `preprocessing` doubles the revision before that and is hopefully temporary. Motion estimation with DREDge can run in an online batching mode that bounds its memory use on long recordings. Pipeline v1.4.0 supports that mode, and the `default` parameters from v1.4.0 turn it on with one hour chunks. Once runs confirm the lower memory use, preprocessing should go back to a smaller memory request. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
+These figures come from `configs/name-mit+engaging_revision-7.config`, which the `default` config key points to. It adds the two spike sorters pipeline v1.5.0 introduced, giving `spikesort_lupin` the CPU allocation of Spyking Circus 2 and `spikesort_dartsort` the GPU allocation of Kilosort, and otherwise keeps revision 6. That revision loads the `nf-schema` plugin, sets `PYTHONNOUSERSITE` so the containers ignore packages in the user's home, and otherwise keeps the resources of revision 5. That revision runs `nwb_ecephys` on 4 CPUs instead of 16. The capsule starts one worker per CPU, and each worker holds about three minutes of padded data while it filters the LFP, because the 0.1 Hz highpass pads every 60 second chunk with 50 seconds on each side. Memory therefore grows with the worker count, not the recording length. Fewer workers keep this step well inside its 256 GB, which the previous revision raised from 64 GB. Its 256 GB for `preprocessing` doubles the revision before that and is hopefully temporary. Motion estimation with DREDge can run in an online batching mode that bounds its memory use on long recordings. Pipeline v1.4.0 supports that mode, and the `default` parameters from v1.4.0 turn it on with one hour chunks. Once runs confirm the lower memory use, preprocessing should go back to a smaller memory request. Time limits follow the partition maximums, 12 hours on `mit_normal` and 6 hours on the GPU partition. The Nextflow driver that submits these jobs runs on `mit_preemptable` for up to 48 hours, since the steps it submits have to queue and run inside its own time limit.
+
+Which sorter a capsule runs is chosen by its parameter file, through `spikesorting.sorter`. The registered `default` parameters leave it null, which the pipeline takes as Kilosort 4. The `lupin` and `dartsort` parameters are the same file with that one field set, so every asset is given a capsule per sorter against the one config. Lupin and Spyking Circus 2 run in the pipeline's base image. DARTsort has an image of its own, `aind-ephys-spikesort-dartsort`, which dandi-compute-runner caches alongside the others.
 
 When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule. From v1.5.0 the pipeline also writes `provenance.json`, with the commit of every step, the container tag and the effective parameters. It goes into `logs/` too.
 

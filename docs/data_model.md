@@ -9,6 +9,7 @@ erDiagram
     PIPELINES_CONFIG ||--|{ PIPELINE : "declares"
     PIPELINE ||--o{ ASSET_OVERRIDE : "overrides"
     PIPELINE ||--o| DISPATCH : "limits"
+    PIPELINE ||--o{ PARAMS_DISPATCH : "dispatches apart"
     PIPELINE }o--o{ REGISTRY_ENTRY : "forms capsules for params"
     REGISTRY ||--|{ REGISTRY_ENTRY : "maps key to file"
     JOB_CAPSULE }o--|| PIPELINE : "runs"
@@ -46,6 +47,11 @@ erDiagram
         int max_concurrent "SLURM %n throttle, default 2"
         int max_array_tasks "capsules per array, default 500, null for no cap"
     }
+    PARAMS_DISPATCH {
+        string params PK "registry key, e.g. lupin"
+        int max_concurrent "this parameter set's own throttle"
+        int max_array_tasks "falls back to the pipeline's"
+    }
     REGISTRY {
         map entries "key to RegistryEntry"
     }
@@ -58,11 +64,14 @@ erDiagram
     PIPELINES_CONFIG ||--|{ PIPELINE : ""
     PIPELINE ||--o{ ASSET_OVERRIDE : ""
     PIPELINE ||--o| DISPATCH : ""
+    PIPELINE ||--o{ PARAMS_DISPATCH : ""
     REGISTRY ||--|{ REGISTRY_ENTRY : ""
     PIPELINE }o--o{ REGISTRY_ENTRY : "params keys"
 ```
 
 `asset_overrides` is validated when the configuration loads, but capsule formation does not consult it yet. An asset listed there with a null override is still processed.
+
+`params` lists the parameter sets each asset is given a capsule for. For `aind+ephys` those are one per spike sorter: `default` (Kilosort 4), `dartsort` and `lupin`. `params_dispatch` names the ones run by a dispatcher of their own, which is how `lupin`, a CPU sorter, runs more capsules at once than the GPU sorters. See [Array dispatch](dispatch.md).
 
 The registries in use are:
 
@@ -180,6 +189,7 @@ The raw records are kept whole so that callers can reach a field the index does 
 erDiagram
     DISPATCH_CONFIG {
         string pipeline PK
+        string params_key "null for the pipeline's own dispatcher"
         int max_concurrent
         int max_array_tasks
         string memory "template fallback"
@@ -189,6 +199,7 @@ erDiagram
     }
     DISPATCH_RESULT {
         string pipeline
+        string params_key "null for the pipeline's own dispatcher"
         enum status "dispatched, no-pending, dispatcher-active"
         string_list active_job_ids "when dispatcher-active"
         string dispatch_directory
@@ -212,7 +223,7 @@ erDiagram
     DISPATCHED_ARRAY }o--|| CAPSULE_RESOURCES : "requests"
 ```
 
-`DispatchConfig` extends `CapsuleResources`. Its resource fields are read from the pipeline's packaged submission template, and only apply to a capsule whose own `submit.sh` cannot be read back. [Array dispatch](dispatch.md) covers how capsules are grouped and how the limit is shared across arrays.
+`DispatchConfig` extends `CapsuleResources`. Its resource fields are read from the pipeline's packaged submission template, and only apply to a capsule whose own `submit.sh` cannot be read back. A pipeline has one `DispatchConfig` of its own and one more per parameter set in its `params_dispatch`, each producing its own `DispatchResult`. [Array dispatch](dispatch.md) covers how capsules are grouped and how the limit is shared across arrays.
 
 ## Reports uploaded to the archive
 

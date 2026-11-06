@@ -330,6 +330,15 @@ def _jobs_group() -> None:
     default=None,
 )
 @click.option(
+    "--params",
+    "only_params_key",
+    help="Create capsules only for the named parameter set (e.g. 'lupin'). "
+    "Defaults to every parameter set the pipeline is configured with.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
     "--config",
     "config_key",
     help="Registered configuration key to use.",
@@ -364,6 +373,7 @@ def _jobs_group() -> None:
 def _jobs_create_command(
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     only_pipeline: str | None = None,
+    only_params_key: str | None = None,
     config_key: str = "default",
     limit: int | None = None,
     force_latest_versions: bool = False,
@@ -377,6 +387,7 @@ def _jobs_create_command(
         config_key=config_key,
         limit=limit,
         only_pipeline=only_pipeline,
+        only_params_key=only_params_key,
         force_latest_versions=force_latest_versions,
         base_directory=base_directory,
     )
@@ -391,6 +402,15 @@ def _jobs_create_command(
     "--pipeline",
     "only_pipeline",
     help="Check only the named pipeline (e.g. 'lfp' or 'aind+ephys'). Defaults to all configured pipelines.",
+    required=False,
+    type=str,
+    default=None,
+)
+@click.option(
+    "--params",
+    "only_params_key",
+    help="Check only the named parameter set (e.g. 'lupin'). "
+    "Defaults to every parameter set the pipeline is configured with.",
     required=False,
     type=str,
     default=None,
@@ -412,7 +432,11 @@ def _jobs_create_command(
 )
 @click.pass_context
 def _jobs_creatable_command(
-    context: click.Context, only_pipeline: str | None = None, config_key: str = "default", silent: bool = False
+    context: click.Context,
+    only_pipeline: str | None = None,
+    only_params_key: str | None = None,
+    config_key: str = "default",
+    silent: bool = False,
 ) -> None:
     """Report whether any job capsules are waiting to be created.
 
@@ -427,7 +451,9 @@ def _jobs_creatable_command(
     """
     _configure_logging(silent=silent)
     try:
-        labels = PipelineQueue.creatable_job_labels(only_pipeline=only_pipeline, config_key=config_key)
+        labels = PipelineQueue.creatable_job_labels(
+            only_pipeline=only_pipeline, only_params_key=only_params_key, config_key=config_key
+        )
     except Exception as exception:  # noqa: BLE001 -- any failure must stay distinct from "nothing to create"
         click.echo(f"Unable to check for job capsules to create: {exception!r}", err=True)
         context.exit(2)
@@ -554,7 +580,8 @@ def _jobs_pending_command(context: click.Context, silent: bool = False) -> None:
 @click.option(
     "--max",
     "max_concurrent",
-    help="Override how many capsules the dispatched pipeline may run at once. Requires --pipeline.",
+    help="Override how many capsules the dispatched pipeline may run at once. Applies to each of its "
+    "dispatchers, the pipeline's own and any dedicated to a parameter set. Requires --pipeline.",
     required=False,
     type=click.IntRange(min=1),
     default=None,
@@ -591,7 +618,7 @@ def _jobs_dispatch_command(
     test: bool = False,
     jitter_seconds: float = 30.0,
 ) -> None:
-    """Hand every pending job capsule to its pipeline's SLURM array dispatcher."""
+    """Hand every pending job capsule to its SLURM array dispatcher."""
     # The concurrency limit is a per-pipeline setting, so an override that silently applied to
     # every pipeline at once would not mean the same thing as the setting it overrides.
     if max_concurrent is not None and only_pipeline is None:

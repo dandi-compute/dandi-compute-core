@@ -108,14 +108,17 @@ def test_packaged_registries_validate_strictly(registry_file_path: pathlib.Path)
         ("max_array_tasks", 0),
     ],
 )
-def test_strict_validation_rejects_bad_dispatch_limits(field: str, value: object) -> None:
+@pytest.mark.parametrize("block", ["dispatch", "params_dispatch"])
+def test_strict_validation_rejects_bad_dispatch_limits(block: str, field: str, value: object) -> None:
     """
     The strict validator rejects the scalar mismatches the runtime one lets through.
 
-    This is the reason the schemas are validated twice rather than only at runtime.
+    This is the reason the schemas are validated twice rather than only at runtime. A dedicated
+    parameter set's dispatcher carries the same limits as the pipeline's own, so both are checked.
     """
     validator_module = _import_linkml("linkml.validator")
-    invalid = {"pipelines": {"test": {"dispatch": {field: value}}}}
+    limits = {field: value} if block == "dispatch" else {"lupin": {field: value}}
+    invalid = {"pipelines": {"test": {block: limits}}}
 
     report = validator_module.validate(
         invalid,

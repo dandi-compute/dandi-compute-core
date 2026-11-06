@@ -9,8 +9,9 @@ from dandi_compute_code.queue import DispatchConfig, PipelineQueue
 _PIPELINE_CONFIG = {
     "pipelines": {
         "aind+ephys": {
-            "params": ["default"],
+            "params": ["default", "lupin", "dartsort"],
             "dispatch": {"max_concurrent": 3, "max_array_tasks": 40},
+            "params_dispatch": {"lupin": {"max_concurrent": 12}},
         },
         "unbounded": {"params": ["default"], "dispatch": {"max_array_tasks": None}},
         "bare": {"params": ["default"]},
@@ -63,6 +64,47 @@ def test_from_pipeline_config_max_concurrent_override_wins_over_the_configured_l
 
 
 @pytest.mark.ai_generated
+def test_from_pipeline_config_reads_a_dedicated_dispatcher_over_the_pipelines_own_limits() -> None:
+    """A params_dispatch entry overrides the pipeline's dispatch block field by field."""
+    dispatch_config = DispatchConfig.from_pipeline_config(
+        pipeline="aind+ephys", pipeline_config=_PIPELINE_CONFIG, params_key="lupin"
+    )
+
+    assert dispatch_config.params_key == "lupin"
+    assert dispatch_config.max_concurrent == 12
+    assert dispatch_config.max_array_tasks == 40
+
+
+@pytest.mark.ai_generated
+def test_from_pipeline_config_raises_for_a_parameter_set_without_a_dedicated_dispatcher() -> None:
+    """A parameter set the pipeline does not dispatch apart has no dispatcher of its own."""
+    with pytest.raises(ValueError, match="no dedicated dispatcher for parameter set 'dartsort'"):
+        DispatchConfig.from_pipeline_config(
+            pipeline="aind+ephys", pipeline_config=_PIPELINE_CONFIG, params_key="dartsort"
+        )
+
+
+@pytest.mark.ai_generated
+def test_all_from_pipeline_config_lists_dedicated_dispatchers_before_the_pipelines_own() -> None:
+    """Every dispatcher of a pipeline, dedicated ones first so they take their capsules before the rest."""
+    dispatch_configs = DispatchConfig.all_from_pipeline_config(
+        pipeline="aind+ephys", pipeline_config=_PIPELINE_CONFIG, max_concurrent=5
+    )
+
+    assert [config.params_key for config in dispatch_configs] == ["lupin", None]
+    assert [config.label for config in dispatch_configs] == ["aind+ephys/lupin", "aind+ephys"]
+    assert {config.max_concurrent for config in dispatch_configs} == {5}
+
+
+@pytest.mark.ai_generated
+def test_all_from_pipeline_config_is_the_pipelines_own_dispatcher_alone_without_params_dispatch() -> None:
+    """A pipeline that dispatches nothing apart has exactly one dispatcher."""
+    dispatch_configs = DispatchConfig.all_from_pipeline_config(pipeline="bare", pipeline_config=_PIPELINE_CONFIG)
+
+    assert dispatch_configs == [DispatchConfig(pipeline="bare")]
+
+
+@pytest.mark.ai_generated
 def test_from_pipeline_config_raises_for_an_unconfigured_pipeline() -> None:
     """An unconfigured pipeline name is rejected, naming the ones that are configured."""
     with pytest.raises(ValueError, match="Pipeline 'nope' is not configured"):
@@ -71,16 +113,20 @@ def test_from_pipeline_config_raises_for_an_unconfigured_pipeline() -> None:
 
 @pytest.mark.ai_generated
 @pytest.mark.parametrize(
-    ("pipeline", "expected_job_name"),
+    ("pipeline", "params_key", "expected_job_name"),
     [
-        ("aind+ephys", "dandicompute-dispatch-aind-ephys"),
-        ("lfp", "dandicompute-dispatch-lfp"),
-        ("some pipeline", "dandicompute-dispatch-some-pipeline"),
+        ("aind+ephys", None, "dandicompute-dispatch-aind-ephys"),
+        ("lfp", None, "dandicompute-dispatch-lfp"),
+        ("some pipeline", None, "dandicompute-dispatch-some-pipeline"),
+        ("aind+ephys", "lupin", "dandicompute-dispatch-aind-ephys-lupin"),
+        ("aind+ephys", "no motion", "dandicompute-dispatch-aind-ephys-no-motion"),
     ],
 )
-def test_job_name_folds_characters_a_slurm_job_name_should_not_carry(pipeline: str, expected_job_name: str) -> None:
-    """The dispatcher job name is the pipeline name with awkward characters folded to hyphens."""
-    assert DispatchConfig(pipeline=pipeline).job_name == expected_job_name
+def test_job_name_folds_characters_a_slurm_job_name_should_not_carry(
+    pipeline: str, params_key: str | None, expected_job_name: str
+) -> None:
+    """The dispatcher job name is the pipeline name, and any dedicated parameter set, with awkward characters folded."""
+    assert DispatchConfig(pipeline=pipeline, params_key=params_key).job_name == expected_job_name
 
 
 @pytest.mark.ai_generated
@@ -136,6 +182,29 @@ def test_packaged_configuration_declares_no_resource_settings() -> None:
 
     for pipeline_data in pipelines.values():
         assert set(pipeline_data.get("dispatch", {})) <= {"max_concurrent", "max_array_tasks"}
+        for params_dispatch in pipeline_data.get("params_dispatch", {}).values():
+            assert set(params_dispatch) <= {"max_concurrent", "max_array_tasks"}
+
+
+@pytest.mark.ai_generated
+def test_packaged_configuration_dispatches_only_configured_parameter_sets_apart() -> None:
+    """A dedicated dispatcher is for a parameter set the pipeline forms capsules for."""
+    pipelines = PipelineQueue.load_pipeline_config()["pipelines"]
+
+    for pipeline_data in pipelines.values():
+        assert set(pipeline_data.get("params_dispatch", {})) <= set(pipeline_data.get("params", []))
+
+
+@pytest.mark.ai_generated
+def test_packaged_configuration_runs_lupin_apart_and_at_a_higher_concurrency() -> None:
+    """Lupin needs no GPU, so it has a dispatcher of its own that runs more capsules at once than the GPU sorters."""
+    pipeline_config = PipelineQueue.load_pipeline_config()
+    lupin = DispatchConfig.from_pipeline_config(
+        pipeline="aind+ephys", pipeline_config=pipeline_config, params_key="lupin"
+    )
+    shared = DispatchConfig.from_pipeline_config(pipeline="aind+ephys", pipeline_config=pipeline_config)
+
+    assert lupin.max_concurrent > shared.max_concurrent
 
 
 @pytest.mark.ai_generated

@@ -10,6 +10,7 @@ _AIND_MODULE = "dandi_compute_code.queue._aind_ephys_pipeline_queue"
 
 _AIND_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default"]}}}
 _MULTI_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default"]}, "lfp": {"params": ["default"]}}}
+_SORTERS_PIPELINE_CONFIG = {"pipelines": {"aind+ephys": {"params": ["default", "lupin"]}}}
 
 
 def _queue_with_capsule(*, content_id: str) -> PipelineQueue:
@@ -71,6 +72,39 @@ def test_nothing_creatable_when_every_asset_has_a_capsule() -> None:
     )
 
     assert labels == []
+
+
+@pytest.mark.ai_generated
+def test_lists_every_parameter_set_of_an_asset_together() -> None:
+    """Labels come asset by asset, each with every parameter set, in the order creation forms them."""
+    labels = _creatable(
+        pipeline_config=_SORTERS_PIPELINE_CONFIG,
+        qualifying=["asset-new", "asset-partial"],
+        mapped=["asset-new", "asset-partial"],
+        state=_queue_with_capsule(content_id="asset-partial"),
+    )
+
+    assert labels == ["aind+ephys/default/asset-new", "aind+ephys/lupin/asset-new", "aind+ephys/lupin/asset-partial"]
+
+
+@pytest.mark.ai_generated
+def test_only_params_key_limits_the_check() -> None:
+    """--params checks a single parameter set."""
+    labels = _creatable(
+        pipeline_config=_SORTERS_PIPELINE_CONFIG,
+        qualifying=["asset-new"],
+        mapped=["asset-new"],
+        only_params_key="lupin",
+    )
+
+    assert labels == ["aind+ephys/lupin/asset-new"]
+
+
+@pytest.mark.ai_generated
+def test_unknown_params_key_is_rejected() -> None:
+    """An unconfigured parameter set is an error, as it is for creation."""
+    with pytest.raises(ValueError, match="Parameter set 'nope' is not configured"):
+        _creatable(pipeline_config=_SORTERS_PIPELINE_CONFIG, qualifying=[], mapped=[], only_params_key="nope")
 
 
 @pytest.mark.ai_generated
