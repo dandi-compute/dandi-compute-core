@@ -13,3 +13,8 @@ _PIPELINE_FILE_NAMES = ("main_multi_backend.nf", "main.nf")
 
 # Release 1.4.1 renamed the pinned step versions file.
 _PINNED_STEP_VERSIONS_FILE_NAMES = ("process_versions.env", "capsule_versions.env")
+
+# Release 1.5.0 validates the job dispatch arguments against a schema that has no `nwb_files`, so
+# `--job_dispatch_args "--nwb-files ..."` fails the run before any step starts. From this release a
+# capsule gives the pipeline an input folder holding the blob as its one `.nwb` file instead.
+_FIRST_PIPELINE_VERSION_WITH_NWB_INPUT_FOLDER = (1, 5, 0)
