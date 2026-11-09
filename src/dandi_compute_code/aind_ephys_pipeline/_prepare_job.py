@@ -27,6 +27,7 @@ from .._base_directory import (
     _work_directory,
 )
 from .._codebase_commit_hash import _codebase_commit_hash
+from ..dandiset._blob_mirror import resolve_blob_path
 from ..dandiset._globals import _JOB_CAPSULES_DANDISET_ID, _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
@@ -313,9 +314,7 @@ def prepare_aind_ephys_job(
     job_id = _next_available_job_id(job_hash=job_hash, taken_job_ids=existing_capsule_names)
     output_dandiset_path = f"{pipeline_dandiset_path}/{job_id}"
 
-    blob_head = content_id[0]
-    partition = "001" if ord(blob_head) - ord("0") <= 8 else "002"  # TODO: pull from source to keep up to date
-    nwbfile_path = f"/orcd/data/dandi/{partition}/s3dandiarchive/blobs/{content_id[0:3]}/{content_id[3:6]}/{content_id}"
+    nwbfile_path = str(resolve_blob_path(content_id=content_id))
     # TODO: figure out if Zarr or not - only supports blobs ATM
 
     # The shared checkout is only moved to the release when the job starts.
