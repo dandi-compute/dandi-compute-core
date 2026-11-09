@@ -59,7 +59,7 @@ Pipelines differ here for real reasons:
 | pipeline | its `submit.sh` | resulting array |
 |---|---|---|
 | `aind+ephys` | a Nextflow driver that dispatches the heavy work to its own jobs, so it needs very little itself | 1GB / 1 CPU / `mit_preemptable` / 48h |
-| `lfp` | does its work in process via `datalad containers-run` | 16GB / 1 CPU / `mit_preemptable` / 48h |
+| `lfp` | does its work in process, running its container with Apptainer | 16GB / 1 CPU / `mit_preemptable` / 48h |
 
 Capsules of one pipeline normally agree, since one template renders them all, so this is one array per pipeline in practice. They can diverge when a template changed between the releases that prepared them, and a capsule needing more than its neighbours would otherwise be truncated by an array sized for them.
 

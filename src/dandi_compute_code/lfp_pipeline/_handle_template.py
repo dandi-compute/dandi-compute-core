@@ -13,8 +13,8 @@ def generate_lfp_submission_script(
     log_directory: str,
     dataset_directory: str,
     environment_directory: str,
-    container_name: str,
     container_image: str,
+    image_file_path: str,
     nwb_file_path: str,
     output_nwb_file_path: str,
     parameters_key: str,
@@ -24,9 +24,10 @@ def generate_lfp_submission_script(
     """
     Generate the LFP pipeline sbatch submission script from the template.
 
-    The script uses datalad-containers and duct to run the LFP runtime container
-    on a local NWB file. It is intentionally much simpler than the AIND ephys
-    submission script.
+    The script runs the LFP runtime container with Apptainer on a local NWB file,
+    wrapped in duct. It is intentionally much simpler than the AIND ephys
+    submission script. Whichever way the script ends, it uploads the capsule, so
+    a failed capsule always has its logs on the archive.
 
     Parameters
     ----------
@@ -35,15 +36,17 @@ def generate_lfp_submission_script(
     log_directory : str
         Directory for the slurm and duct logs.
     dataset_directory : str
-        The datalad dataset directory in which the container runs.
+        The capsule directory the script runs in and uploads from.
     environment_directory : str
-        The conda environment to activate. It must provide datalad,
-        datalad-container, con-duct, and apptainer.
-    container_name : str
-        The datalad container registration name.
+        The conda environment to activate. It must provide con-duct and the
+        DANDI CLI.
     container_image : str
         The container image reference, for example
         ``ghcr.io/dandi-compute/dandi-compute-lfp:latest``.
+    image_file_path : str
+        Where the image is kept once pulled, so every capsule of the same
+        version runs the one copy. It is pulled there by the first capsule
+        that finds it missing.
     nwb_file_path : str
         Path to the input NWB file. It is a valid NWB file even though it has no
         ``.nwb`` suffix.
@@ -62,8 +65,8 @@ def generate_lfp_submission_script(
         log_directory=log_directory,
         dataset_directory=dataset_directory,
         environment_directory=environment_directory,
-        container_name=container_name,
         container_image=container_image,
+        image_file_path=image_file_path,
         nwb_file_path=nwb_file_path,
         output_nwb_file_path=output_nwb_file_path,
         parameters_key=parameters_key,

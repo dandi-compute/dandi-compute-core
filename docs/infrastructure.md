@@ -49,7 +49,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 ├── aind-ephys-pipeline/         # checkout of the AIND ephys pipeline, tags checked out per job
 ├── work/                        # Nextflow work directories
 │   ├── job-{id}/                # one per AIND capsule
-│   └── apptainer_cache/         # container images, kept by `clean --work`
+│   └── apptainer_cache/         # container images, AIND and LFP, kept by `clean --work`
 └── processing/
     ├── prepare-job-XXXXXXXX/    # one preparation tree per capsule (see below)
     │   └── 001697/
@@ -84,7 +84,7 @@ Because the AIND submission script checks out a tag in the shared `aind-ephys-pi
 |---|---|---|
 | Environment modules | `/etc/profile.d/modules.sh` | Loading `miniforge` and `apptainer` in every submission script |
 | Conda environment `name-nextflow_version-25+10+4_environment` | `/orcd/data/dandi/001/environments/` | Nextflow 25.10.4 and the DANDI CLI for AIND capsules. The Update codebase workflow of dandi-compute-runner provisions it and installs the `nf-schema` plugin. Capsules formed before it keep the older `name-nextflow_environment` their `submit.sh` names. |
-| Conda environment `name-lfp_environment` | `/orcd/data/dandi/001/environments/` | DataLad, `datalad-container` and `duct` for LFP capsules |
+| Conda environment `name-lfp_environment` | `/orcd/data/dandi/001/environments/` | `duct` and the DANDI CLI for LFP capsules |
 | Apptainer | module | Running every pipeline container |
 | DANDI CLI | the environment running `dandicompute`, and each pipeline environment | Every download, upload and delete against the archive. AIND capsules upgrade it with `pip install -U dandi` before uploading. |
 | `sbatch`, `squeue` | SLURM | Submitting arrays, detecting live dispatchers |
@@ -114,7 +114,9 @@ When Nextflow finishes, the script moves the results out of `intermediate/` into
 
 ### LFP execution
 
-Each LFP capsule's `submit.sh` registers the `dandi-compute-lfp` image with DataLad (once per dataset), then runs `python -m dandi_compute_code.lfp_pipeline` inside it through `datalad containers-run`, wrapped in `duct` to record resource usage into `logs/`. The container image tag is the version of this package that prepared the capsule. The output goes to `derivatives/nwb/`. The script then uploads the capsule, and still uploads its logs when the run fails, after removing any partial output.
+Each LFP capsule's `submit.sh` runs `python -m dandi_compute_code.lfp_pipeline` inside the `dandi-compute-lfp` image with `apptainer exec`, wrapped in `duct` to record resource usage into `logs/`. The container image tag is the version of this package that prepared the capsule. The image is kept in `work/apptainer_cache/` under the name Nextflow gives the AIND images there. The first capsule of a version that finds it missing pulls it, and every later one reuses it. Both blob partitions are bound into the container, since the input blob is outside the capsule. The output goes to `derivatives/nwb/`.
+
+The script uploads the capsule from a trap on exit, so it is uploaded however the script ends. A failure in any step, including activating the environment or pulling the image, still puts the capsule's logs on the archive. The capsule then reads as `failed` rather than `stalled`. A run that SLURM stops with TERM is treated the same way. Any partial output is removed before a failed capsule is uploaded, since a file under `derivatives/` marks a capsule successful.
 
 ## The LFP container
 
