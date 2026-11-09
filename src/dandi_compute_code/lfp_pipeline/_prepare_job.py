@@ -14,9 +14,9 @@ import dandi.dandiapi
 import dandi.download
 import dandi.upload
 
-from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE, _LFP_CONTAINER_NAME
+from ._globals import _JOB_CAPSULES_DANDISET_ID, _LFP_CONTAINER_IMAGE_TEMPLATE
 from ._handle_template import generate_lfp_submission_script
-from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory
+from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory, _work_directory
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
 from ..dandiset._globals import _dandiset_derivatives_relative_dir
@@ -81,6 +81,18 @@ def build_lfp_job_hash(
 
 
 @beartype.beartype
+def _image_file_name(container_image: str, /) -> str:
+    """
+    The file an image is kept under in the shared Apptainer cache.
+
+    It follows the naming Nextflow gives the AIND images in the same cache, so every image there
+    is named the one way.
+    """
+    image_file_name = f"{container_image.replace('/', '-').replace(':', '-')}.img"
+    return image_file_name
+
+
+@beartype.beartype
 def _resolve_parameters_file(parameters_key: str, /) -> tuple[pathlib.Path, str]:
     """Resolve a registered parameters key to its file path and short MD5 identifier."""
     params_registry_path = pathlib.Path(__file__).parent / "registries" / "registered_params.json"
@@ -125,7 +137,7 @@ def prepare_lfp_job(
     Prepare a single LFP job capsule for an asset, or skip it if one already exists.
 
     This mirrors :func:`~dandi_compute_code.aind_ephys_pipeline.prepare_aind_ephys_job`
-    but is much simpler. The job runs a container via datalad-containers and duct,
+    but is much simpler. The job runs a container with Apptainer, wrapped in duct,
     so there is no pipeline repository checkout and no Nextflow config. Exactly one
     capsule is ever prepared per asset. When a capsule already exists for the
     resolved output path, the function returns ``None`` without preparing another.
@@ -248,6 +260,7 @@ def prepare_lfp_job(
         dandiset_output_dir / "derivatives" / "nwb" / f"{pathlib.Path(output_within_dandiset_path).name}_desc-lfp"
     )
     container_image = _LFP_CONTAINER_IMAGE_TEMPLATE.format(version=pipeline_version)
+    image_file_path = _work_directory(base_directory) / "apptainer_cache" / _image_file_name(container_image)
     environment_directory = "/orcd/data/dandi/001/environments/name-lfp_environment"
     done_tracker_file_path = processing_directory / "done.txt"
 
@@ -292,8 +305,8 @@ def prepare_lfp_job(
         log_directory=str(log_directory),
         dataset_directory=str(dandiset_output_dir),
         environment_directory=environment_directory,
-        container_name=_LFP_CONTAINER_NAME,
         container_image=container_image,
+        image_file_path=str(image_file_path),
         nwb_file_path=nwbfile_path,
         output_nwb_file_path=str(output_nwb_file_path),
         parameters_key=parameters_key,

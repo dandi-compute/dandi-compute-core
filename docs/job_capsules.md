@@ -39,7 +39,7 @@ The `dandisets-{first 3 digits}` level keeps any one directory from holding thou
 
 | Path | `aind+ephys` | `lfp` |
 |---|---|---|
-| `code/submit.sh` | Nextflow driver script | `datalad containers-run` script |
+| `code/submit.sh` | Nextflow driver script | Apptainer script |
 | `code/{parameters}.json` | The registered AIND parameter file | The registered LFP parameter file |
 | `code/{config}.config` | The registered Nextflow config | Not used |
 | `code/main_multi_backend.nf` or `code/main.nf` | Copy of the pipeline entry point at the capsule's release (`main.nf` from v1.5.0) | Not used |
