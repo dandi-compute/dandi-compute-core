@@ -16,6 +16,7 @@ from dandi_compute_code.dandiset import (
     AssetsJsonldMetadata,
     load_assets_jsonld_metadata,
     move_job_capsule,
+    resolve_blob_path,
     write_dandiset_file,
 )
 from dandi_compute_code.lfp_pipeline import (
@@ -133,6 +134,9 @@ _CASES = [
     ),
     pytest.param(move_job_capsule, (), {"capsule_path": _PATH}, id="move_job_capsule-path-for-str"),
     pytest.param(load_assets_jsonld_metadata, (1697,), {}, id="load_assets_jsonld_metadata"),
+    pytest.param(
+        resolve_blob_path, (), {"content_id": "abc", "mirror_root": "/some/path"}, id="resolve_blob_path-str-root"
+    ),
     pytest.param(
         AssetMetadata,
         (),

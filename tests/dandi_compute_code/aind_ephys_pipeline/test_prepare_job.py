@@ -687,10 +687,14 @@ def test_prepare_aind_ephys_job_without_pinned_step_versions_fails_before_any_ca
 
 
 def _prepare_job_at_release(
-    *, tmp_path: pathlib.Path, base_directory: pathlib.Path, pipeline_version: str, check_output
+    *,
+    tmp_path: pathlib.Path,
+    base_directory: pathlib.Path,
+    pipeline_version: str,
+    check_output,
+    content_id: str = "07500000-0000-0000-0000-000000000000",
 ) -> pathlib.Path:
     """Prepare a job at *pipeline_version* with parameter validation and every external call mocked."""
-    content_id = "07500000-0000-0000-0000-000000000000"
     mapping = {content_id: {"000001": "sub-mouse01/sub-mouse01_ecephys.nwb"}}
     temp_dir = tmp_path / "tmpdir"
     temp_dir.mkdir()
@@ -821,3 +825,33 @@ def test_prepare_aind_ephys_job_gives_each_job_its_own_nextflow_work_directory(
     script = script_path.read_text()
     assert f'WORKDIR="{fake_base_directory / "work" / job_id}"' in script
     assert f'NXF_APPTAINER_CACHEDIR="{fake_base_directory / "work" / "apptainer_cache"}"' in script
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("content_id", "expected_partition"),
+    [
+        pytest.param("4825cfd1-bc75-4dd2-b4b7-77995ab57e0a", "001", id="4"),
+        pytest.param("9a1b2c3d-0000-0000-0000-000000000000", "001", id="9"),
+        pytest.param("ab1b2c3d-0000-0000-0000-000000000000", "002", id="a"),
+    ],
+)
+def test_prepare_aind_ephys_job_points_at_the_partition_the_backup_mirrors_the_blob_to(
+    content_id: str,
+    expected_partition: str,
+    tmp_path: pathlib.Path,
+    fake_base_directory: pathlib.Path,
+) -> None:
+    """The blob mirror puts content IDs starting with 0 to 9 on partition 001 and the rest on 002."""
+    script_path = _prepare_job_at_release(
+        tmp_path=tmp_path,
+        base_directory=fake_base_directory,
+        pipeline_version="1.5.0",
+        check_output=_git_check_output,
+        content_id=content_id,
+    )
+
+    expected_blob_path = (
+        f"/orcd/data/dandi/{expected_partition}/s3dandiarchive/blobs/{content_id[0:3]}/{content_id[3:6]}/{content_id}"
+    )
+    assert f'NWB_FILE_PATH="{expected_blob_path}"' in script_path.read_text()

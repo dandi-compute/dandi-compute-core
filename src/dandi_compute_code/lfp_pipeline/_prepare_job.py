@@ -19,6 +19,7 @@ from ._handle_template import generate_lfp_submission_script
 from .._base_directory import _DEFAULT_BASE_DIRECTORY, _processing_directory, _work_directory
 from .._codebase_commit_hash import _codebase_commit_hash
 from ..aind_ephys_pipeline import UnmappedContentIDError
+from ..dandiset._blob_mirror import resolve_blob_path
 from ..dandiset._globals import _dandiset_derivatives_relative_dir
 from ..dandiset._job_id import (
     _PROVENANCE_KEY,
@@ -231,9 +232,7 @@ def prepare_lfp_job(
     job_id = _next_available_job_id(job_hash=job_hash, taken_job_ids=existing_capsule_names)
     output_dandiset_path_base = f"{pipeline_dandiset_path}/{job_id}"
 
-    blob_head = content_id[0]
-    partition = "001" if ord(blob_head) - ord("0") <= 8 else "002"
-    nwbfile_path = f"/orcd/data/dandi/{partition}/s3dandiarchive/blobs/{content_id[0:3]}/{content_id[3:6]}/{content_id}"
+    nwbfile_path = str(resolve_blob_path(content_id=content_id))
 
     processing_directory = _processing_directory(base_directory)
     temporary_processing_directory = pathlib.Path(tempfile.mkdtemp(dir=processing_directory, prefix="prepare-job-"))
