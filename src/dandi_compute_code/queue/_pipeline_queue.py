@@ -673,20 +673,23 @@ class PipelineQueue:
         *,
         status: Literal["failed", "pending", "stalled"] | None = None,
         pipeline: str | None = None,
+        job_ids: list[str] | None = None,
         dandiset_id: str = _JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id: str = _FAILED_RUNS_ARCHIVE_DANDISET_ID,
         base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
         test: bool = False,
     ) -> list[str]:
         """
-        Move every entry matching *status* and *pipeline* into the failed runs archive.
+        Move every entry matching *status* and *pipeline*, or named by *job_ids*, into the failed runs archive.
 
         *status* is the recorded :attr:`~._job_capsule.JobCapsule.status` selecting the
         entries to archive: ``"failed"`` (logs present, no output), ``"pending"`` (code
         prepared but never submitted), or ``"stalled"`` (submitted to the scheduler but
         no logs or output ever appeared). *pipeline* selects the entries of one pipeline,
         such as ``"lfp"`` or ``"aind+ephys"``, whatever their status. When both are given,
-        an entry must match both. For each matching entry, resolves its capsule path
+        an entry must match both. *job_ids* instead selects the entries with those job IDs,
+        whatever their status or pipeline, and every one of them must be in the queue, so a
+        mistyped ID stops the call before anything is moved. For each selected entry, resolves its capsule path
         against *dandiset_id*'s remote ``assets.jsonld`` (see
         :meth:`JobCapsule.resolve_capsule_path`) and moves the
         corresponding capsule from *dandiset_id* to *archive_dandiset_id* via
@@ -700,6 +703,9 @@ class PipelineQueue:
             Archive only the entries with this status.
         pipeline : str, optional
             Archive only the entries of this pipeline.
+        job_ids : list of str, optional
+            Archive the entries with these ``job-{YYMMDD}{hash}`` IDs, in the order given.
+            Mutually exclusive with *status* and *pipeline*.
         dandiset_id : str, optional
             Dandiset entries are archived *from*. Defaults to the job capsules
             Dandiset.
@@ -722,24 +728,43 @@ class PipelineQueue:
         Raises
         ------
         ValueError
-            If neither *status* nor *pipeline* is given.
+            If none of *status*, *pipeline* and *job_ids* is given, if *job_ids* is given
+            together with either of the others, if *job_ids* is empty or holds a blank ID, or
+            if any of *job_ids* is not in the queue.
         RuntimeError
             If ``DANDI_API_KEY`` is unset or blank, or if archiving any
             individual capsule fails (see :func:`move_job_capsule`). A failure
             leaves entries processed so far archived and stops before the rest.
         """
-        if status is None and pipeline is None:
-            message = "Provide at least one of `status` or `pipeline` to select the capsules to archive."
+        if job_ids is not None and (status is not None or pipeline is not None):
+            message = "Select the capsules to archive by `job_ids`, or by `status` and `pipeline`, not both."
+            raise ValueError(message)
+        if job_ids is None and status is None and pipeline is None:
+            message = "Provide `job_ids`, or at least one of `status` or `pipeline`, to select the capsules to archive."
+            raise ValueError(message)
+        requested_job_ids = None if job_ids is None else list(dict.fromkeys(job_id.strip() for job_id in job_ids))
+        if requested_job_ids is not None and (not requested_job_ids or "" in requested_job_ids):
+            message = "`job_ids` must name at least one job, and none of them blank."
             raise ValueError(message)
         if not os.environ.get("DANDI_API_KEY", "").strip():
             message = "`DANDI_API_KEY` environment variable is not set or is blank."
             raise RuntimeError(message)
 
-        entries = [
-            entry
-            for entry in self.entries
-            if (status is None or entry.status == status) and (pipeline is None or entry.job.pipeline == pipeline)
-        ]
+        if requested_job_ids is None:
+            entries = [
+                entry
+                for entry in self.entries
+                if (status is None or entry.status == status) and (pipeline is None or entry.job.pipeline == pipeline)
+            ]
+        else:
+            entries_by_job_id: dict[str, list[JobCapsule]] = collections.defaultdict(list)
+            for entry in self.entries:
+                entries_by_job_id[entry.job.job_id].append(entry)
+            unknown_job_ids = [job_id for job_id in requested_job_ids if job_id not in entries_by_job_id]
+            if unknown_job_ids:
+                message = f"No job capsule in the queue has the job ID(s): {', '.join(unknown_job_ids)}."
+                raise ValueError(message)
+            entries = [entry for job_id in requested_job_ids for entry in entries_by_job_id[job_id]]
         archived: list[str] = []
         if not entries:
             return archived

@@ -1,4 +1,4 @@
-"""Unit tests for the ``dandicompute archive add --status`` and ``--pipeline`` CLI options."""
+"""Unit tests for the ``dandicompute archive add`` CLI options ``--status``, ``--pipeline`` and ``--job``."""
 
 import os
 import pathlib
@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from dandi_compute_code._cli import _dandicompute_group
 from dandi_compute_code.dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
+from dandi_compute_code.queue import PipelineQueue
 
 _GROUP = "dandi_compute_code._cli._dandicompute_group"
 
@@ -78,6 +79,7 @@ def test_cli_archive_capsules_invokes_archive_capsules_with_defaults(status: str
     mock_archive.assert_called_once_with(
         status=status,
         pipeline=None,
+        job_ids=None,
         dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
         base_directory=base_directory,
@@ -118,6 +120,7 @@ def test_cli_archive_capsules_forwards_custom_dandiset_ids(base_directory: pathl
     mock_archive.assert_called_once_with(
         status="failed",
         pipeline=None,
+        job_ids=None,
         dandiset_id="000123",
         archive_dandiset_id="000456",
         base_directory=base_directory,
@@ -146,6 +149,7 @@ def test_cli_archive_capsules_reports_nothing_to_archive(status: str, base_direc
     mock_archive.assert_called_once_with(
         status=status,
         pipeline=None,
+        job_ids=None,
         dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
         base_directory=base_directory,
@@ -185,6 +189,7 @@ def test_cli_archive_forwards_pipeline(
     mock_archive.assert_called_once_with(
         status=expected_status,
         pipeline="lfp",
+        job_ids=None,
         dandiset_id=_JOB_CAPSULES_DANDISET_ID,
         archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
         base_directory=base_directory,
@@ -196,15 +201,18 @@ def test_cli_archive_forwards_pipeline(
 @pytest.mark.parametrize(
     "arguments",
     [
-        pytest.param(["--pipeline", "lfp", "--job", "derivatives/example-capsule"], id="pipeline_with_job"),
+        pytest.param(["--pipeline", "lfp", "--job", "job-240101aa0003"], id="pipeline_with_job"),
+        pytest.param(["--status", "failed", "--job", "job-240101aa0003"], id="status_with_job"),
         pytest.param(
-            ["--pipeline", "lfp", "--status", "failed", "--job", "derivatives/example-capsule"],
+            ["--pipeline", "lfp", "--status", "failed", "--job", "job-240101aa0003"],
             id="pipeline_and_status_with_job",
         ),
+        pytest.param([], id="no_selection"),
+        pytest.param(["--job", " , ,"], id="blank_job_ids"),
     ],
 )
-def test_cli_archive_rejects_pipeline_with_job(arguments: list[str], base_directory: pathlib.Path) -> None:
-    """dandicompute archive add rejects --pipeline given together with --job."""
+def test_cli_archive_rejects_invalid_selection(arguments: list[str], base_directory: pathlib.Path) -> None:
+    """dandicompute archive add needs either job IDs or a status/pipeline filter, never both or neither."""
     runner = CliRunner()
 
     with (
@@ -214,5 +222,105 @@ def test_cli_archive_rejects_pipeline_with_job(arguments: list[str], base_direct
         result = runner.invoke(_dandicompute_group, ["archive", "add", *arguments, "--base", str(base_directory)])
 
     assert result.exit_code != 0
-    assert "Provide either --job PATH" in result.output
+    assert "Provide either --job JOB_ID[,JOB_ID...]" in result.output
+    mock_from_dandi.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("job_argument", "expected_job_ids"),
+    [
+        pytest.param("job-240101aa0003", ["job-240101aa0003"], id="one"),
+        pytest.param("job-240101aa0003,job-240101aa000a", ["job-240101aa0003", "job-240101aa000a"], id="several"),
+        pytest.param(" job-240101aa0003 , job-240101aa000a, ", ["job-240101aa0003", "job-240101aa000a"], id="spaced"),
+    ],
+)
+def test_cli_archive_forwards_job_ids(
+    job_argument: str,
+    expected_job_ids: list[str],
+    example_pipeline_queue: PipelineQueue,
+    base_directory: pathlib.Path,
+) -> None:
+    """dandicompute archive add --job splits its comma-separated job IDs and archives exactly those capsules."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=example_pipeline_queue) as mock_from_dandi,
+        mock.patch.object(
+            PipelineQueue, "archive_capsules", return_value=["derivatives/a", "derivatives/b"]
+        ) as mock_archive,
+    ):
+        result = runner.invoke(
+            _dandicompute_group, ["archive", "add", "--job", job_argument, "--base", str(base_directory)]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "Archived 2 job capsule(s)" in result.output
+    mock_from_dandi.assert_called_once_with(dandiset_id=_JOB_CAPSULES_DANDISET_ID)
+    mock_archive.assert_called_once_with(
+        status=None,
+        pipeline=None,
+        job_ids=expected_job_ids,
+        dandiset_id=_JOB_CAPSULES_DANDISET_ID,
+        archive_dandiset_id=_FAILED_RUNS_ARCHIVE_DANDISET_ID,
+        base_directory=base_directory,
+        test=False,
+    )
+
+
+@pytest.mark.ai_generated
+def test_cli_archive_rejects_unknown_job_ids(
+    example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path
+) -> None:
+    """dandicompute archive add --job names every unknown job ID and archives nothing."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict(os.environ, {"DANDI_API_KEY": "test-key", "DANDI_DEVEL": "1"}),
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi", return_value=example_pipeline_queue),
+        mock.patch.object(PipelineQueue, "archive_capsules") as mock_archive,
+    ):
+        result = runner.invoke(
+            _dandicompute_group,
+            [
+                "archive",
+                "add",
+                "--job",
+                "job-240101aa0003,job-999999ffffff,job-888888eeeeee",
+                "--base",
+                str(base_directory),
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "job-999999ffffff, job-888888eeeeee" in result.output
+    assert "job-240101aa0003" not in result.output
+    mock_archive.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("environment", "expected_message"),
+    [
+        pytest.param({}, "DANDI_API_KEY", id="without_api_key"),
+        pytest.param({"DANDI_API_KEY": "test-key"}, "DANDI_DEVEL", id="without_dandi_devel"),
+    ],
+)
+def test_cli_archive_job_requires_credentials(
+    environment: dict[str, str], expected_message: str, base_directory: pathlib.Path
+) -> None:
+    """dandicompute archive add --job errors before loading the queue when DANDI_API_KEY or DANDI_DEVEL is missing."""
+    runner = CliRunner()
+
+    with (
+        mock.patch.dict(os.environ, environment, clear=True),
+        mock.patch(f"{_GROUP}.PipelineQueue.from_dandi") as mock_from_dandi,
+    ):
+        result = runner.invoke(
+            _dandicompute_group, ["archive", "add", "--job", "job-240101aa0003", "--base", str(base_directory)]
+        )
+
+    assert result.exit_code != 0
+    assert expected_message in result.output
     mock_from_dandi.assert_not_called()

@@ -29,7 +29,7 @@ from dandi_compute_code._cli import _dandicompute_group
         (["archive", "--help"], "Move capsules into the failed runs archive (001873) or delete them from it."),
         (
             ["archive", "add", "--help"],
-            "Archive one capsule (--job) or every capsule matching --status or --pipeline.",
+            "Archive the capsules of --job IDs, or all matching --status or --pipeline.",
         ),
         (
             ["archive", "delete", "--help"],
