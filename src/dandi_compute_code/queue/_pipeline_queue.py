@@ -69,6 +69,7 @@ from ..dandiset._globals import (
     _FAILED_RUNS_ARCHIVE_DANDISET_ID,
     _JOB_CAPSULES_DANDISET_ID,
 )
+from ..dandiset._job_id import _normalize_job_id
 from ..dandiset._load_assets_jsonld_metadata import (
     AssetMetadata,
     AssetsJsonldMetadata,
@@ -587,6 +588,7 @@ class PipelineQueue:
         ----------
         job_id : str, optional
             The ``job-{YYMMDD}{hash}`` ID of the one capsule to delete, as recorded in ``jobs.tsv``.
+            The ``job-`` prefix may be left off.
         version : str, optional
             The pipeline version whose capsules are deleted, as recorded in ``jobs.tsv``.
             Requires *pipeline*.
@@ -641,7 +643,7 @@ class PipelineQueue:
         entries = []
         for entry in self.entries:
             if job_id is not None:
-                matches = entry.job.job_id == job_id.strip()
+                matches = entry.job.job_id == _normalize_job_id(job_id)
             else:
                 recorded = entry.job.version.removeprefix("v")
                 matches_version = recorded == release or recorded.partition("+")[0] == release
@@ -704,8 +706,8 @@ class PipelineQueue:
         pipeline : str, optional
             Archive only the entries of this pipeline.
         job_ids : list of str, optional
-            Archive the entries with these ``job-{YYMMDD}{hash}`` IDs, in the order given.
-            Mutually exclusive with *status* and *pipeline*.
+            Archive the entries with these ``job-{YYMMDD}{hash}`` IDs, in the order given. The
+            ``job-`` prefix may be left off. Mutually exclusive with *status* and *pipeline*.
         dandiset_id : str, optional
             Dandiset entries are archived *from*. Defaults to the job capsules
             Dandiset.
@@ -742,7 +744,7 @@ class PipelineQueue:
         if job_ids is None and status is None and pipeline is None:
             message = "Provide `job_ids`, or at least one of `status` or `pipeline`, to select the capsules to archive."
             raise ValueError(message)
-        requested_job_ids = None if job_ids is None else list(dict.fromkeys(job_id.strip() for job_id in job_ids))
+        requested_job_ids = None if job_ids is None else list(dict.fromkeys(map(_normalize_job_id, job_ids)))
         if requested_job_ids is not None and (not requested_job_ids or "" in requested_job_ids):
             message = "`job_ids` must name at least one job, and none of them blank."
             raise ValueError(message)

@@ -242,8 +242,8 @@ def test_archive_capsules_filters_by_pipeline(
 def test_archive_capsules_moves_entries_named_by_job_ids(
     example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, dandi_api_key: None
 ) -> None:
-    """archive_capsules moves the entries of the given job IDs once each, in order, whatever their status."""
-    job_ids = ["job-240101aa000a", "job-240101aa0002", " job-240101aa000a "]
+    """archive_capsules moves each given job ID's entry once, in order, with or without the job- prefix."""
+    job_ids = ["job-240101aa000a", "240101aa0002", " 240101aa000a "]
     expected_entries = [
         next(entry for entry in example_pipeline_queue if entry.job.job_id == job_id)
         for job_id in ("job-240101aa000a", "job-240101aa0002")

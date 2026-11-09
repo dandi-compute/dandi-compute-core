@@ -233,6 +233,8 @@ def test_cli_archive_rejects_invalid_selection(arguments: list[str], base_direct
         pytest.param("job-240101aa0003", ["job-240101aa0003"], id="one"),
         pytest.param("job-240101aa0003,job-240101aa000a", ["job-240101aa0003", "job-240101aa000a"], id="several"),
         pytest.param(" job-240101aa0003 , job-240101aa000a, ", ["job-240101aa0003", "job-240101aa000a"], id="spaced"),
+        pytest.param("240101aa0003, 240101aa000a", ["job-240101aa0003", "job-240101aa000a"], id="without_prefix"),
+        pytest.param("240101aa0003,job-240101aa000a", ["job-240101aa0003", "job-240101aa000a"], id="mixed_prefix"),
     ],
 )
 def test_cli_archive_forwards_job_ids(
@@ -287,7 +289,7 @@ def test_cli_archive_rejects_unknown_job_ids(
                 "archive",
                 "add",
                 "--job",
-                "job-240101aa0003,job-999999ffffff,job-888888eeeeee",
+                "240101aa0003,999999ffffff,job-888888eeeeee",
                 "--base",
                 str(base_directory),
             ],

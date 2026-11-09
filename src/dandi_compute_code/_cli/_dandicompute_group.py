@@ -11,6 +11,7 @@ from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
+from ..dandiset._job_id import _normalize_job_id
 from ..queue import TEST_QUEUE_CONTENT_ID, JobCapsule, PipelineQueue, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
@@ -772,8 +773,8 @@ def _archive_group() -> None:
 @click.option(
     "--job",
     "job_ids",
-    help="Archive the capsules with these job IDs, separated by commas "
-    "(e.g. 'job-260916a1b2c3' or 'job-260916a1b2c3,job-260917d4e5f6'). "
+    help="Archive the capsules with these job IDs, separated by commas, with or without the 'job-' prefix "
+    "(e.g. '260916a1b2c3' or '260916a1b2c3,job-260917d4e5f6'). "
     "Mutually exclusive with --status and --pipeline.",
     required=False,
     type=str,
@@ -824,7 +825,9 @@ def _archive_add_command(
     silent: bool = False,
 ) -> None:
     """Archive the capsules of --job IDs, or all matching --status or --pipeline."""
-    requested_job_ids = None if job_ids is None else [job_id.strip() for job_id in job_ids.split(",") if job_id.strip()]
+    requested_job_ids = (
+        None if job_ids is None else [job_id for job_id in map(_normalize_job_id, job_ids.split(",")) if job_id]
+    )
     has_filter = status is not None or pipeline is not None
     if has_filter == (requested_job_ids is not None) or requested_job_ids == []:
         message = (
@@ -869,7 +872,8 @@ def _archive_add_command(
 @click.option(
     "--job",
     "job_id",
-    help="Delete the one capsule with this job ID (e.g. 'job-260916a1b2c3'). Mutually exclusive with --version.",
+    help="Delete the one capsule with this job ID, with or without the 'job-' prefix "
+    "(e.g. '260916a1b2c3' or 'job-260916a1b2c3'). Mutually exclusive with --version.",
     required=False,
     type=str,
     default=None,
@@ -943,7 +947,7 @@ def _archive_delete_command(
 
     if silent:
         return
-    description = job_id if job_id is not None else f"{pipeline} {version}"
+    description = _normalize_job_id(job_id) if job_id is not None else f"{pipeline} {version}"
     if not deleted:
         _styled_echo(
             text=f"\nNo {description} job capsules in Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}.", color="yellow"
