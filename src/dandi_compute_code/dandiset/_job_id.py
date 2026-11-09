@@ -77,6 +77,17 @@ def _format_job_id(*, job_hash: str, date: datetime.date | None = None, index: i
 
 
 @beartype.beartype
+def _normalize_job_id(job_id: str, /) -> str:
+    """
+    Strip *job_id* and give it the ``job-`` prefix when it lacks one, so ``260916a1b2c3`` and
+    ``job-260916a1b2c3`` name the same capsule. A blank ID stays blank.
+    """
+    stripped = job_id.strip()
+    normalized = stripped if not stripped or stripped.startswith("job-") else f"job-{stripped}"
+    return normalized
+
+
+@beartype.beartype
 def _parse_job_hash(job_id: str, /) -> str | None:
     """
     Return the hash portion of a job ID, or ``None`` when *job_id* is not a job ID.

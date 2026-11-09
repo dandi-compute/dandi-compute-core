@@ -105,10 +105,11 @@ dandicompute archive add --status failed      # every capsule with logs but no o
 dandicompute archive add --status stalled     # claimed, but nothing was ever logged
 dandicompute archive add --pipeline lfp       # every capsule of one pipeline, whatever its status
 dandicompute archive add --pipeline lfp --status failed   # only that pipeline's failed capsules
-dandicompute archive add --job derivatives/dandisets-000/dandiset-000409/sub-mouse01/pipeline-aind+ephys/job-260916a1b2c3
+dandicompute archive add --job 260916a1b2c3                # one capsule, by job ID
+dandicompute archive add --job 260916a1b2c3,260917d4e5f6   # several, separated by commas
 ```
 
-Archiving preserves each capsule's path exactly and deletes it from the source only after the upload to the archive succeeds. Once a failed capsule is archived, the next `jobs create` sees no capsule for that asset and forms a fresh one.
+The `job-` prefix of a job ID is optional, so `260916a1b2c3` and `job-260916a1b2c3` are the same capsule. Every job ID given to `--job` must name a capsule in `001697`, or nothing is archived. Archiving preserves each capsule's path exactly and deletes it from the source only after the upload to the archive succeeds. Once a failed capsule is archived, the next `jobs create` sees no capsule for that asset and forms a fresh one.
 
 To throw away capsules that were never claimed, for example after changing a parameter set, delete them instead of archiving:
 

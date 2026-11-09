@@ -236,3 +236,66 @@ def test_archive_capsules_filters_by_pipeline(
     assert [entry.job.within_dandiset_path for entry in expected_entries] == expected_within_dandiset_paths
     assert archived == expected_paths
     assert mock_move.call_count == len(expected_paths)
+
+
+@pytest.mark.ai_generated
+def test_archive_capsules_moves_entries_named_by_job_ids(
+    example_pipeline_queue: PipelineQueue, base_directory: pathlib.Path, dandi_api_key: None
+) -> None:
+    """archive_capsules moves each given job ID's entry once, in order, with or without the job- prefix."""
+    job_ids = ["job-240101aa000a", "240101aa0002", " 240101aa000a "]
+    expected_entries = [
+        next(entry for entry in example_pipeline_queue if entry.job.job_id == job_id)
+        for job_id in ("job-240101aa000a", "job-240101aa0002")
+    ]
+    expected_paths = [entry.capsule_path() for entry in expected_entries]
+    metadata = _metadata_with_capsules_at(*expected_paths)
+
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata", return_value=metadata),
+    ):
+        archived = example_pipeline_queue.archive_capsules(job_ids=job_ids, base_directory=base_directory)
+
+    assert [entry.status for entry in expected_entries] == ["stalled", "successful"]
+    assert archived == expected_paths
+    assert [call.kwargs["capsule_path"] for call in mock_move.call_args_list] == expected_paths
+
+
+@pytest.mark.ai_generated
+def test_archive_capsules_rejects_unknown_job_ids_before_moving(
+    example_pipeline_queue: PipelineQueue, dandi_api_key: None
+) -> None:
+    """archive_capsules names every job ID missing from the queue and moves nothing, not even the known ones."""
+    with (
+        mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move,
+        mock.patch("dandi_compute_code.queue._pipeline_queue.load_assets_jsonld_metadata") as mock_load_metadata,
+    ):
+        with pytest.raises(ValueError, match="job-999999ffffff, job-888888eeeeee"):
+            example_pipeline_queue.archive_capsules(
+                job_ids=["job-240101aa0003", "job-999999ffffff", "job-888888eeeeee"]
+            )
+
+    mock_move.assert_not_called()
+    mock_load_metadata.assert_not_called()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.parametrize(
+    ("arguments", "expected_message"),
+    [
+        pytest.param({"job_ids": ["job-240101aa0003"], "status": "failed"}, "not both", id="with_status"),
+        pytest.param({"job_ids": ["job-240101aa0003"], "pipeline": "test"}, "not both", id="with_pipeline"),
+        pytest.param({"job_ids": []}, "at least one job", id="empty"),
+        pytest.param({"job_ids": ["job-240101aa0003", "  "]}, "none of them blank", id="blank"),
+    ],
+)
+def test_archive_capsules_rejects_invalid_job_ids_selection(
+    arguments: dict, expected_message: str, example_pipeline_queue: PipelineQueue, dandi_api_key: None
+) -> None:
+    """archive_capsules refuses job IDs combined with a status or pipeline filter, and empty or blank job IDs."""
+    with mock.patch("dandi_compute_code.queue._pipeline_queue.move_job_capsule") as mock_move:
+        with pytest.raises(ValueError, match=expected_message):
+            example_pipeline_queue.archive_capsules(**arguments)
+
+    mock_move.assert_not_called()

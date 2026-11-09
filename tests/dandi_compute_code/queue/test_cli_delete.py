@@ -179,6 +179,7 @@ def test_cli_delete_preview_lists_provenance_without_an_api_key() -> None:
     [
         pytest.param(["--version", "v1.4.0", "--pipeline", "lfp"], "lfp v1.4.0", id="version"),
         pytest.param(["--job", "job-240101aa000c"], "job-240101aa000c", id="job"),
+        pytest.param(["--job", "240101aa000c"], "job-240101aa000c", id="job_without_prefix"),
     ],
 )
 def test_cli_delete_reports_when_nothing_matches(args: list[str], description: str) -> None:

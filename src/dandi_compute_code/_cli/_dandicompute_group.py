@@ -10,8 +10,8 @@ from ._styled_echo import _styled_echo
 from .._base_directory import _DEFAULT_BASE_DIRECTORY
 from .._configure_logging import _configure_logging
 from ..aind_ephys_pipeline import prepare_aind_ephys_job, submit_job
-from ..dandiset import move_job_capsule
 from ..dandiset._globals import _FAILED_RUNS_ARCHIVE_DANDISET_ID, _JOB_CAPSULES_DANDISET_ID
+from ..dandiset._job_id import _normalize_job_id
 from ..queue import TEST_QUEUE_CONTENT_ID, JobCapsule, PipelineQueue, clean_dispatch_directories
 
 logging.basicConfig(level=logging.INFO)
@@ -772,9 +772,10 @@ def _archive_group() -> None:
 )
 @click.option(
     "--job",
-    "capsule_path",
-    help="Path of a single job capsule folder (relative to the source Dandiset root) to archive directly. "
-    "Mutually exclusive with --status.",
+    "job_ids",
+    help="Archive the capsules with these job IDs, separated by commas, with or without the 'job-' prefix "
+    "(e.g. '260916a1b2c3' or '260916a1b2c3,job-260917d4e5f6'). "
+    "Mutually exclusive with --status and --pipeline.",
     required=False,
     type=str,
     default=None,
@@ -816,39 +817,40 @@ def _archive_group() -> None:
 def _archive_add_command(
     status: str | None,
     pipeline: str | None,
-    capsule_path: str | None,
+    job_ids: str | None,
     dandiset_id: str,
     archive_dandiset_id: str,
     base_directory: pathlib.Path = _DEFAULT_BASE_DIRECTORY,
     test: bool = False,
     silent: bool = False,
 ) -> None:
-    """Archive one capsule (--job) or every capsule matching --status or --pipeline."""
+    """Archive the capsules of --job IDs, or all matching --status or --pipeline."""
+    requested_job_ids = (
+        None if job_ids is None else [job_id for job_id in map(_normalize_job_id, job_ids.split(",")) if job_id]
+    )
     has_filter = status is not None or pipeline is not None
-    if has_filter == (capsule_path is not None):
-        message = "Provide either --job PATH, or at least one of --status (failed|pending|stalled) and --pipeline NAME."
+    if has_filter == (requested_job_ids is not None) or requested_job_ids == []:
+        message = (
+            "Provide either --job JOB_ID[,JOB_ID...], "
+            "or at least one of --status (failed|pending|stalled) and --pipeline NAME."
+        )
         raise click.UsageError(message)
 
     _configure_logging(silent=silent)
     _require_dandi_api_key()
     _require_dandi_devel()
 
-    if capsule_path is not None:
-        move_job_capsule(
-            capsule_path=capsule_path,
-            source_dandiset_id=dandiset_id,
-            target_dandiset_id=archive_dandiset_id,
-            base_directory=base_directory,
-            test=test,
-        )
-        if not silent:
-            _styled_echo(text=f"\nArchived job capsule: {capsule_path}", color="green")
-        return
-
     state = PipelineQueue.from_dandi(dandiset_id=dandiset_id)
+    if requested_job_ids is not None:
+        known_job_ids = {entry.job.job_id for entry in state}
+        unknown_job_ids = [job_id for job_id in requested_job_ids if job_id not in known_job_ids]
+        if unknown_job_ids:
+            message = f"no job capsule in Dandiset {dandiset_id} has the job ID(s) {', '.join(unknown_job_ids)}."
+            raise click.BadParameter(message, param_hint="'--job'")
     archived = state.archive_capsules(
         status=status,
         pipeline=pipeline,
+        job_ids=requested_job_ids,
         dandiset_id=dandiset_id,
         archive_dandiset_id=archive_dandiset_id,
         base_directory=base_directory,
@@ -856,13 +858,13 @@ def _archive_add_command(
     )
 
     if not silent:
-        description = " ".join(part for part in (status, pipeline) if part is not None)
+        description = " ".join(part for part in (status, pipeline, "job") if part is not None)
         if archived:
-            _styled_echo(text=f"\nArchived {len(archived)} {description} job capsule(s):", color="green")
+            _styled_echo(text=f"\nArchived {len(archived)} {description} capsule(s):", color="green")
             for capsule_path in archived:
                 _styled_echo(text=f"  {capsule_path}", color="green")
         else:
-            _styled_echo(text=f"\nNo {description} job capsules to archive.", color="yellow")
+            _styled_echo(text=f"\nNo {description} capsules to archive.", color="yellow")
 
 
 # dandicompute archive delete [OPTIONS]
@@ -870,7 +872,8 @@ def _archive_add_command(
 @click.option(
     "--job",
     "job_id",
-    help="Delete the one capsule with this job ID (e.g. 'job-260916a1b2c3'). Mutually exclusive with --version.",
+    help="Delete the one capsule with this job ID, with or without the 'job-' prefix "
+    "(e.g. '260916a1b2c3' or 'job-260916a1b2c3'). Mutually exclusive with --version.",
     required=False,
     type=str,
     default=None,
@@ -944,7 +947,7 @@ def _archive_delete_command(
 
     if silent:
         return
-    description = job_id if job_id is not None else f"{pipeline} {version}"
+    description = _normalize_job_id(job_id) if job_id is not None else f"{pipeline} {version}"
     if not deleted:
         _styled_echo(
             text=f"\nNo {description} job capsules in Dandiset {_FAILED_RUNS_ARCHIVE_DANDISET_ID}.", color="yellow"
