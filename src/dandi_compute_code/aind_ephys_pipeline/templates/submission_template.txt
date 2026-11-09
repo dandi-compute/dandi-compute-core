@@ -30,7 +30,16 @@ pip install -U dandi
 # isolated .nextflow/ (history + cache) and they don't fight over file locks.
 RUNDIR="{{ log_directory }}"
 cd "$RUNDIR"
-
+{% if uses_nwb_input_folder %}
+# From release 1.5.0 the pipeline checks the job dispatch arguments against its parameters schema,
+# which has no `--nwb-files`. Instead it reads the one `.nwb` file in its input folder, so the blob,
+# which has no suffix, is linked into one. The containers reach the blob through the config's bind of
+# its partition. The link is made once, so a requeued run resumes on an unchanged input.
+if [ ! -L "$DATA_PATH/{{ nwb_link_name }}" ]; then
+    mkdir -p "$DATA_PATH"
+    ln -s "$NWB_FILE_PATH" "$DATA_PATH/{{ nwb_link_name }}"
+fi
+{% endif %}
 # The steps Nextflow submits queue and run inside this job's time limit. When the limit is
 # near, SLURM sends USR1 (`--signal` above). When it stops the job early (preemption,
 # `scancel`), it sends TERM. Either way Nextflow is stopped, which cancels the steps it
@@ -62,8 +71,8 @@ DATA_PATH="$DATA_PATH" RESULTS_PATH="$RESULTS_PATH" NXF_APPTAINER_CACHEDIR="$NXF
     run "{{ pipeline_file_path }}" \
     -resume \
     -work-dir "$WORKDIR" \
-    --params_file "{{ params_file_path }}" \
-    --job_dispatch_args "--nwb-files $NWB_FILE_PATH" &
+    --params_file "{{ params_file_path }}"{% if not uses_nwb_input_folder %} \
+    --job_dispatch_args "--nwb-files $NWB_FILE_PATH"{% endif %} &
 NEXTFLOW_PID=$!
 wait "$NEXTFLOW_PID"
 trap - USR1 TERM

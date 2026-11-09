@@ -3,7 +3,8 @@ import pathlib
 import beartype
 import jinja2
 
-from ._globals import _RAW_TEMPLATE_FILE_PATH
+from ._globals import _FIRST_PIPELINE_VERSION_WITH_NWB_INPUT_FOLDER, _RAW_TEMPLATE_FILE_PATH
+from ._pipeline_version import _parse_pipeline_version
 
 
 @beartype.beartype
@@ -35,11 +36,13 @@ def generate_aind_ephys_submission_script(
     log_directory : str
         The log directory.
     nwb_file_path : str
-        The input NWB file path.
+        The input NWB file path. Up to pipeline v1.4.1 it is passed to the job dispatch step as
+        ``--nwb-files``. From v1.5.0 the script links it into an input folder under the work
+        directory as the one ``.nwb`` file there, and the pipeline reads that folder.
     results_directory : str
         The results directory.
     work_directory : str
-        The work directory.
+        The Nextflow work directory of this job.
     apptainer_cache_directory : str
         The Apptainer cache directory.
     environment_directory : str
@@ -60,12 +63,22 @@ def generate_aind_ephys_submission_script(
     params_file_path : str
         The parameters file path.
     """
+    uses_nwb_input_folder = (
+        _parse_pipeline_version(pipeline_version, label="pipeline") >= _FIRST_PIPELINE_VERSION_WITH_NWB_INPUT_FOLDER
+    )
+    if uses_nwb_input_folder:
+        data_path = str(pathlib.Path(work_directory) / "input")
+    else:
+        data_path = str(pathlib.Path(nwb_file_path).parent)
+
     raw_template = _RAW_TEMPLATE_FILE_PATH.read_text()
     template = jinja2.Template(source=raw_template)
     script = template.render(
         log_directory=log_directory,
         nwb_file_path=nwb_file_path,
-        data_path=str(pathlib.Path(nwb_file_path).parent),
+        data_path=data_path,
+        uses_nwb_input_folder=uses_nwb_input_folder,
+        nwb_link_name=f"{pathlib.Path(nwb_file_path).name}.nwb",
         results_directory=results_directory,
         work_directory=work_directory,
         apptainer_cache_directory=apptainer_cache_directory,

@@ -39,9 +39,14 @@
     "md5": "c749cf96cb29e0c528b08a1aa0dafa1b",
     "description": "Revised configuration for the Lupin and DARTsort spike sorters, which pipeline v1.5.0 added. Gives `spikesort_lupin` the CPU allocation of Spyking Circus 2 and `spikesort_dartsort` the GPU allocation of Kilosort, as upstream's SLURM config does. Otherwise identical to revision 6."
   },
+  "v8": {
+    "path": "name-mit+engaging_revision-8.config",
+    "md5": "8ef3fd42e3bc76ef74667e2baeb25ff2",
+    "description": "Revised configuration to bind the blob mirror in partition 002 into the containers, as revision 6 already does for 001. From pipeline v1.5.0 the capsule's input folder holds a link to the blob, and Nextflow mounts only the folder, so the steps would otherwise not reach a blob in 002. Otherwise identical to revision 7."
+  },
   "default": {
-    "path": "name-mit+engaging_revision-7.config",
-    "md5": "c749cf96cb29e0c528b08a1aa0dafa1b",
+    "path": "name-mit+engaging_revision-8.config",
+    "md5": "8ef3fd42e3bc76ef74667e2baeb25ff2",
     "description": "The current recommended configuration."
   }
 }
