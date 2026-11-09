@@ -129,13 +129,16 @@ def test_delete_capsules_raises_without_dandi_api_key() -> None:
 
 
 @pytest.mark.ai_generated
-def test_delete_capsules_deletes_one_job_by_id(example_pipeline_queue: PipelineQueue, dandi_api_key: None) -> None:
-    """*job_id* selects exactly that capsule, whatever other capsules share its pipeline and version."""
+@pytest.mark.parametrize("job_id", ["job-240101aa000c", "240101aa000c", " 240101aa000c "])
+def test_delete_capsules_deletes_one_job_by_id(
+    job_id: str, example_pipeline_queue: PipelineQueue, dandi_api_key: None
+) -> None:
+    """*job_id*, with or without its ``job-`` prefix, selects exactly that capsule and no other."""
     sole_path = example_pipeline_queue.entry_for(within_dandiset_path=_SOLE_AIND_PATH).capsule_path()
     files = _files_for(example_pipeline_queue, _SOLE_AIND_PATH, _SOURCEDATA_AIND_PATH)
 
     with serve_remote_dandiset(files), mock.patch("subprocess.run") as mock_run:
-        deleted = example_pipeline_queue.delete_capsules(job_id="job-240101aa000c")
+        deleted = example_pipeline_queue.delete_capsules(job_id=job_id)
 
     assert list(deleted) == [sole_path]
     assert deleted[sole_path].job.job_id == "job-240101aa000c"
