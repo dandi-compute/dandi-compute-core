@@ -131,7 +131,7 @@ The command only deletes from `001873`. A version must always be paired with its
 ### Tidy the cluster
 
 ```bash
-dandicompute clean --work              # empty work/ except its apptainer_cache/
+dandicompute clean --work              # empty work/ except its apptainer_cache/ and bazel/
 dandicompute clean --dispatch          # remove dispatch directories with no live array
 dandicompute clean --dispatch --age 6  # only those at least 6 hours old
 ```

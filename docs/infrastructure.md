@@ -49,7 +49,8 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 ├── aind-ephys-pipeline/         # checkout of the AIND ephys pipeline, tags checked out per job
 ├── work/                        # Nextflow work directories
 │   ├── job-{id}/                # one per AIND capsule
-│   └── apptainer_cache/         # container images, AIND and LFP, kept by `clean --work`
+│   ├── apptainer_cache/         # container images, AIND and LFP, kept by `clean --work`
+│   └── bazel/                   # Bazel's output root, kept by `clean --work`
 └── processing/
     ├── prepare-job-XXXXXXXX/    # one preparation tree per capsule (see below)
     │   └── 001697/
@@ -67,6 +68,7 @@ Every command takes `--base`, defaulting to `/orcd/data/dandi/001/dandi-compute`
 | `dandi-compute-core/` | Kept up to date by hand with `git pull` | Never |
 | `aind-ephys-pipeline/` | Kept up to date by hand. Each AIND job runs `git checkout {version}` in it before starting. | Never |
 | `work/` | Nextflow | `dandicompute clean --work` |
+| `work/bazel/` | Bazel, run by some pipeline step. The cluster user's `~/.bazelrc` points it here instead of the home directory. | dandi-compute-runner's `launcher/clean_bazel.sh`, every 15 minutes, once an output base has been idle for an hour |
 | `processing/prepare-job-*` | `prepare aind`, `jobs create` | Nothing automatic |
 | `processing/dandicompute-dispatch-*` | `jobs dispatch` | `dandicompute clean --dispatch`, once no dispatcher is live and the directory is old enough |
 | `processing/derivatives/logs/` | `jobs dispatch` and its array tasks | Never. It is the permanent dispatch record. |
