@@ -14,4 +14,6 @@ dependencies = [
     "pynwb",
     "numpy",
     "jsonschema",
+    # The submission script runs duct inside the container to record resource usage.
+    "con-duct",
 ]

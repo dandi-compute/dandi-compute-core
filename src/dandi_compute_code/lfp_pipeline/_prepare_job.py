@@ -138,7 +138,7 @@ def prepare_lfp_job(
     Prepare a single LFP job capsule for an asset, or skip it if one already exists.
 
     This mirrors :func:`~dandi_compute_code.aind_ephys_pipeline.prepare_aind_ephys_job`
-    but is much simpler. The job runs a container with Apptainer, wrapped in duct,
+    but is much simpler. The job runs a container with Apptainer, with duct inside it,
     so there is no pipeline repository checkout and no Nextflow config. Exactly one
     capsule is ever prepared per asset. When a capsule already exists for the
     resolved output path, the function returns ``None`` without preparing another.
@@ -260,7 +260,6 @@ def prepare_lfp_job(
     )
     container_image = _LFP_CONTAINER_IMAGE_TEMPLATE.format(version=pipeline_version)
     image_file_path = _work_directory(base_directory) / "apptainer_cache" / _image_file_name(container_image)
-    environment_directory = "/orcd/data/dandi/001/environments/name-lfp_environment"
     done_tracker_file_path = processing_directory / "done.txt"
 
     dataset_description = {
@@ -303,7 +302,6 @@ def prepare_lfp_job(
         script_file_path=script_file_path,
         log_directory=str(log_directory),
         dataset_directory=str(dandiset_output_dir),
-        environment_directory=environment_directory,
         container_image=container_image,
         image_file_path=str(image_file_path),
         nwb_file_path=nwbfile_path,

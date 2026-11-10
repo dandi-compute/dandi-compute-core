@@ -67,7 +67,6 @@ _LFP_SCRIPT_KWARGS = {
     "script_file_path": "/some/submit.sh",
     "log_directory": "logs",
     "dataset_directory": "dataset",
-    "environment_directory": "env",
     "container_image": "image",
     "image_file_path": "image.img",
     "nwb_file_path": "nwb",

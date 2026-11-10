@@ -1,6 +1,7 @@
 import dataclasses
 import os
 import pathlib
+import re
 import shutil
 import signal
 import subprocess
@@ -20,12 +21,14 @@ _requires_bash = pytest.mark.skipif(
 
 # Stand-ins for the cluster's tools. Each records how it was called, and each can be told to fail.
 _STUB_MODULES_INIT = """
-module() { :; }
-conda() {
-    echo "conda $*" >> "$STUB_CALLS"
-    return "${STUB_CONDA_STATUS:-0}"
+module() {
+    echo "module $*" >> "$STUB_CALLS"
+    return "${STUB_MODULE_STATUS:-0}"
 }
 """
+# The apptainer stub runs the command it is given, as `apptainer exec` would inside the image. With
+# --cleanenv only the stubs' own settings, PATH and HOME get through, plus the APPTAINERENV_ variables
+# under their unprefixed names.
 _STUB_EXECUTABLES = {
     "apptainer": """#!/bin/bash
 echo "apptainer $*" >> "$STUB_CALLS"
@@ -33,6 +36,37 @@ if [ "$1" = "pull" ]; then
     echo "image" > "$3"
     exit "${STUB_PULL_STATUS:-0}"
 fi
+shift
+clean=""
+while [ "${1#--}" != "$1" ]; do
+    case "$1" in
+        --cleanenv) clean=1 ;;
+        --bind) shift ;;
+    esac
+    shift
+done
+image="$1"
+shift
+[ -f "$image" ] || exit 255
+if [ -n "$clean" ]; then
+    kept=(PATH="$PATH" HOME="$HOME")
+    while IFS= read -r line; do
+        kept+=("$line")
+    done < <(env | grep '^STUB_')
+    if [ -n "${APPTAINERENV_DANDI_API_KEY:-}" ]; then
+        kept+=(DANDI_API_KEY="$APPTAINERENV_DANDI_API_KEY")
+    fi
+    exec env -i "${kept[@]}" "$@"
+fi
+exec "$@"
+""",
+    "duct": """#!/bin/bash
+echo "duct $*" >> "$STUB_CALLS"
+shift 2
+exec "$@"
+""",
+    "python": """#!/bin/bash
+echo "python $*" >> "$STUB_CALLS"
 output=""
 while [ $# -gt 0 ]; do
     if [ "$1" = "--output" ]; then
@@ -47,16 +81,19 @@ if [ -n "${STUB_RUN_STARTED_FILE_PATH:-}" ]; then
 fi
 exit "${STUB_RUN_STATUS:-0}"
 """,
-    "duct": """#!/bin/bash
-echo "duct $*" >> "$STUB_CALLS"
-shift 2
-exec "$@"
-""",
     "dandi": """#!/bin/bash
-echo "dandi $* from $PWD" >> "$STUB_CALLS"
+echo "dandi $* from $PWD with token ${DANDI_API_KEY:-none}" >> "$STUB_CALLS"
 exit "${STUB_UPLOAD_STATUS:-0}"
 """,
 }
+_PID_PLACEHOLDER = "PID"
+_UPLOAD_CALL_TEMPLATE = "dandi upload --allow-any-path --validation skip from {dataset_directory} with token {token}"
+
+
+def _mask_pid(call: str) -> str:
+    """Replace the process ID a partial image is named after, which differs on every run."""
+    masked_call = re.sub(pattern=r"\.partial-\d+", repl=f".partial-{_PID_PLACEHOLDER}", string=call)
+    return masked_call
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,6 +110,10 @@ class _Capsule:
         if not self.calls_file_path.exists():
             return []
         return self.calls_file_path.read_text().splitlines()
+
+    def upload_call(self) -> str:
+        upload_call = _UPLOAD_CALL_TEMPLATE.format(dataset_directory=self.dataset_directory, token="secret")
+        return upload_call
 
     def run(self, **stub_settings: str) -> subprocess.CompletedProcess:
         result = subprocess.run(
@@ -91,7 +132,6 @@ def _render(tmp_path: pathlib.Path) -> str:
         script_file_path=script_file_path,
         log_directory="/dataset/logs",
         dataset_directory="/dataset",
-        environment_directory="/envs/name-lfp",
         container_image=_CONTAINER_IMAGE,
         image_file_path="/work/apptainer_cache/image.img",
         nwb_file_path="/data/blobs/abc/def/0123456789",
@@ -119,7 +159,6 @@ def capsule(tmp_path: pathlib.Path) -> _Capsule:
         script_file_path=script_file_path,
         log_directory=str(log_directory),
         dataset_directory=str(dataset_directory),
-        environment_directory="/envs/name-lfp",
         container_image=_CONTAINER_IMAGE,
         image_file_path=str(image_file_path),
         nwb_file_path=str(tmp_path / "blob"),
@@ -147,6 +186,7 @@ def capsule(tmp_path: pathlib.Path) -> _Capsule:
         "PATH": f"{stub_directory}{os.pathsep}{os.environ['PATH']}",
         "HOME": str(tmp_path),
         "STUB_CALLS": str(calls_file_path),
+        "DANDI_API_KEY": "secret",
     }
     return _Capsule(
         script_file_path=script_file_path,
@@ -169,14 +209,18 @@ def test_rendered_script_has_sbatch_header(tmp_path) -> None:
 
 
 @pytest.mark.ai_generated
-def test_rendered_script_runs_the_container_with_apptainer_under_duct(tmp_path) -> None:
+def test_rendered_script_runs_every_step_from_the_image(tmp_path) -> None:
     script = _render(tmp_path)
 
     assert "datalad" not in script
+    assert "conda" not in script
+    assert "miniforge" not in script
+    assert "module load apptainer" in script
     assert 'duct --output-prefix "/dataset/logs/duct_"' in script
     assert f'apptainer pull --disable-cache "$PARTIAL_IMAGE_FILE_PATH" "docker://{_CONTAINER_IMAGE}"' in script
     assert 'IMAGE_FILE_PATH="/work/apptainer_cache/image.img"' in script
-    assert "--bind /orcd/data/dandi/001:/orcd/data/dandi/001,/orcd/data/dandi/002:/orcd/data/dandi/002" in script
+    assert 'BIND_PATHS="/orcd/data/dandi/001:/orcd/data/dandi/001,/orcd/data/dandi/002:/orcd/data/dandi/002"' in script
+    assert 'apptainer exec --cleanenv --bind "$BIND_PATHS" "$IMAGE_FILE_PATH" "$@"' in script
 
 
 @pytest.mark.ai_generated
@@ -194,26 +238,41 @@ def test_rendered_script_uploads_from_an_exit_trap_set_before_any_setup(tmp_path
     script = _render(tmp_path)
 
     assert script.index("trap upload_capsule EXIT") < script.index(f"source {_MODULES_INIT_FILE_PATH}")
-    assert 'cd "/dataset" && dandi upload --allow-any-path --validation skip' in script
+    assert 'cd "/dataset" && run_in_image dandi upload --allow-any-path --validation skip' in script
     assert f'echo "{_TEMP_NAME}" >> /processing/done.txt' in script
 
 
 @_requires_bash
 @pytest.mark.ai_generated
-def test_successful_run_keeps_its_output_and_uploads_the_capsule(capsule: _Capsule) -> None:
+def test_successful_run_keeps_its_output_and_uploads_the_capsule(capsule: _Capsule, tmp_path: pathlib.Path) -> None:
     result = capsule.run()
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert capsule.output_nwb_file_path.read_text() == "partial\n"
     assert capsule.image_file_path.read_text() == "image\n"
     assert capsule.done_tracker_file_path.read_text() == f"{_TEMP_NAME}\n"
-    apptainer_exec_calls = [call for call in capsule.calls() if call.startswith("apptainer exec")]
-    assert len(apptainer_exec_calls) == 1
-    assert "--cleanenv" in apptainer_exec_calls[0]
-    assert "--bind /orcd/data/dandi/001:/orcd/data/dandi/001,/orcd/data/dandi/002:/orcd/data/dandi/002" in (
-        apptainer_exec_calls[0]
+    exec_prefix = (
+        "apptainer exec --cleanenv --bind "
+        "/orcd/data/dandi/001:/orcd/data/dandi/001,/orcd/data/dandi/002:/orcd/data/dandi/002 "
+        f"{capsule.image_file_path}"
     )
-    assert capsule.calls()[-1] == f"dandi upload --allow-any-path --validation skip from {capsule.dataset_directory}"
+    pipeline_call = (
+        f"python -m dandi_compute_code.lfp_pipeline --input {tmp_path / 'blob'} "
+        f"--output {capsule.output_nwb_file_path} --params default"
+    )
+    duct_call = f"duct --output-prefix {capsule.dataset_directory / 'logs'}/duct_ {pipeline_call}"
+    upload_call = "dandi upload --allow-any-path --validation skip"
+    expected_calls = [
+        "module load apptainer",
+        f"apptainer pull --disable-cache {capsule.image_file_path}.partial-{_PID_PLACEHOLDER} docker://{_CONTAINER_IMAGE}",
+        f"{exec_prefix} {duct_call}",
+        duct_call,
+        pipeline_call,
+        f"{exec_prefix} {upload_call}",
+        capsule.upload_call(),
+    ]
+    calls = [_mask_pid(call) for call in capsule.calls()]
+    assert calls == expected_calls
 
 
 @_requires_bash
@@ -234,21 +293,35 @@ def test_cached_image_is_not_pulled_again(capsule: _Capsule) -> None:
 @pytest.mark.parametrize(
     ("stub_settings", "expected_status"),
     [
-        pytest.param({"STUB_CONDA_STATUS": "5"}, 5, id="setup"),
-        pytest.param({"STUB_PULL_STATUS": "4"}, 1, id="image_pull"),
+        pytest.param({"STUB_MODULE_STATUS": "5"}, 5, id="setup"),
         pytest.param({"STUB_RUN_STATUS": "3"}, 3, id="run"),
     ],
 )
-def test_failure_at_any_step_still_uploads_the_logs(
+def test_failure_with_the_image_cached_still_uploads_the_logs(
     capsule: _Capsule, stub_settings: dict[str, str], expected_status: int
 ) -> None:
+    capsule.image_file_path.parent.mkdir(parents=True)
+    capsule.image_file_path.write_text("cached\n")
+
     result = capsule.run(**stub_settings)
 
     assert result.returncode == expected_status, result.stdout + result.stderr
-    assert capsule.calls()[-1] == f"dandi upload --allow-any-path --validation skip from {capsule.dataset_directory}"
+    assert capsule.calls()[-1] == capsule.upload_call()
     assert capsule.output_nwb_file_path.exists() is False
     assert capsule.done_tracker_file_path.exists() is False
+
+
+@_requires_bash
+@pytest.mark.ai_generated
+def test_failed_image_pull_leaves_no_partial_image_and_skips_the_upload(capsule: _Capsule) -> None:
+    result = capsule.run(STUB_PULL_STATUS="4")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "so the capsule cannot be uploaded" in result.stdout
+    assert [call for call in capsule.calls() if call.startswith("dandi")] == []
+    assert capsule.image_file_path.exists() is False
     assert list(capsule.image_file_path.parent.glob("*.partial-*")) == []
+    assert capsule.done_tracker_file_path.exists() is False
 
 
 @_requires_bash
@@ -281,6 +354,6 @@ def test_run_stopped_by_slurm_uploads_its_logs(capsule: _Capsule, tmp_path: path
     output, _ = process.communicate(timeout=30)
 
     assert process.returncode == 143, output
-    assert capsule.calls()[-1] == f"dandi upload --allow-any-path --validation skip from {capsule.dataset_directory}"
+    assert capsule.calls()[-1] == capsule.upload_call()
     assert capsule.output_nwb_file_path.exists() is False
     assert capsule.done_tracker_file_path.exists() is False
