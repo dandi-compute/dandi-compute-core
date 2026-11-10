@@ -67,7 +67,7 @@ def _dandicompute_group():
 @click.option(
     "--work",
     "work",
-    help="Clean the base directory's work/ (all contents except 'apptainer_cache' will be deleted).",
+    help="Clean the base directory's work/ (all contents except 'apptainer_cache' and 'bazel' will be deleted).",
     required=False,
     is_flag=True,
     default=False,
