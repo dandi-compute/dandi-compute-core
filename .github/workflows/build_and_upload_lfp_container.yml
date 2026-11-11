@@ -51,6 +51,13 @@ jobs:
           repository=$(echo "ghcr.io/${{ github.repository_owner }}/${image}" | tr '[:upper:]' '[:lower:]')
           echo "repository=${repository}" >> "$GITHUB_OUTPUT"
 
+      # Capsules pull the image tagged with the version of this package that prepared them.
+      - name: Resolve package version tag
+        id: version
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
@@ -59,6 +66,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.reference.outputs.repository }}:latest
+            ${{ steps.reference.outputs.repository }}:${{ steps.version.outputs.tag }}
             ${{ steps.reference.outputs.repository }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

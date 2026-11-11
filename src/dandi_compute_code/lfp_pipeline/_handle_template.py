@@ -12,7 +12,6 @@ def generate_lfp_submission_script(
     script_file_path: pathlib.Path,
     log_directory: str,
     dataset_directory: str,
-    environment_directory: str,
     container_image: str,
     image_file_path: str,
     nwb_file_path: str,
@@ -25,9 +24,11 @@ def generate_lfp_submission_script(
     Generate the LFP pipeline sbatch submission script from the template.
 
     The script runs the LFP runtime container with Apptainer on a local NWB file,
-    wrapped in duct. It is intentionally much simpler than the AIND ephys
-    submission script. Whichever way the script ends, it uploads the capsule, so
-    a failed capsule always has its logs on the archive.
+    with duct inside the container recording resource usage. It is intentionally
+    much simpler than the AIND ephys submission script. Every step runs from the
+    image, the upload included, so nothing depends on an environment on the
+    cluster. Whichever way the script ends, it uploads the capsule once the image
+    is in place, so a failed capsule has its logs on the archive.
 
     Parameters
     ----------
@@ -37,9 +38,6 @@ def generate_lfp_submission_script(
         Directory for the slurm and duct logs.
     dataset_directory : str
         The capsule directory the script runs in and uploads from.
-    environment_directory : str
-        The conda environment to activate. It must provide con-duct and the
-        DANDI CLI.
     container_image : str
         The container image reference, for example
         ``ghcr.io/dandi-compute/dandi-compute-lfp:latest``.
@@ -64,7 +62,6 @@ def generate_lfp_submission_script(
     script = template.render(
         log_directory=log_directory,
         dataset_directory=dataset_directory,
-        environment_directory=environment_directory,
         container_image=container_image,
         image_file_path=image_file_path,
         nwb_file_path=nwb_file_path,
