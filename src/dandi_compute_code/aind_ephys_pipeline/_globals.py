@@ -3,9 +3,12 @@ import pathlib
 _RAW_TEMPLATE_FILE_PATH = pathlib.Path(__file__).parent / "templates" / "submission_template.txt"
 
 # Provisioned on the cluster by the Update codebase workflow of dandi-compute-runner. The pipeline
-# needs Nextflow 25.10 or later from release 1.5.0. Capsules formed earlier keep the environment
-# their own `submit.sh` names.
-_NEXTFLOW_ENVIRONMENT_DIRECTORY = "/orcd/data/dandi/001/environments/name-nextflow_version-25+10+4_environment"
+# needs Nextflow 25.10 or later from release 1.5.0. Its Python is pinned to 3.13, since the DANDI
+# CLI's compiled dependencies have no wheels for 3.15, which an unpinned environment got. Capsules
+# formed earlier keep the environment their own `submit.sh` names.
+_NEXTFLOW_ENVIRONMENT_DIRECTORY = (
+    "/orcd/data/dandi/001/environments/name-nextflow_version-25+10+4_python-3+13_environment"
+)
 
 # Release 1.5.0 merged `main_multi_backend.nf`, the entry point for SLURM, into `main.nf`. Every
 # earlier release ships both, and there `main.nf` is the one for Code Ocean.

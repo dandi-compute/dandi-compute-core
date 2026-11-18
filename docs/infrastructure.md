@@ -85,7 +85,7 @@ Because the AIND submission script checks out a tag in the shared `aind-ephys-pi
 | Component | Where | Used for |
 |---|---|---|
 | Environment modules | `/etc/profile.d/modules.sh` | Loading `apptainer` in every submission script, and `miniforge` in AIND ones |
-| Conda environment `name-nextflow_version-25+10+4_environment` | `/orcd/data/dandi/001/environments/` | Nextflow 25.10.4 and the DANDI CLI for AIND capsules. The Update codebase workflow of dandi-compute-runner provisions it and installs the `nf-schema` plugin. Capsules formed before it keep the older `name-nextflow_environment` their `submit.sh` names. |
+| Conda environment `name-nextflow_version-25+10+4_python-3+13_environment` | `/orcd/data/dandi/001/environments/` | Nextflow 25.10.4, Python 3.13 and the DANDI CLI for AIND capsules. The Update codebase workflow of dandi-compute-runner provisions it and installs the `nf-schema` plugin. Python is pinned because the DANDI CLI's compiled dependencies have no wheels for Python 3.15. Capsules formed before it keep the environment their `submit.sh` names. |
 | Apptainer | module | Running every pipeline container |
 | DANDI CLI | the environment running `dandicompute`, the AIND Nextflow environment and the LFP image | Every download, upload and delete against the archive. AIND capsules upgrade it with `pip install -U dandi` before uploading. |
 | `sbatch`, `squeue` | SLURM | Submitting arrays, detecting live dispatchers |
