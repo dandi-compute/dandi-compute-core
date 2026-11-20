@@ -2,10 +2,14 @@
 The cluster's mirror of the archive's S3 blobs.
 
 The mirror is kept by the backup jobs of https://github.com/dandi/simple-s3-backup, which split the
-blobs across two partitions by the first hex digit of their content ID. That split has changed
-over time, so a blob is looked for on every partition before the current split is assumed.
+blobs across partitions by the first hex digit of their content ID. That split is specified by
+simple-s3-backup's ``partitions.json``. It cannot be imported from there, since simple-s3-backup is
+not a dependency, so ``blob_partitions.json`` is a copy of it that the tests check against upstream.
+The split has changed over time, so a blob is looked for on every partition before the current split
+is assumed.
 """
 
+import json
 import logging
 import pathlib
 
@@ -13,15 +17,13 @@ import beartype
 
 _log = logging.getLogger(__name__)
 
-#: Where the partitions of the blob mirror are mounted on MIT Engaging.
-_BLOB_MIRROR_ROOT = pathlib.Path("/orcd/data/dandi")
+_BLOB_PARTITIONS_SPEC_PATH = pathlib.Path(__file__).parent / "blob_partitions.json"
+_BLOB_PARTITIONS_SPEC = json.loads(_BLOB_PARTITIONS_SPEC_PATH.read_text())
 
-# The current split of `BLOBS_HEAD_TO_PARTITION` in simple-s3-backup.
-_BLOB_PARTITION_BY_FIRST_HEX_DIGIT = {
-    **{digit: "001" for digit in "0123456789"},
-    **{digit: "002" for digit in "abcdef"},
-}
-_BLOB_PARTITIONS = tuple(sorted(set(_BLOB_PARTITION_BY_FIRST_HEX_DIGIT.values())))
+#: Where the partitions of the blob mirror are mounted on MIT Engaging.
+_BLOB_MIRROR_ROOT = pathlib.Path(_BLOB_PARTITIONS_SPEC["mirror_root"])
+_BLOB_PARTITION_BY_FIRST_HEX_DIGIT: dict[str, str] = _BLOB_PARTITIONS_SPEC["blobs"]
+_BLOB_PARTITIONS = tuple(_BLOB_PARTITIONS_SPEC["partitions"])
 
 
 @beartype.beartype
