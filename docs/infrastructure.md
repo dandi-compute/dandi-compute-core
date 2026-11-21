@@ -111,6 +111,8 @@ These figures come from `configs/name-mit+engaging_revision-8.config`, which the
 
 Which sorter a capsule runs is chosen by its parameter file, through `spikesorting.sorter`. The registered `default` parameters leave it null, which the pipeline takes as Kilosort 4. The `lupin` and `dartsort` parameters are the same file with that one field set, so every asset is given a capsule per sorter against the one config. Lupin and Spyking Circus 2 run in the pipeline's base image. DARTsort has an image of its own, `aind-ephys-spikesort-dartsort`, which dandi-compute-runner caches alongside the others.
 
+The `default`, `lupin` and `dartsort` keys point to the files written for v1.5.2. That release moved the job settings every step shares into `global_job_kwargs`. Through it, preprocessing, quality control and NWB ecephys use `forkserver` instead of `spawn`. A parameter file may not be newer than the release a capsule runs, so a capsule for v1.5.0 or v1.5.1 takes the `default-v1.5.0`, `lupin-v1.5.0` or `dartsort-v1.5.0` keys instead.
+
 When Nextflow finishes, the script moves the results out of `intermediate/` into the capsule's `derivatives/`, moves Nextflow's reports into `logs/`, deletes `intermediate/` and uploads the capsule. From v1.5.0 the pipeline also writes `provenance.json`, with the commit of every step, the container tag and the effective parameters. It goes into `logs/` too.
 
 ### LFP execution

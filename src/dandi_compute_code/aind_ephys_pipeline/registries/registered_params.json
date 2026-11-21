@@ -69,19 +69,34 @@
     "md5": "6ba0b5b9fb65f4a941baaa8b550247fd",
     "description": "Same as `name-default_version-1+5+0.json`, but selects DARTsort as the spike sorter. DARTsort runs on a GPU, in a container image of its own."
   },
+  "default-v1.5.2": {
+    "path": "name-default_version-1+5+2.json",
+    "md5": "81b6cedd462c6774697c23ec13780e41",
+    "description": "The upstream v1.5.2 defaults with the same DANDI overrides as `name-default_version-1+5+0.json`. Release 1.5.2 moved the job settings shared by every step into `global_job_kwargs`, which runs preprocessing, quality control and NWB ecephys with `forkserver` instead of `spawn`. It also renamed two quality control settings. The 1.5.0 files still pass its schema, but they keep `spawn` for preprocessing and make the pipeline warn about the missing `global_job_kwargs`."
+  },
+  "lupin-v1.5.2": {
+    "path": "name-lupin_version-1+5+2.json",
+    "md5": "a018ac1f44ffceaae57f98b77ff40a87",
+    "description": "Same as `name-default_version-1+5+2.json`, but selects Lupin as the spike sorter. Lupin runs on CPUs in the pipeline's base image, so it needs no GPU node."
+  },
+  "dartsort-v1.5.2": {
+    "path": "name-dartsort_version-1+5+2.json",
+    "md5": "e4f6753052553c0c21838ba1e02f5f67",
+    "description": "Same as `name-default_version-1+5+2.json`, but selects DARTsort as the spike sorter. DARTsort runs on a GPU, in a container image of its own."
+  },
   "default": {
-    "path": "name-default_version-1+5+0.json",
-    "md5": "7ea1ac58535ec1bacb88555bc0487738",
+    "path": "name-default_version-1+5+2.json",
+    "md5": "81b6cedd462c6774697c23ec13780e41",
     "description": "The current recommended default parameter set."
   },
   "lupin": {
-    "path": "name-lupin_version-1+5+0.json",
-    "md5": "1157294c6d27c1c59beabda237ccccbc",
+    "path": "name-lupin_version-1+5+2.json",
+    "md5": "a018ac1f44ffceaae57f98b77ff40a87",
     "description": "The current recommended parameter set for the Lupin spike sorter."
   },
   "dartsort": {
-    "path": "name-dartsort_version-1+5+0.json",
-    "md5": "6ba0b5b9fb65f4a941baaa8b550247fd",
+    "path": "name-dartsort_version-1+5+2.json",
+    "md5": "e4f6753052553c0c21838ba1e02f5f67",
     "description": "The current recommended parameter set for the DARTsort spike sorter."
   }
 }
