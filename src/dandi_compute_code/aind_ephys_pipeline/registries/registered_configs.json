@@ -44,9 +44,14 @@
     "md5": "8ef3fd42e3bc76ef74667e2baeb25ff2",
     "description": "Revised configuration to bind the blob mirror in partition 002 into the containers, as revision 6 already does for 001. From pipeline v1.5.0 the capsule's input folder holds a link to the blob, and Nextflow mounts only the folder, so the steps would otherwise not reach a blob in 002. Otherwise identical to revision 7."
   },
+  "v9": {
+    "path": "name-mit+engaging_revision-9.config",
+    "md5": "56161a124e510c4eeb3f03dfe288e2f5",
+    "description": "Revised configuration to request little memory by default and raise it only when a step needs it. Each step on mit_normal asks for its base memory times the attempt number, and a step SLURM kills for running out of memory (exit 137) is retried, up to three times, until an attempt has run at the 256 GB cap set through resourceLimits. Any other failure still stops the capsule. Bases come from the peak_rss of past capsules' traces. Preprocessing drops from 256 GB to 64 GB, nwb_ecephys from 256 GB to 96 GB and quality_control from 64 GB to 48 GB. The GPU sorters keep their fixed 64 GB and are not retried. Otherwise identical to revision 8."
+  },
   "default": {
-    "path": "name-mit+engaging_revision-8.config",
-    "md5": "8ef3fd42e3bc76ef74667e2baeb25ff2",
+    "path": "name-mit+engaging_revision-9.config",
+    "md5": "56161a124e510c4eeb3f03dfe288e2f5",
     "description": "The current recommended configuration."
   }
 }
