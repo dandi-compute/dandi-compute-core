@@ -1,0 +1,55 @@
+{
+  "lupin": {
+    "params_key": "lupin",
+    "description": "The registered Lupin parameters as capsules run them. Motion is estimated in preprocessing but not applied.",
+    "upstream_checks": "",
+    "overrides": {}
+  },
+  "lupin-motion-applied": {
+    "params_key": "lupin",
+    "description": "Applies the estimated motion to the preprocessed recording, so interpolation and the motion-corrected postprocessing run too.",
+    "upstream_checks": "--check-motion",
+    "overrides": {
+      "preprocessing": {
+        "motion_correction": {
+          "apply": true
+        }
+      },
+      "postprocessing": {
+        "use_motion_corrected": true
+      }
+    }
+  },
+  "lupin-no-motion": {
+    "params_key": "lupin",
+    "description": "Neither estimates nor corrects motion anywhere, as the registered `no-motion` key intends for older releases.",
+    "upstream_checks": "",
+    "overrides": {
+      "preprocessing": {
+        "motion_correction": {
+          "compute": false,
+          "apply": false
+        }
+      },
+      "spikesorting": {
+        "lupin": {
+          "skip_motion_correction": true,
+          "sorter": {
+            "apply_motion_correction": false
+          }
+        }
+      }
+    }
+  },
+  "lupin-all-channels": {
+    "params_key": "lupin",
+    "description": "Keeps every channel, as the registered `all-channels` key intends for older releases. Bad and out-of-brain channels are detected but never removed.",
+    "upstream_checks": "",
+    "overrides": {
+      "preprocessing": {
+        "remove_out_channels": false,
+        "remove_bad_channels": false
+      }
+    }
+  }
+}

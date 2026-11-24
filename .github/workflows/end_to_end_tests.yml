@@ -1,0 +1,230 @@
+name: End-to-end pipeline tests
+
+# Runs the AIND ephys pipeline end to end on the example asset, once per parameter archetype in
+# `.github/end_to_end/archetypes.json`, each on its own runner. Every archetype is a registered
+# parameters file with its overrides layered on, run the way a capsule runs it. A run takes a
+# runner for most of an hour, so this is manual and weekly rather than on every pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      archetypes:
+        description: 'JSON list of archetypes to run, such as ["lupin"]. Leave empty to run all of them.'
+        required: false
+        default: ''
+  schedule:
+    - cron: '17 13 * * 1'  # Mondays, 8:17 am EST
+  pull_request:
+    paths:
+      - '.github/end_to_end/**'
+      - '.github/workflows/end_to_end_tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The example recording, `sourcedata/aind-sample.nwb`, whose blob capsules treat as the test asset.
+  ASSET_URL: https://api.dandiarchive.org/api/assets/7c1e2502-b7ba-4269-afb3-9a1dd431c767/download/
+  CONTENT_ID: 048d1ee9-83b7-491f-8f02-1ca615b1d455
+  NXF_VER: 25.10.4
+  # The pipeline and its config are written for the first Nextflow syntax parser.
+  NXF_SYNTAX_PARSER: v1
+
+jobs:
+  archetypes:
+    name: List archetypes
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install the package
+        run: pip install -e .
+
+      - name: List the archetypes to run
+        id: list
+        env:
+          REQUESTED: ${{ inputs.archetypes }}
+        run: |
+          ALL=$(python .github/end_to_end/compose_params.py matrix)
+          NAMES=${REQUESTED:-$ALL}
+          echo "Running $NAMES"
+          echo "names=$NAMES" >> "$GITHUB_OUTPUT"
+
+  run:
+    name: ${{ matrix.archetype }}
+    needs: archetypes
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        archetype: ${{ fromJson(needs.archetypes.outputs.names) }}
+    env:
+      ARCHETYPE: ${{ matrix.archetype }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set the run's paths
+        run: |
+          {
+            echo "BLOB_DIRECTORY=$RUNNER_TEMP/blobs"
+            echo "DATA_PATH=$RUNNER_TEMP/data"
+            echo "RESULTS_PATH=$RUNNER_TEMP/results"
+            echo "WORK_DIRECTORY=$RUNNER_TEMP/work"
+            echo "PARAMS_FILE_PATH=$RUNNER_TEMP/params.json"
+            echo "MEASUREMENTS=$RUNNER_TEMP/measurements"
+          } >> "$GITHUB_ENV"
+
+      - name: Free disk space
+        run: |
+          df -h /
+          START=$(date +%s)
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost
+          docker system prune --all --force > /dev/null
+          echo "Freed in $(( $(date +%s) - START )) s"
+          df -h /
+          mkdir -p "$MEASUREMENTS" "$BLOB_DIRECTORY" "$DATA_PATH" "$RESULTS_PATH" "$WORK_DIRECTORY"
+          df --output=avail -B1 / | tail -1 > "$MEASUREMENTS/disk_available_at_start"
+
+      - name: Sample memory and disk use in the background
+        run: |
+          nohup bash -c 'while true; do
+            free -b | awk "/Mem:/ {print \$3}" >> "$MEASUREMENTS/memory_used";
+            df --output=used -B1 / | tail -1 >> "$MEASUREMENTS/disk_used";
+            sleep 10;
+          done' > /dev/null 2>&1 &
+          echo $! > "$MEASUREMENTS/sampler_pid"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Install the package
+        run: pip install -e .
+
+      - name: Compose the parameters
+        id: params
+        run: |
+          python .github/end_to_end/compose_params.py compose --archetype "$ARCHETYPE" --output "$PARAMS_FILE_PATH"
+          echo "pipeline_version=$(jq -r .pipeline_version "$PARAMS_FILE_PATH")" >> "$GITHUB_OUTPUT"
+          echo "upstream_checks=$(jq -r --arg a "$ARCHETYPE" '.[$a].upstream_checks' .github/end_to_end/archetypes.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the pipeline at its release
+        uses: actions/checkout@v7
+        with:
+          repository: AllenNeuralDynamics/aind-ephys-pipeline
+          ref: ${{ steps.params.outputs.pipeline_version }}
+          path: aind-ephys-pipeline
+
+      # As in a capsule, the blob keeps its content ID as its name and the input folder links to it.
+      - name: Download the example asset
+        run: |
+          START=$(date +%s)
+          curl --fail --silent --show-error --location --retry 3 --output "$BLOB_DIRECTORY/$CONTENT_ID" "$ASSET_URL"
+          echo $(( $(date +%s) - START )) > "$MEASUREMENTS/download_seconds"
+          ln -s "$BLOB_DIRECTORY/$CONTENT_ID" "$DATA_PATH/$CONTENT_ID.nwb"
+          ls -lL "$DATA_PATH"
+
+      # Lupin runs in the base image. Only the NWB steps need another.
+      - name: Pull the pipeline images
+        env:
+          TAG: ${{ steps.params.outputs.pipeline_version }}
+        run: |
+          START=$(date +%s)
+          for IMAGE in aind-ephys-pipeline-base aind-ephys-pipeline-nwb; do
+            docker pull --quiet "ghcr.io/allenneuraldynamics/$IMAGE:$TAG"
+          done
+          echo $(( $(date +%s) - START )) > "$MEASUREMENTS/pull_seconds"
+          docker image ls --format '{{.Repository}}:{{.Tag}} {{.Size}}' | tee "$MEASUREMENTS/images"
+          df -h /
+
+      - uses: nf-core/setup-nextflow@v3
+        with:
+          version: ${{ env.NXF_VER }}
+          java-version: '21'
+
+      - name: Run the pipeline
+        run: |
+          START=$(date +%s)
+          set +e
+          nextflow \
+            -C "$GITHUB_WORKSPACE/.github/end_to_end/nextflow_github_actions.config" \
+            -log "$RESULTS_PATH/nextflow.log" \
+            run "$GITHUB_WORKSPACE/aind-ephys-pipeline/pipeline/main.nf" \
+            -work-dir "$WORK_DIRECTORY" \
+            --params_file "$PARAMS_FILE_PATH"
+          STATUS=$?
+          echo $(( $(date +%s) - START )) > "$MEASUREMENTS/pipeline_seconds"
+          exit $STATUS
+
+      - name: Check the outputs a capsule needs
+        if: ${{ !cancelled() }}
+        run: |
+          python .github/end_to_end/check_capsule_outputs.py \
+            --results "$RESULTS_PATH" --params "$PARAMS_FILE_PATH" --archetype "$ARCHETYPE"
+
+      # Upstream's own checker, from the release that ran, with the package versions its images pin.
+      - name: Check the outputs with upstream's checker
+        if: ${{ !cancelled() }}
+        working-directory: aind-ephys-pipeline
+        env:
+          UPSTREAM_CHECKS: ${{ steps.params.outputs.upstream_checks }}
+        run: |
+          python -m venv "$RUNNER_TEMP/checker"
+          source "$RUNNER_TEMP/checker/bin/activate"
+          pip install --quiet $(grep -E '^(spikeinterface|neuroconv|pynwb|hdmf-zarr|zarr|numcodecs)==' environment/package-versions.txt \
+            | sed 's/^spikeinterface==/spikeinterface[full]==/' | tr '\n' ' ')
+          python tests/check_pipeline_results.py --results-path "$RESULTS_PATH" --data-path "$DATA_PATH" \
+            --num-streams 1 --num-success 1 --num-nwb 1 --check-nwb-devices --check-sparse-waveforms $UPSTREAM_CHECKS
+
+      - name: Summarize the measurements
+        if: ${{ always() }}
+        run: |
+          kill "$(cat "$MEASUREMENTS/sampler_pid")" 2>/dev/null || true
+          gib() { awk '{ printf "%.2f GiB", $1 / 1073741824 }'; }
+          peak() { sort -n "$1" 2>/dev/null | tail -1; }
+          {
+            echo "### Measurements for \`$ARCHETYPE\`"
+            echo ""
+            echo "| Measure | Value |"
+            echo "| --- | --- |"
+            echo "| Asset size | $(stat -L -c %s "$DATA_PATH/$CONTENT_ID.nwb" 2>/dev/null | gib) |"
+            echo "| Asset download | $(cat "$MEASUREMENTS/download_seconds" 2>/dev/null) s |"
+            echo "| Image pull | $(cat "$MEASUREMENTS/pull_seconds" 2>/dev/null) s |"
+            echo "| Pipeline run | $(cat "$MEASUREMENTS/pipeline_seconds" 2>/dev/null) s |"
+            echo "| Disk free after cleanup | $(cat "$MEASUREMENTS/disk_available_at_start" | gib) |"
+            echo "| Peak disk used | $(peak "$MEASUREMENTS/disk_used" | gib) |"
+            echo "| Peak memory used | $(peak "$MEASUREMENTS/memory_used" | gib) |"
+            echo "| Work directory | $(du -sb "$WORK_DIRECTORY" 2>/dev/null | cut -f1 | gib) |"
+            echo "| Results directory | $(du -sb "$RESULTS_PATH" 2>/dev/null | cut -f1 | gib) |"
+            echo ""
+            echo "Images:"
+            echo '```'
+            cat "$MEASUREMENTS/images" 2>/dev/null
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cp "$PARAMS_FILE_PATH" "$MEASUREMENTS/"
+
+      - name: Upload the logs and reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: end-to-end-${{ matrix.archetype }}
+          path: |
+            ${{ env.RESULTS_PATH }}/nextflow/
+            ${{ env.RESULTS_PATH }}/nextflow.log
+            ${{ env.RESULTS_PATH }}/provenance.json
+            ${{ env.RESULTS_PATH }}/quality_control.json
+            ${{ env.MEASUREMENTS }}/
+          if-no-files-found: warn
+          retention-days: 14
