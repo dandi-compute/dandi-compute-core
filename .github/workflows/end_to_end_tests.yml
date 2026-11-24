@@ -212,7 +212,7 @@ jobs:
             echo '```'
             cat "$MEASUREMENTS/images" 2>/dev/null
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           cp "$PARAMS_FILE_PATH" "$MEASUREMENTS/"
 
       - name: Upload the logs and reports

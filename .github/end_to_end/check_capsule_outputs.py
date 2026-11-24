@@ -19,7 +19,6 @@ import click
 # The paths `submission_template.txt` moves out of the results directory after the run.
 _CAPSULE_PATHS = (
     "nwb",
-    "visualization",
     "visualization_output.json",
     "quality_control.json",
     "quality_control",
@@ -55,6 +54,18 @@ def find_capsule_problems(*, results_directory: pathlib.Path, parameters: dict, 
             problems.append("The parameters in 'provenance.json' differ from the parameters file given to the run.")
 
     return problems
+
+
+@beartype.beartype
+def find_capsule_warnings(results_directory: pathlib.Path, /) -> list[str]:
+    warnings = []
+    if not (results_directory / "visualization").exists():
+        warnings.append(
+            "No 'visualization' folder. The visualization step skips itself without FIGPACK_API_KEY, and the "
+            "results collector then writes none. A capsule's `mv ... visualization/` would fail, so "
+            "'quality_control.json' and the QC figures would not reach its derivatives."
+        )
+    return warnings
 
 
 @beartype.beartype
@@ -103,6 +114,8 @@ def _main(results: pathlib.Path, params: pathlib.Path, archetype: str, sorter: s
         for row in rows
         if row["status"] != "COMPLETED"
     )
+    for warning in find_capsule_warnings(results):
+        click.echo(f"::warning::{warning}")
     for problem in problems:
         click.echo(f"::error::{problem}")
     if problems:
