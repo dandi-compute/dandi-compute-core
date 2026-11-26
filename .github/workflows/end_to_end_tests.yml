@@ -85,16 +85,18 @@ jobs:
             echo "MEASUREMENTS=$RUNNER_TEMP/measurements"
           } >> "$GITHUB_ENV"
 
-      - name: Free disk space
+      # A run adds under 10 GB (images, asset, work and results), and runners have far more free,
+      # so nothing is cleared. This fails early if a runner image ever ships with much less.
+      - name: Check free disk space
         run: |
           df -h /
-          START=$(date +%s)
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost
-          docker system prune --all --force > /dev/null
-          echo "Freed in $(( $(date +%s) - START )) s"
-          df -h /
           mkdir -p "$MEASUREMENTS" "$BLOB_DIRECTORY" "$DATA_PATH" "$RESULTS_PATH" "$WORK_DIRECTORY"
-          df --output=avail -B1 / | tail -1 > "$MEASUREMENTS/disk_available_at_start"
+          AVAILABLE=$(df --output=avail -B1 / | tail -1)
+          echo "$AVAILABLE" > "$MEASUREMENTS/disk_available_at_start"
+          if [ "$AVAILABLE" -lt $(( 20 * 1024 ** 3 )) ]; then
+            echo "::error::Only $(( AVAILABLE / 1024 ** 3 )) GiB free; the run needs about 10 GiB plus headroom."
+            exit 1
+          fi
 
       - name: Sample memory and disk use in the background
         run: |
@@ -202,7 +204,7 @@ jobs:
             echo "| Asset download | $(cat "$MEASUREMENTS/download_seconds" 2>/dev/null) s |"
             echo "| Image pull | $(cat "$MEASUREMENTS/pull_seconds" 2>/dev/null) s |"
             echo "| Pipeline run | $(cat "$MEASUREMENTS/pipeline_seconds" 2>/dev/null) s |"
-            echo "| Disk free after cleanup | $(cat "$MEASUREMENTS/disk_available_at_start" | gib) |"
+            echo "| Disk free at start | $(cat "$MEASUREMENTS/disk_available_at_start" | gib) |"
             echo "| Peak disk used | $(peak "$MEASUREMENTS/disk_used" | gib) |"
             echo "| Peak memory used | $(peak "$MEASUREMENTS/memory_used" | gib) |"
             echo "| Work directory | $(du -sb "$WORK_DIRECTORY" 2>/dev/null | cut -f1 | gib) |"

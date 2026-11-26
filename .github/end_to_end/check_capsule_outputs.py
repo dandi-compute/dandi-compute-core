@@ -2,9 +2,10 @@
 Check that a pipeline run left what a job capsule needs, and summarize its resource use.
 
 Upstream's `tests/check_pipeline_results.py` checks the science of the outputs. This checks the
-contract with `submission_template.txt`, whose post-run moves fail on any missing path, and that
-the pipeline ran the exact parameters it was given. It also writes each step's runtime and peak
-memory from the Nextflow trace to the job summary.
+outputs `submission_template.txt` moves into a capsule's derivatives, and that the pipeline ran
+the exact parameters it was given. The template skips any output that is missing, so a missing
+one would otherwise only show up as a gap in the capsule. It also writes each step's runtime and
+peak memory from the Nextflow trace to the job summary.
 """
 
 import csv
@@ -57,18 +58,6 @@ def find_capsule_problems(*, results_directory: pathlib.Path, parameters: dict, 
 
 
 @beartype.beartype
-def find_capsule_warnings(results_directory: pathlib.Path, /) -> list[str]:
-    warnings = []
-    if not (results_directory / "visualization").exists():
-        warnings.append(
-            "No 'visualization' folder. The visualization step skips itself without FIGPACK_API_KEY, and the "
-            "results collector then writes none. A capsule's `mv ... visualization/` would fail, so "
-            "'quality_control.json' and the QC figures would not reach its derivatives."
-        )
-    return warnings
-
-
-@beartype.beartype
 def read_trace(trace_file_path: pathlib.Path, /) -> list[dict]:
     with trace_file_path.open(newline="") as trace_file:
         rows = list(csv.DictReader(trace_file, delimiter="\t"))
@@ -114,8 +103,6 @@ def _main(results: pathlib.Path, params: pathlib.Path, archetype: str, sorter: s
         for row in rows
         if row["status"] != "COMPLETED"
     )
-    for warning in find_capsule_warnings(results):
-        click.echo(f"::warning::{warning}")
     for problem in problems:
         click.echo(f"::error::{problem}")
     if problems:
