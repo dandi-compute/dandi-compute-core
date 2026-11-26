@@ -263,3 +263,95 @@ def test_submission_script_leaves_the_input_folder_unchanged_when_run_again(caps
     assert second_run.returncode == 0, second_run.stdout + second_run.stderr
     assert input_folder.stat().st_mtime_ns == folder_status_after_first_run.st_mtime_ns
     assert link.lstat().st_ino == link_status_after_first_run.st_ino
+
+
+# Stands in for a 1.5.2 run on a recording with two probes. The quality control collector writes each
+# probe's plots under its own subfolder with the same file names, and the visualization step does the
+# same per recording.
+_MULTI_PROBE_NEXTFLOW_STUB = """#!/bin/bash
+mkdir -p "$RESULTS_PATH/nextflow" "$RESULTS_PATH/nwb" "$RESULTS_PATH/postprocessed"
+echo trace > "$RESULTS_PATH/nextflow/trace.txt"
+for probe in ProbeA ProbeB; do
+    mkdir -p "$RESULTS_PATH/quality_control/$probe" "$RESULTS_PATH/visualization/$probe"
+    echo "$probe drift" > "$RESULTS_PATH/quality_control/$probe/drift_map.png"
+    echo "$probe traces" > "$RESULTS_PATH/quality_control/$probe/traces_raw.pdf"
+    echo "$probe error" > "$RESULTS_PATH/visualization/$probe/error.txt"
+done
+echo qc > "$RESULTS_PATH/quality_control.json"
+echo links > "$RESULTS_PATH/visualization_output.json"
+"""
+
+# Stands in for a run whose visualization and quality control steps failed or were skipped.
+_NO_VISUALIZATION_NEXTFLOW_STUB = """#!/bin/bash
+mkdir -p "$RESULTS_PATH/nextflow" "$RESULTS_PATH/nwb" "$RESULTS_PATH/postprocessed"
+echo trace > "$RESULTS_PATH/nextflow/trace.txt"
+"""
+
+
+def _relative_files(directory: pathlib.Path, /) -> dict[str, str]:
+    files = {
+        path.relative_to(directory).as_posix(): path.read_text() for path in directory.rglob("*") if path.is_file()
+    }
+    return files
+
+
+_EXPECTED_MULTI_PROBE_VISUALIZATION = {
+    "quality_control.json": "qc\n",
+    "visualization_output.json": "links\n",
+    "ProbeA/error.txt": "ProbeA error\n",
+    "ProbeB/error.txt": "ProbeB error\n",
+    "quality_control/ProbeA/drift_map.png": "ProbeA drift\n",
+    "quality_control/ProbeA/traces_raw.pdf": "ProbeA traces\n",
+    "quality_control/ProbeB/drift_map.png": "ProbeB drift\n",
+    "quality_control/ProbeB/traces_raw.pdf": "ProbeB traces\n",
+}
+
+
+@pytest.mark.ai_generated
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_submission_script_keeps_each_probes_visualization_and_quality_control_output(
+    capsule: dict[str, pathlib.Path],
+) -> None:
+    """
+    Plots of the same name from several probes all survive, as do files other than PNGs.
+
+    `quality_control.json` sits beside `quality_control/`, which its plot references are relative to.
+    """
+    completed = _run_to_completion(capsule=capsule, nextflow_stub=_MULTI_PROBE_NEXTFLOW_STUB)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    derivatives = capsule["capsule"] / "derivatives"
+    assert sorted(path.name for path in derivatives.iterdir()) == ["nwb", "postprocessed", "visualization"]
+    assert _relative_files(derivatives / "visualization") == _EXPECTED_MULTI_PROBE_VISUALIZATION
+    assert not capsule["results"].exists()
+
+
+@pytest.mark.ai_generated
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_submission_script_moves_the_other_outputs_when_visualization_and_quality_control_are_missing(
+    capsule: dict[str, pathlib.Path],
+) -> None:
+    """A run whose visualization or quality control step did not finish still has its other outputs uploaded."""
+    completed = _run_to_completion(capsule=capsule, nextflow_stub=_NO_VISUALIZATION_NEXTFLOW_STUB)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "mv:" not in completed.stderr
+    derivatives = capsule["capsule"] / "derivatives"
+    assert sorted(path.name for path in derivatives.iterdir()) == ["nwb", "postprocessed"]
+    assert (capsule["capsule"] / "logs" / "trace.txt").read_text() == "trace\n"
+
+
+@pytest.mark.ai_generated
+@pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
+def test_submission_script_replaces_outputs_a_requeued_run_already_moved(capsule: dict[str, pathlib.Path]) -> None:
+    """Moving onto the folders an earlier run left behind replaces them rather than nesting the new ones inside."""
+    first_run = _run_to_completion(capsule=capsule, nextflow_stub=_MULTI_PROBE_NEXTFLOW_STUB)
+    capsule["results"].mkdir()
+    second_run = _run_to_completion(capsule=capsule, nextflow_stub=_MULTI_PROBE_NEXTFLOW_STUB)
+
+    assert first_run.returncode == 0, first_run.stdout + first_run.stderr
+    assert second_run.returncode == 0, second_run.stdout + second_run.stderr
+    derivatives = capsule["capsule"] / "derivatives"
+    assert sorted(path.name for path in derivatives.iterdir()) == ["nwb", "postprocessed", "visualization"]
+    assert _relative_files(derivatives / "visualization") == _EXPECTED_MULTI_PROBE_VISUALIZATION
+    assert list((derivatives / "nwb").iterdir()) == []

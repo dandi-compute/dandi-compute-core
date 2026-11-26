@@ -81,13 +81,27 @@ echo "=== Directory tree of \$RESULTS_PATH after nextflow run ==="
 tree "$RESULTS_PATH" || find "$RESULTS_PATH" -print
 echo "=== End of directory tree ==="
 
+# A folder a requeued run already moved is replaced, since `mv` would otherwise nest the new
+# one inside it. A step that failed or was skipped leaves its folder or file out, so each is
+# moved only when present.
+move_output() {
+    if [ -e "$1" ]; then
+        mkdir -p "$2"
+        rm -rf "$2/$(basename "$1")"
+        mv "$1" "$2/"
+    fi
+}
+
 cd $RESULTS_PATH
-mv nwb/ ../derivatives/
-mv visualization_output.json visualization/
-mv quality_control.json visualization/
-find quality_control/ -type f -name "*.png" -exec mv -t visualization/ {} +
-mv visualization/ ../derivatives/
-mv postprocessed/ ../derivatives/
+move_output nwb ../derivatives
+move_output postprocessed ../derivatives
+# The trees are kept whole, since recordings with several probes or shanks reuse file names
+# in their own subfolders. `quality_control.json` refers to its plots as
+# `quality_control/{recording}/{plot}`, so it sits beside that folder.
+move_output visualization ../derivatives
+move_output quality_control ../derivatives/visualization
+move_output quality_control.json ../derivatives/visualization
+move_output visualization_output.json ../derivatives/visualization
 mv nextflow/* ../logs/
 # From release 1.5.0: the step commits, container tag and effective parameters of this run
 if [ -f provenance.json ]; then mv provenance.json ../logs/; fi
