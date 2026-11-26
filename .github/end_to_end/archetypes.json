@@ -20,27 +20,6 @@
       }
     }
   },
-  "lupin-no-motion": {
-    "params_key": "lupin",
-    "description": "Neither estimates nor corrects motion anywhere, as the registered `no-motion` key intends for older releases.",
-    "upstream_checks": "",
-    "overrides": {
-      "preprocessing": {
-        "motion_correction": {
-          "compute": false,
-          "apply": false
-        }
-      },
-      "spikesorting": {
-        "lupin": {
-          "skip_motion_correction": true,
-          "sorter": {
-            "apply_motion_correction": false
-          }
-        }
-      }
-    }
-  },
   "lupin-all-channels": {
     "params_key": "lupin",
     "description": "Keeps every channel, as the registered `all-channels` key intends for older releases. Bad and out-of-brain channels are detected but never removed.",
