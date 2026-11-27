@@ -90,7 +90,7 @@ Because the AIND submission script checks out a tag in the shared `aind-ephys-pi
 | DANDI CLI | the environment running `dandicompute`, the AIND Nextflow environment and the LFP image | Every download, upload and delete against the archive. AIND capsules upgrade it with `pip install -U dandi` before uploading. |
 | `sbatch`, `squeue` | SLURM | Submitting arrays, detecting live dispatchers |
 
-The AIND ephys pipeline also needs `NUMBA_CACHE_DIR` to be set in `~/.bashrc` to the shared `work/` directory, which holds each capsule's own Nextflow work directory. Its Nextflow config passes `KACHERY_ZONE`, `KACHERY_API_KEY`, `NUMBA_CACHE_DIR`, `HDF5_USE_FILE_LOCKING` and `HF_HOME` through to the containers when they are set.
+The AIND ephys pipeline also needs `NUMBA_CACHE_DIR` to be set in `~/.bashrc` to the shared `work/` directory, which holds each capsule's own Nextflow work directory. Its Nextflow config passes `FIGPACK_API_KEY`, `FIGPACK_UPLOAD`, `FIGPACK_BUCKET`, `NUMBA_CACHE_DIR`, `HDF5_USE_FILE_LOCKING` and `HF_HOME` through to the containers when they are set. The visualization step publishes its interactive views through [Figpack](https://figpack.org/) and skips itself when `FIGPACK_API_KEY` is not set. The quality control figures do not need it. Configs before revision 10 passed `KACHERY_ZONE` and `KACHERY_API_KEY` instead, which only releases before 1.4.1 read.
 
 ### AIND ephys execution
 
@@ -108,7 +108,7 @@ Each capsule has its own Nextflow work directory, `work/job-{id}/`. From v1.5.0 
 | `quality_control` | 16 | 48 GB | `mit_normal` |
 | `nwb_ecephys` | 4 | 96 GB | `mit_normal` |
 
-These figures come from `configs/name-mit+engaging_revision-9.config`, which the `default` config key points to. Every step on `mit_normal` asks for its memory times the attempt number, so a step asks for twice its base on a second attempt and three times on a third. Nextflow retries a step only when SLURM killed it for running out of memory, which shows as exit status 137. Any other failure still stops the capsule. `resourceLimits` caps every request at 16 CPUs, 256 GB and 12 hours. A retry stops once an attempt has run at the 256 GB cap, and `maxRetries` allows three retries at most. The GPU sorters keep a fixed 64 GB and are never retried, since the limits of `mit_normal_gpu` have not been measured.
+These figures come from `configs/name-mit+engaging_revision-10.config`, which the `default` config key points to. Every step on `mit_normal` asks for its memory times the attempt number, so a step asks for twice its base on a second attempt and three times on a third. Nextflow retries a step only when SLURM killed it for running out of memory, which shows as exit status 137. Any other failure still stops the capsule. `resourceLimits` caps every request at 16 CPUs, 256 GB and 12 hours. A retry stops once an attempt has run at the 256 GB cap, and `maxRetries` allows three retries at most. The GPU sorters keep a fixed 64 GB and are never retried, since the limits of `mit_normal_gpu` have not been measured.
 
 The cap matters because SLURM limits how much memory one user's jobs may hold at once. On `mit_normal`, DANDI never had more than 384 GB running at once, and a second 256 GB step always waited with the reason `QOSMaxMemoryPerUser` while one ran. The per-user cap is therefore below 512 GB, and revision 8's 256 GB requests ran about one at a time across every capsule. `sacctmgr show qos format=name,maxtrespu%60` on the cluster shows the exact cap. 256 GB is the largest request seen to run there, so no retry asks for more.
 
